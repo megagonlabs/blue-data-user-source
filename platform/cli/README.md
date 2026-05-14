@@ -1,25 +1,22 @@
 # userdb CLI
 
-Command-line interface for UserDb — a per-user data store with natural language query.
+Command-line interface for UserDb — a per-user data store with natural language querying.
 
 ## Installation
 
-The library is not yet published to PyPI. Install it from the local source first, then install the CLI:
+The library is not yet published to PyPI. Install both packages from source:
 
 ```bash
-# 1. Install the library from source
-cd lib
-pip install -e .
-cd ..
+# 1. Install the library
+cd lib && pip install -e . && cd ..
 
-# 2. Install the CLI from source
-cd platform/cli
-pip install -e .
+# 2. Install the CLI
+cd platform/cli && pip install -e .
 ```
 
-`click` and `rich` are pulled in automatically as dependencies of the CLI package.
+`click` and `rich` are pulled in automatically as CLI dependencies.
 
-You also need an OpenAI API key for the reasoning layer:
+Set your OpenAI API key:
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -28,19 +25,25 @@ export OPENAI_API_KEY=sk-...
 ## Quick start
 
 ```bash
-# 1. Create a database for a user
-userdb database create alice
+# Create a database
+userdb user create alice
 
-# 2. Import a file (Type 1 — register as a queryable source)
-userdb --database alice import ~/resume.txt
+# Register a file as a queryable source (Type 1)
+userdb --user alice import resume.txt
 
-# 3. Import a file and extract specific data (Type 2)
-userdb --database alice import ~/resume.txt \
+# Extract and store specific attributes (Type 2)
+userdb --user alice import resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
-# 4. Query in natural language
-userdb --database alice query "What jobs are suitable for this user?"
+# Query — Rich table (default)
+userdb --user alice query "What jobs are suitable for me?"
+
+# Query — natural language answer
+userdb --user alice query "What jobs are suitable for me?" --format nl
+
+# Query — raw JSON
+userdb --user alice query "What jobs are suitable for me?" --format json
 ```
 
 ## Commands
@@ -48,12 +51,12 @@ userdb --database alice query "What jobs are suitable for this user?"
 ### Global options
 
 ```
-userdb [--database DB] [--data-dir DIR] COMMAND
+userdb [--user USER] [--data-dir DIR] COMMAND
 ```
 
 | Option | Env var | Default | Description |
 |---|---|---|---|
-| `--database DB` | `USERDB_DATABASE` | — | User database ID |
+| `--user USER` | `USERDB_DATABASE` | — | User database ID |
 | `--data-dir DIR` | `USERDB_DATA_DIR` | `~/.userdb` | Directory where database files are stored |
 
 ```bash
@@ -68,30 +71,45 @@ userdb query "jobs suitable for me"
 Execute a natural language query and print results.
 
 ```
-userdb query TEXT [--session SESSION_ID] [--format (table|json)]
+userdb query TEXT [--session SESSION_ID] [--format (table|json|nl)]
 ```
 
 | Argument / Option | Description |
 |---|---|
 | `TEXT` | Natural language query (required) |
 | `--session SESSION_ID` | Session ID for query context and user interaction |
-| `--format` | `table` (default, Rich-formatted) or `json` |
+| `--format` | `table` (default) · `json` · `nl` |
 
-**Examples**
+**`--format table`** — Rich-formatted table (default)
 
 ```bash
-userdb --database alice query "What skills does this user have?"
+userdb --user alice query "What skills does this user have?"
+```
 
-userdb --database alice query "jobs suitable for me" --format json
+**`--format json`** — structured JSON array
+
+```bash
+userdb --user alice query "What skills does this user have?" --format json
 ```
 
 ```json
 [
   {
-    "query": "What skills does the user have?",
+    "query": "What technical skills does the user have?",
     "results": ["Python", "SQL", "machine learning"]
   }
 ]
+```
+
+**`--format nl`** — synthesized natural language answer
+
+```bash
+userdb --user alice query "What jobs are suitable for me?" --format nl
+```
+
+```
+Based on your background in project management and technical skills in SQL and Python,
+roles such as Technical Project Manager or Data Analyst would be a strong fit.
 ```
 
 ---
@@ -107,36 +125,38 @@ userdb import FILE [--query QUERY]...
 | Argument / Option | Description |
 |---|---|
 | `FILE` | Path to file (required, must exist) |
-| `--query QUERY` | Query to run over the file (Type 2). Repeat for multiple queries. Omit for source registration only (Type 1). |
+| `--query QUERY` | Query to extract and store (Type 2). Repeat for multiple. Omit for source registration only (Type 1). |
 
 **Type 1 — register source only**
 
 ```bash
-userdb --database alice import ~/resume.txt
-# Registered: /home/alice/resume.txt
+userdb --user alice import resume.txt
+# Registered: resume.txt
 ```
 
-**Type 2 — extract and store data**
+**Type 2 — extract and store attributes**
+
+Each query is run through the LLM extractor. Results are stored under a schema-style attribute name derived from the query (e.g. `user_skills`, `recent_job_title`).
 
 ```bash
-userdb --database alice import ~/resume.txt \
+userdb --user alice import resume.txt \
   --query "What skills does the user have?" \
   --query "Does the user prefer remote work?"
-# Imported: /home/alice/resume.txt (2 queries)
+# Imported: resume.txt (2 queries)
 ```
 
 ---
 
-### `userdb database create`
+### `userdb user create`
 
 Create a new user database.
 
 ```
-userdb database create NAME
+userdb user create NAME
 ```
 
 ```bash
-userdb database create alice
+userdb user create alice
 # Created database: alice
 ```
 
@@ -148,27 +168,25 @@ userdb database create alice
 |---|---|
 | 0 | Success |
 | 1 | `UserDbError` — message printed to stderr |
-| 2 | Bad arguments |
+| 2 | Bad arguments (Click) |
 
 ---
 
 ## Storage
 
-Data is persisted to disk under `~/.userdb/<database>/` by default — two JSON files per database:
+Data is persisted under `~/.userdb/<user>/` by default:
 
 ```
 ~/.userdb/
 └── alice/
-    ├── data.json      # structured key-value entries
+    ├── data.json      # structured attribute entries
     └── vectors.json   # text entries for semantic search
 ```
 
-Data survives between separate `userdb` invocations. Use `--data-dir` to store databases elsewhere:
+Use `--data-dir` to store databases elsewhere:
 
 ```bash
-userdb --data-dir /tmp/demo --database alice database create alice
-userdb --data-dir /tmp/demo --database alice import resume.txt --query "What skills?"
-userdb --data-dir /tmp/demo --database alice query "jobs suitable for me"
+userdb --data-dir /tmp/demo user create alice
+userdb --data-dir /tmp/demo --user alice import resume.txt --query "What skills?"
+userdb --data-dir /tmp/demo --user alice query "jobs suitable for me"
 ```
-
-To use a different backend (Redis, SQLite, etc.), implement `JSONSource` and `VectorSource` from `blue_data_user_source.interfaces` and pass a matching `store_factory` via the Python API.
