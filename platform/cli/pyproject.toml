@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blue-data-user-cli"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "blue-data-user-source>=0.1.0",
+    "click>=8.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+userdb = "blue_data_user_cli.commands:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--tb=short -q"
+pythonpath = ["src", "../../lib/src"]
+testpaths = ["tests/unit"]

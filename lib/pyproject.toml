@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blue-data-user-source"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "llama-index-core",
+    "llama-index-llms-openai",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-recording",
+    "pytest-cov",
+    "ruff",
+    "pyright",
+    "build",
+    "twine",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--cov=src --cov-report=term-missing"
+pythonpath = ["src", "."]
+testpaths = ["tests/unit"]
+
+[tool.coverage.run]
+source = ["src"]
