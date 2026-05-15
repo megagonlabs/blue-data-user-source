@@ -1,0 +1,37 @@
+NODE TYPES AND ATTRIBUTES:
+Person: person_id, legal_name, preferred_name, aliases, pronouns, birth_date, death_date, gender, nationality, languages, biography, current_status, profile_embedding, created_at, updated_at
+Organization: org_id, name, type, industry, description, founded_date, size_range, headquarters, website, metadata
+Place: place_id, name, type, address, geo_lat, geo_long, country, region, timezone, metadata
+Experience: experience_id, type, title, description, summary, start_time, end_time, status, importance_score, emotional_weight, visibility, source_count, embedding, created_at, updated_at
+Event: event_id, type, name, description, timestamp, duration_seconds, visibility, confidence, source, embedding
+Project: project_id, name, description, category, status, start_time, end_time, repository_url, website, impact_score, embedding
+Skill: skill_id, name, category, description, market_value_score, embedding
+Goal: goal_id, title, description, category, priority, status, target_date, progress, created_at
+Interest: interest_id, topic, category, intensity, embedding
+Preference: preference_id, category, name, value, confidence, source
+Belief: belief_id, topic, stance, confidence, visibility, embedding
+Memory: memory_id, type, summary, emotional_valence, salience_score, timestamp, embedding
+Persona: persona_id, name, context, description, activation_conditions
+Artifact: artifact_id, type, name, description, uri, mime_type, created_at, embedding
+Document: document_id, title, type, uri, content_hash, created_at, embedding
+Publication: publication_id, title, venue, publication_date, doi, abstract, citation_count, embedding
+Conversation: conversation_id, title, started_at, ended_at, channel, summary, embedding
+Task: task_id, title, description, priority, status, created_at, due_date
+Observation: observation_id, type, value, confidence, observed_at, source
+Source: source_id, type, name, uri, trust_score
+TimeInterval: interval_id, start_time, end_time, granularity
+EmbeddingVector: embedding_id, model, dimensions, updated_at
+Permission: permission_id, visibility, owner, retention_policy, consent_status
+
+RELATIONSHIP TYPES (Person-WORKED_AT->Organization, etc.):
+Person-RELATED_TO->Person, Person-WORKED_AT->Organization, Person-STUDIED_AT->Organization,
+Person-HAS_SKILL->Skill, Person-HAS_GOAL->Goal, Person-HAS_INTEREST->Interest,
+Person-HAS_PREFERENCE->Preference, Person-HAS_PERSONA->Persona, Person-HAS_MEMORY->Memory,
+Person-PARTICIPATED_IN->Event, Person-CONTRIBUTED_TO->Project, Person-AUTHORED->Publication,
+Person-LOCATED_IN->Place, Experience-AT_ORGANIZATION->Organization, Experience-INVOLVED->Person,
+Experience-INVOLVED_SKILL->Skill, Experience-PRODUCED->Artifact, Experience-RESULTED_IN->Outcome,
+Event-OCCURRED_AT->Place, Event-PART_OF->Experience, Skill-EVIDENCED_BY->Artifact,
+Skill-RELATED_TO->Skill, Document-MENTIONS->Person, Document-DERIVED_FROM->Source,
+Memory-ABOUT->Event, Memory-INVOLVES->Person, Conversation-INVOLVES->Person,
+Conversation-DISCUSSES->Topic, Conversation-RESULTED_IN->Task, Task-ASSIGNED_TO->Person,
+Task-SUPPORTS->Goal, Observation-ABOUT->Person, Observation-DERIVED_FROM->Source

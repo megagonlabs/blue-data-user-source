@@ -28,6 +28,8 @@ def _mock_source(results: list[QueryResult] | None = None) -> Any:
     instance.execute_query = AsyncMock(return_value=results or [])
     instance.import_source = AsyncMock(return_value=None)
     instance.create_database = AsyncMock(return_value=None)
+    instance.list_data = AsyncMock(return_value=[])
+    instance.list_metadata = AsyncMock(return_value=[])
     return instance
 
 
@@ -147,6 +149,135 @@ def test_user_create_error_exits_with_code_1(runner: CliRunner) -> None:
     with patch("blue_data_user_cli.commands._make_source", return_value=mock):
         result = runner.invoke(cli, ["user", "create", "x"])
     assert result.exit_code == 1
+
+
+# ── user show data command ────────────────────────────────────────────────────
+
+_DATA_ENTRY = {
+    "key": "skills",
+    "value": ["Python", "SQL"],
+    "metadata": {"date": "2024-01-01T00:00:00+00:00", "agent": "v1", "source_id": "src-1"},
+}
+
+
+def test_show_data_displays_entries(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
+    assert result.exit_code == 0
+    assert "skills" in result.output
+    assert "Python" in result.output
+
+
+def test_show_data_passes_key_filter(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "alice", "user", "show", "data", "skills"])
+    mock.list_data.assert_awaited_once_with(key="skills")
+
+
+def test_show_data_no_key_passes_none(runner: CliRunner) -> None:
+    mock = _mock_source()
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
+    mock.list_data.assert_awaited_once_with(key=None)
+
+
+def test_show_data_empty_produces_no_output(runner: CliRunner) -> None:
+    mock = _mock_source()
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+
+def test_show_data_no_user_exits_with_code_1(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["user", "show", "data"])
+    assert result.exit_code == 1
+
+
+# ── user show metadata command ────────────────────────────────────────────────
+
+_META_ENTRY = {
+    "source_id": "src-1",
+    "source_type": "file",
+    "location": "/data/resume.txt",
+    "registered_at": "2024-01-01T00:00:00+00:00",
+    "queries": ["What skills?"],
+}
+
+
+def test_show_metadata_displays_entries(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
+    assert result.exit_code == 0
+    assert "src-1" in result.output
+    assert "/data/resume.txt" in result.output
+
+
+def test_show_metadata_passes_source_id_filter(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "alice", "user", "show", "metadata", "src-1"])
+    mock.list_metadata.assert_awaited_once_with(source_id="src-1")
+
+
+def test_show_metadata_no_filter_passes_none(runner: CliRunner) -> None:
+    mock = _mock_source()
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
+    mock.list_metadata.assert_awaited_once_with(source_id=None)
+
+
+def test_show_metadata_empty_produces_no_output(runner: CliRunner) -> None:
+    mock = _mock_source()
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+
+def test_show_metadata_no_user_exits_with_code_1(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["user", "show", "metadata"])
+    assert result.exit_code == 1
+
+
+# ── user ls command ───────────────────────────────────────────────────────────
+
+def test_user_ls_lists_database_directories(runner: CliRunner, tmp_path: Path) -> None:
+    (tmp_path / "alice").mkdir()
+    (tmp_path / "bob").mkdir()
+    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+    assert result.exit_code == 0
+    assert "alice" in result.output
+    assert "bob" in result.output
+
+
+def test_user_ls_empty_data_dir_produces_no_output(runner: CliRunner, tmp_path: Path) -> None:
+    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+
+def test_user_ls_missing_data_dir_produces_no_output(runner: CliRunner, tmp_path: Path) -> None:
+    absent = tmp_path / "no-such-dir"
+    result = runner.invoke(cli, ["--data-dir", str(absent), "user", "ls"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+
+def test_user_ls_ignores_files(runner: CliRunner, tmp_path: Path) -> None:
+    (tmp_path / "alice").mkdir()
+    (tmp_path / "stray.json").write_text("{}")
+    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+    assert result.exit_code == 0
+    assert "alice" in result.output
+    assert "stray.json" not in result.output
 
 
 # ── _make_source / global --user and --data-dir flags ────────────────────────

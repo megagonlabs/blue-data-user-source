@@ -16,9 +16,10 @@ StoreFactory = Callable[[str], tuple[JSONSource, VectorSource]]
 class UserDataManager:
     """Manages all data sources for a user database through a UserDataRegistry."""
 
-    def __init__(self, store_factory: StoreFactory | None) -> None:
+    def __init__(self, store_factory: StoreFactory | None, schema_path: str | None = None) -> None:
         self._store_factory = store_factory
         self._registries: dict[str, UserDataRegistry] = {}
+        self._schema_reference = open(schema_path).read() if schema_path else ""
 
     async def create_user(self, name: str) -> None:
         """Initialize JSON and vector stores for a new user database."""
@@ -88,6 +89,38 @@ class UserDataManager:
                 await self._write_data_entry(registry, database, attr_name, extracted, source_id)
             await self._persist_source_metadata(registry, database, source, source_id, queries)
 
+    async def list_data(
+        self, database: str, key: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return data entries for the database, optionally filtered by attribute key name."""
+        registry = await self._ensure_loaded(database)
+        prefix = f"{database}:data:"
+        keys = await registry.json_keys(prefix)
+        entries: list[dict[str, Any]] = []
+        for k in keys:
+            entry = await registry.get_json(k)
+            if entry is None:
+                continue
+            if key is None or entry.get("key") == key:
+                entries.append(entry)
+        return entries
+
+    async def list_metadata(
+        self, database: str, source_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return source metadata entries for the database, optionally filtered by source_id."""
+        registry = await self._ensure_loaded(database)
+        prefix = f"{database}:metadata:sources:"
+        keys = await registry.json_keys(prefix)
+        entries: list[dict[str, Any]] = []
+        for k in keys:
+            entry = await registry.get_json(k)
+            if entry is None:
+                continue
+            if source_id is None or entry.get("source_id") == source_id:
+                entries.append(entry)
+        return entries
+
     async def store_data(
         self,
         database: str,
@@ -130,16 +163,22 @@ class UserDataManager:
         return [value]
 
     async def _llm_attribute_name(self, query: str) -> str:
-        """Derive a snake_case attribute name from a query following relational schema conventions."""
+        """Derive a schema-aligned 'NodeType.attribute_name' path from a query."""
         llm = Settings.llm
         prompt = (
-            f"Convert the following query into a concise snake_case attribute name suitable "
-            f"for a relational database column (1-4 words, no verbs, noun-based, lowercase).\n"
+            "Map the following query to the most appropriate attribute in the user data schema below.\n"
+            "Return the result as 'NodeType.attribute_name' using exact names from the schema.\n"
+            "If no exact attribute matches, extend using the same conventions: PascalCase node type, snake_case attribute.\n\n"
+            f"SCHEMA:\n{self._schema_reference}\n"
             f"Query: {query}\n\n"
-            "Return only the attribute name, nothing else."
+            "Return only the attribute path (e.g. 'Person.legal_name' or 'Experience.title'), nothing else."
         )
         response = await llm.acomplete(prompt)
-        return str(response).strip().lower().replace(" ", "_")
+        raw = str(response).strip().strip("'\"")
+        if "." not in raw:
+            return raw.lower().replace(" ", "_")
+        node, attr = raw.split(".", 1)
+        return f"{node.strip()}.{attr.strip().lower().replace(' ', '_')}"
 
     async def _persist_source_metadata(
         self,

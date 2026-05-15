@@ -11,7 +11,8 @@ class UserSource:
         props = properties or {}
         self._default_database: str | None = str(props["database"]) if "database" in props else None
         store_factory: StoreFactory | None = props.get("store_factory")  # type: ignore[assignment]
-        self._data_manager = UserDataManager(store_factory=store_factory)
+        schema_path: str | None = str(props["schema_path"]) if "schema_path" in props else None
+        self._data_manager = UserDataManager(store_factory=store_factory, schema_path=schema_path)
 
     async def execute_query(
         self,
@@ -79,6 +80,24 @@ class UserSource:
     async def create_user(self, name: str) -> None:
         """Alias for create_database."""
         await self.create_database(name)
+
+    async def list_data(
+        self,
+        database: str | None = None,
+        key: str | None = None,
+    ) -> list[dict]:
+        """Return data entries for the database, optionally filtered by attribute key name."""
+        db = self._resolve_database(database)
+        return await self._data_manager.list_data(db, key)
+
+    async def list_metadata(
+        self,
+        database: str | None = None,
+        source_id: str | None = None,
+    ) -> list[dict]:
+        """Return source metadata entries for the database, optionally filtered by source_id."""
+        db = self._resolve_database(database)
+        return await self._data_manager.list_metadata(db, source_id)
 
     def _resolve_database(self, database: str | None) -> str:
         db = database or self._default_database

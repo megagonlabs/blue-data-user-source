@@ -39,6 +39,14 @@ class UserDataRegistry(DataRegistry):
         """Write a value to the JSON store."""
         await self._json.set(key, value)
 
+    async def get_json(self, key: str) -> dict[str, Any] | None:
+        """Read a single value from the JSON store."""
+        return await self._json.get(key)
+
+    async def json_keys(self, prefix: str | None = None) -> list[str]:
+        """List keys in the JSON store, optionally filtered by prefix."""
+        return await self._json.keys(prefix)
+
     async def set_vector(self, key: str, text: str, metadata: dict[str, Any]) -> None:
         """Embed and store text in the vector store."""
         await self._vector.set(key, text, metadata)
