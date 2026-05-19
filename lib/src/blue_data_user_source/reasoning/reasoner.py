@@ -39,10 +39,7 @@ class UserQueryReasoner:
     async def contextualize_query(self, query: str) -> str:
         """Rewrite the query to be suitable for user data retrieval."""
         llm = Settings.llm
-        prompt = (
-            f"Rewrite the following user query to be more precise for searching "
-            f"a personal user data store. Return only the rewritten query.\n\nQuery: {query}"
-        )
+        prompt = f"Rewrite the following user query to be more precise for searching " f"a personal user data store. Return only the rewritten query.\n\nQuery: {query}"
         response = await llm.acomplete(prompt)
         return str(response).strip()
 
@@ -69,10 +66,7 @@ class UserQueryReasoner:
     ) -> list[MetricEvaluation]:
         """Return metric evaluations for applicable quality dimensions."""
         applicable = self._identify_user_data_metrics(query, query_results, query_results_metadata)
-        return [
-            await metric.evaluate(query, query_results, query_results_metadata)
-            for metric in applicable
-        ]
+        return [await metric.evaluate(query, query_results, query_results_metadata) for metric in applicable]
 
     async def assess_user_verification(
         self,
@@ -94,9 +88,7 @@ class UserQueryReasoner:
         """Invoke the Interaction Layer and return updated data after clarification."""
         from blue_data_user_source.interaction import ContactManager
 
-        contact_manager = ContactManager(
-            database=self._database, data_manager=self._source._data_manager
-        )
+        contact_manager = ContactManager(database=self._database, data_manager=self._source._data_manager)
         channel = await contact_manager.identify_contact_method(query)
         interaction = channel.interact()
 
@@ -105,9 +97,7 @@ class UserQueryReasoner:
         is_verification = any(m.name == "freshness" for m in metrics if not m.passes)
 
         clarification_question = (
-            f"To answer \"{query}\", I need more information. "
-            f"The following data quality checks did not pass: {', '.join(failing_names)}. "
-            "Could you provide additional details?"
+            f"To answer \"{query}\", I need more information. " f"The following data quality checks did not pass: {', '.join(failing_names)}. " "Could you provide additional details?"
         )
 
         await interaction.start()
@@ -115,9 +105,10 @@ class UserQueryReasoner:
         await interaction.stop()
 
         source_query = query if is_verification else clarification_question
-        attr_name = await self._source._data_manager._llm_attribute_name(source_query)
-        extracted = await self._extract_from_response(source_query, response)
-        await self._source._data_manager.store_data(self._database, attr_name, extracted)
+        schema = await self._source._data_manager._llm_extract_schema(source_query)
+        extracted = await self._source._data_manager._llm_extract_data(source_query, schema, [str(response)])
+        for key, values in extracted.items():
+            await self._source._data_manager.store_data(self._database, key, values)
 
         return list(data) + [response], metadata
 
@@ -140,9 +131,7 @@ class UserQueryReasoner:
     async def synthesize_results_nl(self, original_query: str, results: list[QueryResult]) -> str:
         """Synthesize a list of sub-question results into a single natural language answer."""
         llm = Settings.llm
-        pairs = "\n".join(
-            f"Q: {r.query}\nA: {r.results}" for r in results
-        )
+        pairs = "\n".join(f"Q: {r.query}\nA: {r.results}" for r in results)
         prompt = (
             f"The user asked: \"{original_query}\"\n\n"
             f"The following sub-questions were answered:\n{pairs}\n\n"
@@ -151,13 +140,34 @@ class UserQueryReasoner:
         )
         return str(await llm.acomplete(prompt)).strip()
 
+    async def synthesize_data_nl(self, entries: list[dict]) -> str:
+        """Describe a list of data entries in natural language using the LLM."""
+        llm = Settings.llm
+        lines = []
+        for e in entries:
+            values = ", ".join(str(v) for v in e.get("value", []))
+            meta = e.get("metadata") or {}
+            date_part = f" (as of {meta['date']})" if meta.get("date") else ""
+            lines.append(f"- {e.get('key', '')}: {values}{date_part}")
+        formatted = "\n".join(lines)
+        prompt = f"The following attributes are stored about a user:\n{formatted}\n\n" "Write a concise natural language summary of this information."
+        return str(await llm.acomplete(prompt)).strip()
+
+    async def synthesize_metadata_nl(self, entries: list[dict]) -> str:
+        """Describe a list of source metadata entries in natural language using the LLM."""
+        llm = Settings.llm
+        lines = []
+        for e in entries:
+            queries_part = f", with queries: {', '.join(str(q) for q in e['queries'])}" if e.get("queries") else ""
+            lines.append(f"- {e.get('source_type', 'unknown')} source at {e.get('location', 'unknown')}, " f"registered {e.get('registered_at', 'unknown')}{queries_part}")
+        formatted = "\n".join(lines)
+        prompt = f"The following sources are registered in a user database:\n{formatted}\n\n" "Write a concise natural language summary of these sources."
+        return str(await llm.acomplete(prompt)).strip()
+
     def _identify_user_data_metrics(
         self,
         query: str,
         query_results: list[Any],
         query_results_metadata: dict[str, Any],
     ) -> list[UserDataMetric]:
-        return [
-            m for m in self._metrics
-            if m._is_applicable(query, query_results, query_results_metadata)
-        ]
+        return [m for m in self._metrics if m._is_applicable(query, query_results, query_results_metadata)]

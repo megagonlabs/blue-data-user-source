@@ -30,6 +30,8 @@ def _mock_source(results: list[QueryResult] | None = None) -> Any:
     instance.create_database = AsyncMock(return_value=None)
     instance.list_data = AsyncMock(return_value=[])
     instance.list_metadata = AsyncMock(return_value=[])
+    instance.describe_data = AsyncMock(return_value="")
+    instance.describe_metadata = AsyncMock(return_value="")
     return instance
 
 
@@ -198,6 +200,32 @@ def test_show_data_no_user_exits_with_code_1(runner: CliRunner) -> None:
     assert result.exit_code == 1
 
 
+def test_show_data_json_format_outputs_valid_json(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(
+            cli, ["--user", "alice", "user", "show", "data", "--format", "json"]
+        )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed[0]["key"] == "skills"
+    assert "Python" in parsed[0]["value"]
+
+
+def test_show_data_nl_format_calls_describe_data(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
+    mock.describe_data = AsyncMock(return_value="Alice knows Python and SQL.")
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(
+            cli, ["--user", "alice", "user", "show", "data", "--format", "nl"]
+        )
+    assert result.exit_code == 0
+    assert "Alice knows Python and SQL." in result.output
+    mock.describe_data.assert_awaited_once_with(key=None)
+
+
 # ── user show metadata command ────────────────────────────────────────────────
 
 _META_ENTRY = {
@@ -247,6 +275,32 @@ def test_show_metadata_no_user_exits_with_code_1(runner: CliRunner) -> None:
     assert result.exit_code == 1
 
 
+def test_show_metadata_json_format_outputs_valid_json(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(
+            cli, ["--user", "alice", "user", "show", "metadata", "--format", "json"]
+        )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed[0]["source_id"] == "src-1"
+    assert parsed[0]["location"] == "/data/resume.txt"
+
+
+def test_show_metadata_nl_format_calls_describe_metadata(runner: CliRunner) -> None:
+    mock = _mock_source()
+    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
+    mock.describe_metadata = AsyncMock(return_value="One file source: resume.txt, registered 2024-01-01.")
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        result = runner.invoke(
+            cli, ["--user", "alice", "user", "show", "metadata", "--format", "nl"]
+        )
+    assert result.exit_code == 0
+    assert "resume.txt" in result.output
+    mock.describe_metadata.assert_awaited_once_with(source_id=None)
+
+
 # ── user ls command ───────────────────────────────────────────────────────────
 
 def test_user_ls_lists_database_directories(runner: CliRunner, tmp_path: Path) -> None:
@@ -286,11 +340,11 @@ def test_user_flag_is_passed_to_source_factory(runner: CliRunner, tmp_path: Path
     mock = _mock_source([])
     with patch("blue_data_user_cli.commands._make_source", return_value=mock) as factory:
         runner.invoke(cli, ["--user", "target-db", "--data-dir", str(tmp_path), "query", "q"])
-    factory.assert_called_once_with("target-db", tmp_path)
+    factory.assert_called_once_with("target-db", tmp_path, None)
 
 
 def test_no_user_flag_passes_none_to_factory(runner: CliRunner, tmp_path: Path) -> None:
     mock = _mock_source([])
     with patch("blue_data_user_cli.commands._make_source", return_value=mock) as factory:
         runner.invoke(cli, ["--data-dir", str(tmp_path), "query", "q"])
-    factory.assert_called_once_with(None, tmp_path)
+    factory.assert_called_once_with(None, tmp_path, None)

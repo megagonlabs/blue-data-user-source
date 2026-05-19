@@ -99,6 +99,28 @@ class UserSource:
         db = self._resolve_database(database)
         return await self._data_manager.list_metadata(db, source_id)
 
+    async def describe_data(
+        self,
+        database: str | None = None,
+        key: str | None = None,
+    ) -> str:
+        """Return a natural language description of data entries for the database."""
+        db = self._resolve_database(database)
+        entries = await self._data_manager.list_data(db, key)
+        reasoner = UserQueryReasoner(source=self, database=db)
+        return await reasoner.synthesize_data_nl(entries)
+
+    async def describe_metadata(
+        self,
+        database: str | None = None,
+        source_id: str | None = None,
+    ) -> str:
+        """Return a natural language description of source metadata for the database."""
+        db = self._resolve_database(database)
+        entries = await self._data_manager.list_metadata(db, source_id)
+        reasoner = UserQueryReasoner(source=self, database=db)
+        return await reasoner.synthesize_metadata_nl(entries)
+
     def _resolve_database(self, database: str | None) -> str:
         db = database or self._default_database
         if db is None:

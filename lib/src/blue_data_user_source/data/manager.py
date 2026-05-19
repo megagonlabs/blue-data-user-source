@@ -24,9 +24,7 @@ class UserDataManager:
     async def create_user(self, name: str) -> None:
         """Initialize JSON and vector stores for a new user database."""
         if self._store_factory is None:
-            raise ValueError(
-                "No store_factory configured. Pass 'store_factory' in UserSource properties."
-            )
+            raise ValueError("No store_factory configured. Pass 'store_factory' in UserSource properties.")
         json_store, vector_store = self._store_factory(name)
         registry = UserDataRegistry(json_store, vector_store)
 
@@ -40,9 +38,7 @@ class UserDataManager:
             await self.create_user(database)
         return self._registries[database]
 
-    async def execute_query(
-        self, query: str, database: str
-    ) -> tuple[list[Any], dict[str, Any]]:
+    async def execute_query(self, query: str, database: str) -> tuple[list[Any], dict[str, Any]]:
         """Execute a query and return (results, metadata) including provenance."""
         registry = await self._ensure_loaded(database)
         planner = UserDataPlanner(registry)
@@ -82,16 +78,15 @@ class UserDataManager:
             for query in queries:
                 try:
                     raw = await registry.execute(query, source_id)
-                    extracted = await self._llm_extract(query, raw)
-                    attr_name = await self._llm_attribute_name(query)
+                    schema = await self._llm_extract_schema(query)
+                    extracted = await self._llm_extract_data(query, schema, raw)
                 except Exception as exc:
                     raise ImportError(f"Query over source failed: {exc}") from exc
-                await self._write_data_entry(registry, database, attr_name, extracted, source_id)
+                for entry_key, entry_values in extracted.items():
+                    await self._write_data_entry(registry, database, entry_key, self._normalize_to_list(entry_values), source_id)
             await self._persist_source_metadata(registry, database, source, source_id, queries)
 
-    async def list_data(
-        self, database: str, key: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_data(self, database: str, key: str | None = None) -> list[dict[str, Any]]:
         """Return data entries for the database, optionally filtered by attribute key name."""
         registry = await self._ensure_loaded(database)
         prefix = f"{database}:data:"
@@ -105,9 +100,7 @@ class UserDataManager:
                 entries.append(entry)
         return entries
 
-    async def list_metadata(
-        self, database: str, source_id: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_metadata(self, database: str, source_id: str | None = None) -> list[dict[str, Any]]:
         """Return source metadata entries for the database, optionally filtered by source_id."""
         registry = await self._ensure_loaded(database)
         prefix = f"{database}:metadata:sources:"
@@ -132,53 +125,54 @@ class UserDataManager:
         registry = await self._ensure_loaded(database)
         await self._write_data_entry(registry, database, key, self._normalize_to_list(value), source_id)
 
-    async def _llm_extract(self, query: str, raw_content: list[Any]) -> list[Any]:
-        """Use LLM to extract query-relevant values from source content as a flat list."""
+    @staticmethod
+    def _normalize_to_list(value: Any) -> list[Any]:
+        if isinstance(value, list):
+            return value
+        return [value]
+
+    async def _llm_extract_data(self, query: str, schema: list[str], raw_content: list[Any]) -> dict[str, Any]:
+        """Use LLM to extract query-relevant data from source content using provided schema."""
         llm = Settings.llm
         content_str = "\n".join(str(item) for item in raw_content)
         prompt = (
             f"Extract information relevant to the following query from the content below.\n"
             f"Query: {query}\n\n"
+            f"Schema: {schema}\n\n"
             f"Content:\n{content_str}\n\n"
-            "Return a JSON array of the extracted values only. Do not wrap them in an object."
+            "Return a JSON object, with matched attribute names from the schema as keys, with matching extracted values in a JSON array.\n"
+            "If no matching value is extracted, return an empty JSON object.\n"
+            "Be as specific as possible for each extracted value, and do not include irrelevant information."
         )
         response = await llm.acomplete(prompt)
         result_str = str(response).strip()
         try:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
-            return [result_str]
-        return self._normalize_to_list(parsed)
+            return {}
+        return parsed
 
-    @staticmethod
-    def _normalize_to_list(value: Any) -> list[Any]:
-        """Flatten an LLM extraction result to a plain list of values."""
-        if isinstance(value, list):
-            return value
-        if isinstance(value, dict):
-            inner = list(value.values())
-            if len(inner) == 1 and isinstance(inner[0], list):
-                return inner[0]
-            return inner
-        return [value]
-
-    async def _llm_attribute_name(self, query: str) -> str:
-        """Derive a schema-aligned 'NodeType.attribute_name' path from a query."""
+    async def _llm_extract_schema(self, query: str) -> list[str]:
+        """Derive a schema 'NodeType.attribute_name' path from a query."""
         llm = Settings.llm
         prompt = (
-            "Map the following query to the most appropriate attribute in the user data schema below.\n"
-            "Return the result as 'NodeType.attribute_name' using exact names from the schema.\n"
-            "If no exact attribute matches, extend using the same conventions: PascalCase node type, snake_case attribute.\n\n"
+            "Map the following query to the most appropriate schema entries in the user data schema below.\n"
+            "Return the result as a list of entries, as below:\n"
+            "If matched schema entry is a NODE ATTRIBUTE, return matching NODE key value and NODE ATTRIBUTE name in the format 'node_key_value.attribute_name', e.g. alice.gender where alice is PERSON.first_name and PERSON.first_name is a key of PERSON node, gender is PERSON.gender attribute\n"
+            "If matched schema entry is a RELATION, return matching source NODE key value and RELATION name in the format 'source_node_key_value.relation_name', e.g. alice.IS_FRIEND where alice is PERSON.first_name, IS_FRIEND is PERSON.IS_FRIEND.PERSON relationship"
+            "If matched schema entry is a RELATION ATTRIBUTE, return matching source NODE key value and RELATION name and target NODE key and RELATION ATTRIBUTE name in the format 'source_node_key_value.relation_name.target_node_key_value.relation_attribute_name', e.g. alice.IS_FRIEND.bob.start_date where alice is PERSON.first_name, IS_FRIEND is PERSON.IS_FRIEND.PERSON relationship, bob is PERSON.first_name, start_date is PERSON.IS_FRIEND.PERSON attribute"
+            "If no exact attribute matches, extend using the same conventions in the schema"
             f"SCHEMA:\n{self._schema_reference}\n"
             f"Query: {query}\n\n"
-            "Return only the attribute path (e.g. 'Person.legal_name' or 'Experience.title'), nothing else."
+            "Return result JSON and nothing else."
         )
         response = await llm.acomplete(prompt)
-        raw = str(response).strip().strip("'\"")
-        if "." not in raw:
-            return raw.lower().replace(" ", "_")
-        node, attr = raw.split(".", 1)
-        return f"{node.strip()}.{attr.strip().lower().replace(' ', '_')}"
+        result_str = str(response).strip()
+        try:
+            parsed = json.loads(result_str)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        return parsed
 
     async def _persist_source_metadata(
         self,
@@ -205,14 +199,15 @@ class UserDataManager:
         value: list[Any],
         source_id: str,
     ) -> None:
-        metadata = {
-            "date": datetime.now(timezone.utc).isoformat(),
-            "agent": "import-agent-v1",
-            "source_id": source_id,
-        }
-        entry = {"key": key, "value": value, "metadata": metadata}
-        entry_id = str(uuid.uuid4())
-        json_key = f"{database}:data:{entry_id}"
-        await registry.set_json(json_key, entry)
-        vector_text = f"{key}: {' '.join(str(v) for v in value)}"
-        await registry.set_vector(json_key, vector_text, metadata)
+        for item in value:
+            metadata = {
+                "date": datetime.now(timezone.utc).isoformat(),
+                "agent": "import-agent-v1",
+                "source_id": source_id,
+            }
+            entry = {"key": key, "value": item, "metadata": metadata}
+            entry_id = str(uuid.uuid4())
+            json_key = f"{database}:data:{entry_id}"
+            await registry.set_json(json_key, entry)
+            vector_text = f"{key}: {item}"
+            await registry.set_vector(json_key, vector_text, metadata)

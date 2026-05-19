@@ -157,8 +157,16 @@ def show_group() -> None:
 
 @show_group.command("data")
 @click.argument("key", required=False, default=None)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["table", "json", "nl"]),
+    default="table",
+    show_default=True,
+    help="Output format: table or json for structured results, nl for natural language.",
+)
 @click.pass_context
-def show_data(ctx: click.Context, key: str | None) -> None:
+def show_data(ctx: click.Context, key: str | None, fmt: str) -> None:
     """Show data entries for the current user database.
 
     Optionally filter by KEY (attribute name).
@@ -175,27 +183,45 @@ def show_data(ctx: click.Context, key: str | None) -> None:
         sys.exit(1)
     if not entries:
         return
-    table = Table(show_header=True)
-    table.add_column("Key", style="cyan")
-    table.add_column("Values")
-    table.add_column("Date")
-    table.add_column("Source ID")
-    for entry in entries:
-        meta = entry.get("metadata") or {}
-        values = ", ".join(str(v) for v in entry.get("value", []))
-        table.add_row(
-            str(entry.get("key", "")),
-            values,
-            str(meta.get("date", "")),
-            str(meta.get("source_id", "")),
-        )
-    _console.print(table)
+    if fmt == "json":
+        click.echo(json.dumps(entries, indent=2))
+    elif fmt == "nl":
+        try:
+            description = asyncio.run(source.describe_data(key=key))
+        except UserDbError as exc:
+            _err.print(f"[red]Error:[/red] {exc}")
+            sys.exit(1)
+        click.echo(description)
+    else:
+        table = Table(show_header=True)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value")
+        table.add_column("Date")
+        table.add_column("Source ID")
+        for entry in entries:
+            meta = entry.get("metadata") or {}
+            value = entry.get("value", "")
+            table.add_row(
+                str(entry.get("key", "")),
+                value,
+                str(meta.get("date", "")),
+                str(meta.get("source_id", "")),
+            )
+        _console.print(table)
 
 
 @show_group.command("metadata")
 @click.argument("source_id", required=False, default=None)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["table", "json", "nl"]),
+    default="table",
+    show_default=True,
+    help="Output format: table or json for structured results, nl for natural language.",
+)
 @click.pass_context
-def show_metadata(ctx: click.Context, source_id: str | None) -> None:
+def show_metadata(ctx: click.Context, source_id: str | None, fmt: str) -> None:
     """Show source metadata for the current user database.
 
     Optionally filter by SOURCE_ID.
@@ -212,22 +238,32 @@ def show_metadata(ctx: click.Context, source_id: str | None) -> None:
         sys.exit(1)
     if not entries:
         return
-    table = Table(show_header=True)
-    table.add_column("Source ID", style="cyan")
-    table.add_column("Type")
-    table.add_column("Location")
-    table.add_column("Registered At")
-    table.add_column("Queries")
-    for entry in entries:
-        queries = ", ".join(str(q) for q in entry.get("queries", []))
-        table.add_row(
-            str(entry.get("source_id", "")),
-            str(entry.get("source_type", "")),
-            str(entry.get("location", "")),
-            str(entry.get("registered_at", "")),
-            queries,
-        )
-    _console.print(table)
+    if fmt == "json":
+        click.echo(json.dumps(entries, indent=2))
+    elif fmt == "nl":
+        try:
+            description = asyncio.run(source.describe_metadata(source_id=source_id))
+        except UserDbError as exc:
+            _err.print(f"[red]Error:[/red] {exc}")
+            sys.exit(1)
+        click.echo(description)
+    else:
+        table = Table(show_header=True)
+        table.add_column("Source ID", style="cyan")
+        table.add_column("Type")
+        table.add_column("Location")
+        table.add_column("Registered At")
+        table.add_column("Queries")
+        for entry in entries:
+            queries = ", ".join(str(q) for q in entry.get("queries", []))
+            table.add_row(
+                str(entry.get("source_id", "")),
+                str(entry.get("source_type", "")),
+                str(entry.get("location", "")),
+                str(entry.get("registered_at", "")),
+                queries,
+            )
+        _console.print(table)
 
 
 @user_group.command("ls")
