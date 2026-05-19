@@ -150,6 +150,7 @@ class UserDataManager:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
             return {}
+        print(parsed)
         return parsed
 
     async def _llm_extract_schema(self, query: str) -> list[str]:
@@ -172,6 +173,7 @@ class UserDataManager:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
             return []
+        print(parsed)
         return parsed
 
     async def _persist_source_metadata(

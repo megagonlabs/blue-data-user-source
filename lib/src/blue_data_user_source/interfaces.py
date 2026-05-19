@@ -1,3 +1,4 @@
+import math
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -62,6 +63,19 @@ class VectorSource(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Semantic similarity search."""
+
+    async def _embed(self, text: str) -> list[float]:
+        from llama_index.core import Settings  # type: ignore[import-untyped]
+        return await Settings.embed_model.aget_text_embedding(text)
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 0.0
+        return dot / (norm_a * norm_b)
 
 
 class DataRegistry(ABC):

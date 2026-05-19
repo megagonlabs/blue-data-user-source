@@ -36,7 +36,8 @@ class MemoryVectorSource(VectorSource):
     async def set(
         self, key: str, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        self._data[key] = {"text": text, "metadata": metadata or {}}
+        embedding = await self._embed(text)
+        self._data[key] = {"text": text, "embedding": embedding, "metadata": metadata or {}}
 
     async def get(self, key: str) -> dict[str, Any] | None:
         return self._data.get(key)
@@ -50,7 +51,21 @@ class MemoryVectorSource(VectorSource):
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        return list(self._data.values())[:top_k]
+        if not self._data:
+            return []
+        query_embedding = await self._embed(text)
+        scored = sorted(
+            (
+                (self._cosine_similarity(query_embedding, entry["embedding"]), key)
+                for key, entry in self._data.items()
+                if "embedding" in entry
+            ),
+            reverse=True,
+        )
+        return [
+            {k: v for k, v in self._data[key].items() if k != "embedding"}
+            for _, key in scored[:top_k]
+        ]
 
 
 def memory_store_factory(name: str) -> tuple[MemoryJsonSource, MemoryVectorSource]:
