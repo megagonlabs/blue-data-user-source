@@ -1,5 +1,6 @@
 NODE TYPES, ATTRIBUTES, KEYS:
-PERSON: attributes(first_name, last_name, preferred_name, birth_date, death_date, gender, nationality), keys(first_name + last_name)
+USER: attributes(first_name, last_name, preferred_name, birth_date, gender, nationality), keys(first_name + last_name)
+PERSON: attributes(first_name, last_name, preferred_name, birth_date, gender, nationality), keys(first_name + last_name)
 ORGANIZATION: attributes(name, type, industry, description, founded_date, size_range, headquarters, website), keys(name)
 SKILL: attributes(name, type, description), keys(name)
 

@@ -43,7 +43,7 @@ class UserDataManager:
         registry = await self._ensure_loaded(database)
         planner = UserDataPlanner(registry)
         plan = await planner.plan(query, database)
-
+        print(plan)
         aggregated: list[Any] = []
         provenance: list[dict[str, Any]] = []
 
@@ -79,13 +79,18 @@ class UserDataManager:
                 try:
                     raw = await registry.execute(query, source_id)
                     schema = await self._llm_extract_schema(query)
+                    print(schema)
                     extracted, sources = await self._llm_extract_data(query, schema, raw)
+                    print(extracted)
                 except Exception as exc:
                     raise ImportError(f"Query over source failed: {exc}") from exc
                 for entry_key, entry_values in extracted.items():
                     await self._write_data_entry(
-                        registry, database, entry_key,
-                        self._normalize_to_list(entry_values), source_id,
+                        registry,
+                        database,
+                        entry_key,
+                        self._normalize_to_list(entry_values),
+                        source_id,
                         source_text=sources.get(entry_key),
                     )
             await self._persist_source_metadata(registry, database, source, source_id, queries)
@@ -136,9 +141,7 @@ class UserDataManager:
             return value
         return [value]
 
-    async def _llm_extract_data(
-        self, query: str, schema: list[str], raw_content: list[Any]
-    ) -> tuple[dict[str, Any], dict[str, str]]:
+    async def _llm_extract_data(self, query: str, schema: list[str], raw_content: list[Any]) -> tuple[dict[str, Any], dict[str, str]]:
         """Extract query-relevant data and the source text segment for each extracted value."""
         llm = Settings.llm
         content_str = "\n".join(str(item) for item in raw_content)
@@ -169,6 +172,27 @@ class UserDataManager:
             else:
                 values[key] = entry
         return values, sources
+
+    async def _llm_onboarding_questions(self) -> list[str]:
+        """Generate onboarding questions for a new user based on the schema."""
+        if not self._schema_reference:
+            return []
+        llm = Settings.llm
+        prompt = (
+            "Generate a concise set of conversational questions to collect information "
+            "about a new user, covering only the USER node attributes in the schema below.\n\n"
+            f"SCHEMA:\n{self._schema_reference}\n\n"
+            "Return a JSON array of question strings. "
+            "Each question should be clear, friendly, and cover a distinct USER attribute. "
+            "Do not ask about relationships, organizations, skills, or any non-USER attributes. "
+            "Do not ask more than 5 questions."
+            "Return only the JSON array, nothing else."
+        )
+        response = await llm.acomplete(prompt)
+        try:
+            return json.loads(str(response).strip())
+        except (json.JSONDecodeError, ValueError):
+            return []
 
     async def _llm_extract_schema(self, query: str) -> list[str]:
         """Derive a schema 'NodeType.attribute_name' path from a query."""

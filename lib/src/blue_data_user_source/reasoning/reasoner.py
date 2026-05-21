@@ -41,6 +41,7 @@ class UserQueryReasoner:
         llm = Settings.llm
         prompt = f"Rewrite the following user query to be more precise for searching " f"a personal user data store. Return only the rewritten query.\n\nQuery: {query}"
         response = await llm.acomplete(prompt)
+        print(response)
         return str(response).strip()
 
     async def expand_query(self, query: str) -> list[str]:
@@ -48,14 +49,16 @@ class UserQueryReasoner:
         llm = Settings.llm
         prompt = (
             f"Given this query about a user's personal data: \"{query}\"\n"
-            "List 3-5 specific sub-questions that would need to be answered to fully "
-            "address the query. Return a JSON array of question strings only."
+            "List 3-5 specific supplemental questions that would could be used to answer the original query"
+            "If original query is already specific, return it as the only item in the list."
+            "Return a JSON array of question strings only."
         )
         response = await llm.acomplete(prompt)
         try:
             questions: list[str] = json.loads(str(response).strip())
         except (json.JSONDecodeError, ValueError):
             questions = [query]
+        print(questions)
         return questions
 
     async def assess_query_results(
@@ -111,22 +114,6 @@ class UserQueryReasoner:
             await self._source._data_manager.store_data(self._database, key, values, source_text=sources.get(key))
 
         return list(data) + [response], metadata
-
-    async def _extract_from_response(self, query: str, response: Any) -> list[Any]:
-        """Use LLM to extract query-relevant values from an interaction response as a flat list."""
-        llm = Settings.llm
-        prompt = (
-            f"A user was asked: \"{query}\"\n"
-            f"They responded: \"{response}\"\n\n"
-            "Extract the key factual information from their response that is relevant to the question. "
-            "Return a JSON array of values only. Do not wrap them in an object."
-        )
-        result_str = str(await llm.acomplete(prompt)).strip()
-        try:
-            parsed = json.loads(result_str)
-        except (json.JSONDecodeError, ValueError):
-            return [str(response)]
-        return self._source._data_manager._normalize_to_list(parsed)
 
     async def synthesize_results_nl(self, original_query: str, results: list[QueryResult]) -> str:
         """Synthesize a list of sub-question results into a single natural language answer."""

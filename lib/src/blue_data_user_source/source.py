@@ -41,14 +41,10 @@ class UserSource:
         for question in questions:
             data, metadata = await self._data_manager.execute_query(question, db)
             metrics = await reasoner.assess_query_results(question, data, metadata)
-            needs_interaction = await reasoner.assess_user_verification(
-                question, data, metadata, metrics
-            )
+            needs_interaction = await reasoner.assess_user_verification(question, data, metadata, metrics)
 
             if needs_interaction:
-                data, metadata = await reasoner.request_user_clarification(
-                    question, data, metadata, metrics
-                )
+                data, metadata = await reasoner.request_user_clarification(question, data, metadata, metrics)
 
             results.append(QueryResult(query=question, results=data))
 
@@ -74,12 +70,34 @@ class UserSource:
         await self._data_manager.import_source(source, db, queries)
 
     async def create_database(self, name: str) -> None:
-        """Create a new user database."""
+        """Create a new user database and collect initial data via onboarding."""
         await self._data_manager.create_user(name)
+        await self._onboard_user(name)
 
     async def create_user(self, name: str) -> None:
         """Alias for create_database."""
         await self.create_database(name)
+
+    async def _onboard_user(self, database: str) -> None:
+        """Ask schema-driven questions and store answers to seed a new user database."""
+        from blue_data_user_source.interaction import ContactManager
+
+        questions = await self._data_manager._llm_onboarding_questions()
+        if not questions:
+            return
+
+        contact_manager = ContactManager(database=database, data_manager=self._data_manager)
+        channel = await contact_manager.identify_contact_method("onboarding")
+        interaction = channel.interact()
+
+        await interaction.start()
+        for question in questions:
+            response = await interaction.send(question)
+            schema = await self._data_manager._llm_extract_schema(question)
+            extracted, sources = await self._data_manager._llm_extract_data(question, schema, [str(response)])
+            for key, values in extracted.items():
+                await self._data_manager.store_data(database, key, values, source_text=sources.get(key))
+        await interaction.stop()
 
     async def list_data(
         self,
