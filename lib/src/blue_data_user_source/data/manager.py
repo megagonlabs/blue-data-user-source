@@ -79,11 +79,15 @@ class UserDataManager:
                 try:
                     raw = await registry.execute(query, source_id)
                     schema = await self._llm_extract_schema(query)
-                    extracted = await self._llm_extract_data(query, schema, raw)
+                    extracted, sources = await self._llm_extract_data(query, schema, raw)
                 except Exception as exc:
                     raise ImportError(f"Query over source failed: {exc}") from exc
                 for entry_key, entry_values in extracted.items():
-                    await self._write_data_entry(registry, database, entry_key, self._normalize_to_list(entry_values), source_id)
+                    await self._write_data_entry(
+                        registry, database, entry_key,
+                        self._normalize_to_list(entry_values), source_id,
+                        source_text=sources.get(entry_key),
+                    )
             await self._persist_source_metadata(registry, database, source, source_id, queries)
 
     async def list_data(self, database: str, key: str | None = None) -> list[dict[str, Any]]:
@@ -120,10 +124,11 @@ class UserDataManager:
         key: str,
         value: Any,
         source_id: str = "interaction",
+        source_text: str | None = None,
     ) -> None:
         """Write a data entry to the user DB JSON store."""
         registry = await self._ensure_loaded(database)
-        await self._write_data_entry(registry, database, key, self._normalize_to_list(value), source_id)
+        await self._write_data_entry(registry, database, key, self._normalize_to_list(value), source_id, source_text=source_text)
 
     @staticmethod
     def _normalize_to_list(value: Any) -> list[Any]:
@@ -131,8 +136,10 @@ class UserDataManager:
             return value
         return [value]
 
-    async def _llm_extract_data(self, query: str, schema: list[str], raw_content: list[Any]) -> dict[str, Any]:
-        """Use LLM to extract query-relevant data from source content using provided schema."""
+    async def _llm_extract_data(
+        self, query: str, schema: list[str], raw_content: list[Any]
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        """Extract query-relevant data and the source text segment for each extracted value."""
         llm = Settings.llm
         content_str = "\n".join(str(item) for item in raw_content)
         prompt = (
@@ -140,18 +147,28 @@ class UserDataManager:
             f"Query: {query}\n\n"
             f"Schema: {schema}\n\n"
             f"Content:\n{content_str}\n\n"
-            "Return a JSON object, with matched attribute names from the schema as keys, with matching extracted values in a JSON array.\n"
+            "Return a JSON object where each key is a matched attribute name from the schema and each value is an object with:\n"
+            "  \"values\": a JSON array of the extracted values\n"
+            "  \"source\": the verbatim excerpt from the content that the values were extracted from\n"
             "If no matching value is extracted, return an empty JSON object.\n"
-            "Be as specific as possible for each extracted value, and do not include irrelevant information."
+            "Be as specific as possible and do not include irrelevant information."
         )
         response = await llm.acomplete(prompt)
         result_str = str(response).strip()
         try:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
-            return {}
-        print(parsed)
-        return parsed
+            return {}, {}
+        values: dict[str, Any] = {}
+        sources: dict[str, str] = {}
+        for key, entry in parsed.items():
+            if isinstance(entry, dict) and "values" in entry:
+                values[key] = entry["values"]
+                if "source" in entry:
+                    sources[key] = entry["source"]
+            else:
+                values[key] = entry
+        return values, sources
 
     async def _llm_extract_schema(self, query: str) -> list[str]:
         """Derive a schema 'NodeType.attribute_name' path from a query."""
@@ -173,7 +190,6 @@ class UserDataManager:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
             return []
-        print(parsed)
         return parsed
 
     async def _persist_source_metadata(
@@ -200,13 +216,16 @@ class UserDataManager:
         key: str,
         value: list[Any],
         source_id: str,
+        source_text: str | None = None,
     ) -> None:
         for item in value:
-            metadata = {
+            metadata: dict[str, Any] = {
                 "date": datetime.now(timezone.utc).isoformat(),
                 "agent": "import-agent-v1",
                 "source_id": source_id,
             }
+            if source_text is not None:
+                metadata["source_text"] = source_text
             entry = {"key": key, "value": item, "metadata": metadata}
             entry_id = str(uuid.uuid4())
             json_key = f"{database}:data:{entry_id}"

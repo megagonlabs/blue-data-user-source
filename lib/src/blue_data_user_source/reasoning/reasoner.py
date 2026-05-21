@@ -106,9 +106,9 @@ class UserQueryReasoner:
 
         source_query = query if is_verification else clarification_question
         schema = await self._source._data_manager._llm_extract_schema(source_query)
-        extracted = await self._source._data_manager._llm_extract_data(source_query, schema, [str(response)])
+        extracted, sources = await self._source._data_manager._llm_extract_data(source_query, schema, [str(response)])
         for key, values in extracted.items():
-            await self._source._data_manager.store_data(self._database, key, values)
+            await self._source._data_manager.store_data(self._database, key, values, source_text=sources.get(key))
 
         return list(data) + [response], metadata
 

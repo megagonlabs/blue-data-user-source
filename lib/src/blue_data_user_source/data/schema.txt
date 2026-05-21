@@ -6,5 +6,5 @@ SKILL: attributes(name, type, description), keys(name)
 RELATIONSHIP TYPES, ATTRIBUTES:
 PERSON.WORKED_AT.ORGANIZATION: attributes(start_date, end_date)
 PERSON.HAS_SKILL.SKILL: attributes(level, duration_days)
-PSERON.IS_FRIEND.PERSON: attributes(start_date, end_date)
+PERSON.IS_FRIEND.PERSON: attributes(start_date, end_date)
 
