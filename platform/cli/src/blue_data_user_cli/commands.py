@@ -67,8 +67,32 @@ def cli(ctx: click.Context, user: str | None, data_dir: Path, schema_path: Path 
     show_default=True,
     help="Output format: table or json for structured results, nl for natural language.",
 )
+@click.option(
+    "--top-k",
+    "top_k",
+    default=None,
+    type=int,
+    help="Maximum number of vector results to retrieve (default: 10).",
+)
+@click.option(
+    "--threshold",
+    "threshold",
+    default=None,
+    type=float,
+    help=(
+        "Percentage-drop threshold (0.0–1.0) for cutting vector results. "
+        "Cuts at the first consecutive pair where (S_i - S_{i+1}) / S_i exceeds this value."
+    ),
+)
 @click.pass_context
-def query_cmd(ctx: click.Context, text: str, session: str | None, fmt: str) -> None:
+def query_cmd(
+    ctx: click.Context,
+    text: str,
+    session: str | None,
+    fmt: str,
+    top_k: int | None,
+    threshold: float | None,
+) -> None:
     """Execute a natural language query against a user database."""
     source = _make_source(ctx.obj.get("user"), ctx.obj["data_dir"], ctx.obj.get("schema_path"))
     props: dict[str, Any] = {}
@@ -76,6 +100,10 @@ def query_cmd(ctx: click.Context, text: str, session: str | None, fmt: str) -> N
         props["session"] = session
     if fmt == "nl":
         props["output_form"] = "nl"
+    if top_k is not None:
+        props["top_k"] = top_k
+    if threshold is not None:
+        props["threshold"] = threshold
     try:
         results = asyncio.run(source.execute_query(text, optional_properties=props or None))
     except UserDbError as exc:

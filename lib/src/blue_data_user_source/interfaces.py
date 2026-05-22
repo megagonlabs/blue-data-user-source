@@ -61,8 +61,15 @@ class VectorSource(ABC):
         text: str,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
+        threshold: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Semantic similarity search."""
+        """Semantic similarity search. Each result includes a 'score' key (cosine similarity).
+
+        threshold: when set, accumulates the per-step percentage drop
+        ((S_i - S_{i+1}) / S_i * 100) and cuts at the first pair where the running
+        total exceeds the threshold (e.g. threshold=10.0 cuts when cumulative drop > 10%).
+        Applied after top_k.
+        """
 
     async def _embed(self, text: str) -> list[float]:
         from llama_index.core import Settings  # type: ignore[import-untyped]
@@ -76,6 +83,18 @@ class VectorSource(ABC):
         if norm_a == 0.0 or norm_b == 0.0:
             return 0.0
         return dot / (norm_a * norm_b)
+
+    @staticmethod
+    def _apply_threshold(results: list[dict[str, Any]], threshold: float) -> list[dict[str, Any]]:
+        c_p = 0.0
+        for i in range(len(results) - 1):
+            s_i: float = results[i]["score"]
+            p = (s_i - results[i + 1]["score"]) / s_i if s_i > 0.0 else 0.0
+            p = p * 100.0  # convert to percentage
+            c_p += p
+            if c_p > threshold:
+                return results[: i + 1]
+        return results
 
 
 class DataRegistry(ABC):

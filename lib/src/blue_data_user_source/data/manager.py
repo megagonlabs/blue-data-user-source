@@ -38,7 +38,13 @@ class UserDataManager:
             await self.create_user(database)
         return self._registries[database]
 
-    async def execute_query(self, query: str, database: str) -> tuple[list[Any], dict[str, Any]]:
+    async def execute_query(
+        self,
+        query: str,
+        database: str,
+        top_k: int = 10,
+        threshold: float | None = None,
+    ) -> tuple[list[Any], dict[str, Any]]:
         """Execute a query and return (results, metadata) including provenance."""
         registry = await self._ensure_loaded(database)
         planner = UserDataPlanner(registry)
@@ -48,7 +54,7 @@ class UserDataManager:
         provenance: list[dict[str, Any]] = []
 
         for step in plan:
-            raw = await registry.execute(step.subquery, step.source_id)
+            raw = await registry.execute(step.subquery, step.source_id, top_k=top_k, threshold=threshold)
             aggregated.extend(raw)
             provenance.append(
                 {
@@ -79,9 +85,7 @@ class UserDataManager:
                 try:
                     raw = await registry.execute(query, source_id)
                     schema = await self._llm_extract_schema(query)
-                    print(schema)
                     extracted, sources = await self._llm_extract_data(query, schema, raw)
-                    print(extracted)
                 except Exception as exc:
                     raise ImportError(f"Query over source failed: {exc}") from exc
                 for entry_key, entry_values in extracted.items():
@@ -171,6 +175,7 @@ class UserDataManager:
                     sources[key] = entry["source"]
             else:
                 values[key] = entry
+        print(f"Extracted data: {json.dumps(values, indent=2)}")
         return values, sources
 
     async def _llm_onboarding_questions(self) -> list[str]:
@@ -214,6 +219,7 @@ class UserDataManager:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
             return []
+        print(f"Extracted schema paths: {json.dumps(parsed, indent=2)}")
         return parsed
 
     async def _persist_source_metadata(

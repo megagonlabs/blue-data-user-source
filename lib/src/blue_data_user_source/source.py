@@ -31,15 +31,22 @@ class UserSource:
         props = optional_properties or {}
         session_id = str(props["session"]) if "session" in props else None
         output_form = str(props.get("output_form", "json"))
+        top_k = int(props["top_k"]) if "top_k" in props else 10
+        threshold = float(props["threshold"]) if "threshold" in props else None
 
         reasoner = UserQueryReasoner(source=self, database=db, session_id=session_id)
 
+        print(f"Original query: {query}")
         rewritten = await reasoner.contextualize_query(query)
+        print(f"Rewritten query: {rewritten}")
         questions = await reasoner.expand_query(rewritten)
+        print(f"Expanded questions: {questions}")
+
+        questions.append(rewritten)  # Ensure the original (rewritten) query is included as a fallback
 
         results: list[QueryResult] = []
         for question in questions:
-            data, metadata = await self._data_manager.execute_query(question, db)
+            data, metadata = await self._data_manager.execute_query(question, db, top_k=top_k, threshold=threshold)
             metrics = await reasoner.assess_query_results(question, data, metadata)
             needs_interaction = await reasoner.assess_user_verification(question, data, metadata, metrics)
 

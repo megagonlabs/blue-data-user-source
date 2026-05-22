@@ -50,6 +50,7 @@ class MemoryVectorSource(VectorSource):
         text: str,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
+        threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         if not self._data:
             return []
@@ -62,10 +63,13 @@ class MemoryVectorSource(VectorSource):
             ),
             reverse=True,
         )
-        return [
-            {k: v for k, v in self._data[key].items() if k != "embedding"}
-            for _, key in scored[:top_k]
+        results = [
+            {**{k: v for k, v in self._data[key].items() if k != "embedding"}, "score": score}
+            for score, key in scored[:top_k]
         ]
+        if threshold is not None:
+            results = self._apply_threshold(results, threshold)
+        return results
 
 
 def memory_store_factory(name: str) -> tuple[MemoryJsonSource, MemoryVectorSource]:

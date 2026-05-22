@@ -157,6 +157,15 @@ async def test_vector_query_on_empty_store_returns_empty_list(tmp_path: Path) ->
     assert await store.query("q") == []
 
 
+async def test_vector_query_result_includes_score(tmp_path: Path) -> None:
+    store = FileVectorSource(tmp_path / "vectors.json")
+    await store.set("k1", "hello world")
+    results = await store.query("hello", top_k=1)
+    assert len(results) == 1
+    assert "score" in results[0]
+    assert isinstance(results[0]["score"], float)
+
+
 async def test_vector_creates_parent_directories(tmp_path: Path) -> None:
     store = FileVectorSource(tmp_path / "nested" / "deep" / "vectors.json")
     await store.set("k", "text")

@@ -71,6 +71,29 @@ def test_query_no_session_passes_none_props(runner: CliRunner) -> None:
     mock.execute_query.assert_awaited_once_with("q", optional_properties=None)
 
 
+def test_query_top_k_is_forwarded(runner: CliRunner) -> None:
+    mock = _mock_source([])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "db", "query", "q", "--top-k", "5"])
+    mock.execute_query.assert_awaited_once_with("q", optional_properties={"top_k": 5})
+
+
+def test_query_threshold_is_forwarded(runner: CliRunner) -> None:
+    mock = _mock_source([])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "db", "query", "q", "--threshold", "0.2"])
+    mock.execute_query.assert_awaited_once_with("q", optional_properties={"threshold": 0.2})
+
+
+def test_query_top_k_and_threshold_together(runner: CliRunner) -> None:
+    mock = _mock_source([])
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
+        runner.invoke(cli, ["--user", "db", "query", "q", "--top-k", "3", "--threshold", "0.15"])
+    mock.execute_query.assert_awaited_once_with(
+        "q", optional_properties={"top_k": 3, "threshold": 0.15}
+    )
+
+
 def test_query_error_exits_with_code_1(runner: CliRunner) -> None:
     mock = _mock_source()
     mock.execute_query = AsyncMock(side_effect=QueryError("no db"))

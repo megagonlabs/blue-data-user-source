@@ -20,20 +20,33 @@ class UserDataRegistry(DataRegistry):
         """Return the source registered under source_id, or None."""
         return self._sources.get(source_id)
 
-    async def execute(self, query: str, source_id: str) -> list[Any]:
+    async def execute(
+        self,
+        query: str,
+        source_id: str,
+        top_k: int = 10,
+        threshold: float | None = None,
+    ) -> list[Any]:
         """Execute a query against the named source and return raw results."""
         source = self._sources.get(source_id)
         if source is None:
             raise QueryError(f"Source not found: {source_id}")
+        if isinstance(source, VectorSource):
+            return await source.query(query, top_k=top_k, threshold=threshold)
         return await source.query(query)
 
     async def execute_json(self, expression: str) -> list[dict[str, Any]]:
         """Execute a JSONPath expression against the JSON store."""
         return await self._json.query(expression)
 
-    async def execute_vector(self, text: str, top_k: int = 10) -> list[dict[str, Any]]:
+    async def execute_vector(
+        self,
+        text: str,
+        top_k: int = 10,
+        threshold: float | None = None,
+    ) -> list[dict[str, Any]]:
         """Execute a semantic similarity search against the vector store."""
-        return await self._vector.query(text, top_k=top_k)
+        return await self._vector.query(text, top_k=top_k, threshold=threshold)
 
     async def set_json(self, key: str, value: dict[str, Any]) -> None:
         """Write a value to the JSON store."""
