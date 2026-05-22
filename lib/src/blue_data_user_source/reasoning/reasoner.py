@@ -107,9 +107,12 @@ class UserQueryReasoner:
         response = await interaction.send(clarification_question)
         await interaction.stop()
 
+        # Combine question and response as the context to extract new data
+        context = f"Question: {query}\n User Response: {response}"
+
         source_query = query if is_verification else clarification_question
-        schema = await self._source._data_manager._llm_extract_schema(source_query)
-        extracted, sources = await self._source._data_manager._llm_extract_data(source_query, schema, [str(response)])
+        schema = await self._source._data_manager._llm_extract_schema(self._database, source_query)
+        extracted, sources = await self._source._data_manager._llm_extract_data(self._database, source_query, schema, [context])
         for key, values in extracted.items():
             await self._source._data_manager.store_data(self._database, key, values, source_text=sources.get(key))
 

@@ -70,18 +70,18 @@ def cli(ctx: click.Context, user: str | None, data_dir: Path, schema_path: Path 
 @click.option(
     "--top-k",
     "top_k",
-    default=None,
+    default=10,
     type=int,
     help="Maximum number of vector results to retrieve (default: 10).",
 )
 @click.option(
     "--threshold",
     "threshold",
-    default=None,
+    default=10.0,
     type=float,
     help=(
-        "Percentage-drop threshold (0.0–1.0) for cutting vector results. "
-        "Cuts at the first consecutive pair where (S_i - S_{i+1}) / S_i exceeds this value."
+        "Cumulative percentage-drop squared threshold for cutting vector results. "
+        "Cuts at the ith cumulative consecutive pair where sum ((S_i - S_{i+1}) / S_i)^2 exceeds this value (default: 10.0)"
     ),
 )
 @click.pass_context

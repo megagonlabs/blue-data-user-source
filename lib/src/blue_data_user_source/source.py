@@ -100,8 +100,12 @@ class UserSource:
         await interaction.start()
         for question in questions:
             response = await interaction.send(question)
-            schema = await self._data_manager._llm_extract_schema(question)
-            extracted, sources = await self._data_manager._llm_extract_data(question, schema, [str(response)])
+            # Combine question and response as the context to extract new data
+            context = f"Question: {question}\n User Response: {response}"
+
+            schema = await self._data_manager._llm_extract_schema(database, question)
+
+            extracted, sources = await self._data_manager._llm_extract_data(database, question, schema, [context])
             for key, values in extracted.items():
                 await self._data_manager.store_data(database, key, values, source_text=sources.get(key))
         await interaction.stop()

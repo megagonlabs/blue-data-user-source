@@ -84,8 +84,8 @@ class UserDataManager:
             for query in queries:
                 try:
                     raw = await registry.execute(query, source_id)
-                    schema = await self._llm_extract_schema(query)
-                    extracted, sources = await self._llm_extract_data(query, schema, raw)
+                    schema = await self._llm_extract_schema(database, query)
+                    extracted, sources = await self._llm_extract_data(database, query, schema, raw)
                 except Exception as exc:
                     raise ImportError(f"Query over source failed: {exc}") from exc
                 for entry_key, entry_values in extracted.items():
@@ -145,22 +145,36 @@ class UserDataManager:
             return value
         return [value]
 
-    async def _llm_extract_data(self, query: str, schema: list[str], raw_content: list[Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    async def _llm_extract_data(self, database: str, query: str, schema: list[str], raw_content: list[Any]) -> tuple[dict[str, Any], dict[str, str]]:
         """Extract query-relevant data and the source text segment for each extracted value."""
         llm = Settings.llm
         content_str = "\n".join(str(item) for item in raw_content)
         prompt = (
-            f"Extract information relevant to the following query from the content below.\n"
+            f"Extract data relevant to the following query from the content below using the schema as the data to extract. Follow the instructions below.\n"
+            f"Database: {database}\n\n"
             f"Query: {query}\n\n"
             f"Schema: {schema}\n\n"
-            f"Content:\n{content_str}\n\n"
-            "Return a JSON object where each key is a matched attribute name from the schema and each value is an object with:\n"
-            "  \"values\": a JSON array of the extracted values\n"
-            "  \"source\": the verbatim excerpt from the content that the values were extracted from\n"
-            "If no matching value is extracted, return an empty JSON object.\n"
-            "Be as specific as possible and do not include irrelevant information."
+            f"Content:\n```{content_str}```\n\n"
+            "Instructions:\n"
+            "* Use both Query and Content as context to interpret the schema and extract relevant data. \n"
+            "* Do not return data that cannot be clearly supported by the content. \n"
+            "* Be as specific as possible and do not include irrelevant information.\n"
+            "* Return a JSON object where each key is a matched entry from the schema and each value is an object with:\n"
+            "**  \"values\": a JSON array of the extracted values\n"
+            "**  \"source\": the verbatim excerpt from the content that the values were extracted from, potentially including the query, especially if it provides referential context.\n"
+            "* Double-check if source text is present for each extracted value.\n"
+            "* If multiple values are extracted from different parts of the content but map to the same schema entry, combine them into a single array under the same key and concatenate the source text with clear delimiters.\n"
+            "* If no matching value is extracted, return an empty JSON object.\n\n"
+            "Additional Instructions:\n"
+            "* Use the below instructions for refining paths based on schema:\n"
+            "** Subsitute entity key for entity types in the schema for SOURCE.ATTRIBUTE, e.g. replace SOURCE.description with python.description if python is the key for the SOURCE entity.\n"
+            "** Subsitute entity keys when referencing source and target entities in the schema for relations SOURCE.RELATION.TARGET, e.g. replace alice.RELATION.SKILL with alice.RELATION.python if alice and python are keys for SOURCE and TARGET respectively.\n"
+            f"** Replace all occurences of USER in key with the database value ({database}), for USER.ATTRIBUTE, e.g. replace USER.gender with {database}.gender, if {database} is the database value.\n"
+            "** Double-check relations SOURCE.RELATION.TARGET to ensure the correct entity keys are used for SOURCE and TARGET, never return source and target types, when makes sense generate keys and use keys.\n"
         )
+        print(prompt)
         response = await llm.acomplete(prompt)
+        print(f"LLM response: {response}")
         result_str = str(response).strip()
         try:
             parsed = json.loads(result_str)
@@ -186,12 +200,13 @@ class UserDataManager:
         prompt = (
             "Generate a concise set of conversational questions to collect information "
             "about a new user, covering only the USER node attributes in the schema below.\n\n"
-            f"SCHEMA:\n{self._schema_reference}\n\n"
-            "Return a JSON array of question strings. "
-            "Each question should be clear, friendly, and cover a distinct USER attribute. "
-            "Do not ask about relationships, organizations, skills, or any non-USER attributes. "
-            "Do not ask more than 5 questions."
-            "Return only the JSON array, nothing else."
+            f"Schema:\n{self._schema_reference}\n\n"
+            "Instructions:\n"
+            "* Return a JSON array of question strings. "
+            "* Each question should be clear, friendly, and cover a distinct USER attribute. "
+            "* Do not ask about relationships, organizations, skills, or any non-USER attributes. "
+            "* Do not ask more than 5 questions."
+            "* Return only the JSON array, nothing else."
         )
         response = await llm.acomplete(prompt)
         try:
@@ -199,19 +214,24 @@ class UserDataManager:
         except (json.JSONDecodeError, ValueError):
             return []
 
-    async def _llm_extract_schema(self, query: str) -> list[str]:
+    async def _llm_extract_schema(self, database: str, query: str) -> list[str]:
         """Derive a schema 'NodeType.attribute_name' path from a query."""
         llm = Settings.llm
         prompt = (
-            "Map the following query to the most appropriate schema entries in the user data schema below.\n"
-            "Return the result as a list of entries, as below:\n"
-            "If matched schema entry is a NODE ATTRIBUTE, return matching NODE key value and NODE ATTRIBUTE name in the format 'node_key_value.attribute_name', e.g. alice.gender where alice is PERSON.first_name and PERSON.first_name is a key of PERSON node, gender is PERSON.gender attribute\n"
-            "If matched schema entry is a RELATION, return matching source NODE key value and RELATION name in the format 'source_node_key_value.relation_name', e.g. alice.IS_FRIEND where alice is PERSON.first_name, IS_FRIEND is PERSON.IS_FRIEND.PERSON relationship"
-            "If matched schema entry is a RELATION ATTRIBUTE, return matching source NODE key value and RELATION name and target NODE key and RELATION ATTRIBUTE name in the format 'source_node_key_value.relation_name.target_node_key_value.relation_attribute_name', e.g. alice.IS_FRIEND.bob.start_date where alice is PERSON.first_name, IS_FRIEND is PERSON.IS_FRIEND.PERSON relationship, bob is PERSON.first_name, start_date is PERSON.IS_FRIEND.PERSON attribute"
-            "If no exact attribute matches, extend using the same conventions in the schema"
-            f"SCHEMA:\n{self._schema_reference}\n"
-            f"Query: {query}\n\n"
-            "Return result JSON and nothing else."
+            f"Extract schema paths relevant to the following query from the content below using the schema as the data to extract. Follow the instructions below.\n"
+            f"Database: {database}\n"
+            f"Query: {query}\n"
+            f"Schema:\n{self._schema_reference}\n\n"
+            "Instructions:\n"
+            "* Do not return schema paths that cannot be clearly referenced by the query. \n"
+            "* Map the query to the most appropriate schema paths in the schema."
+            "* Be as specific as possible and do not include irrelevant information.\n"
+            "* Return result JSON as a list of schema paths and nothing else."
+            "* Additional Instructions for schema path formatting:\n"
+            "* If matched schema path is a node attribute, i.e. NODE.ATTRIBUTE, return matching NODE key value and NODE ATTRIBUTE name in the format 'node_key_value.attribute_name', e.g. alice.gender where alice is PERSON.first_name and PERSON.first_name is a key of PERSON node, gender is PERSON.gender attribute"
+            "* If matched schema path is a relation, i.e. SOURCE.RELATION.TARGET, return matching source NODE key value and RELATION name in the format 'source_node_key_value.relation_name.target_node_key_value', e.g. alice.IS_FRIEND.bob where alice is PERSON.key, IS_FRIEND is the relationship, bob is PERSON.key"
+            "* If matched schema path is a relation attribute, i.e. SOURCE.RELATION.TARGET.RELATION_ATTRIBUTE, return matching source NODE key value and RELATION name and target NODE key and RELATION ATTRIBUTE name in the format 'source_node_key_value.relation_name.target_node_key_value.relation_attribute_name', e.g. alice.IS_FRIEND.bob.start_date where alice is PERSON.key, IS_FRIEND is the relationship, bob is PERSON.key, start_date is PERSON.IS_FRIEND.PERSON attribute"
+            "* If no exact schema path matches, extend using the same conventions"
         )
         response = await llm.acomplete(prompt)
         result_str = str(response).strip()
