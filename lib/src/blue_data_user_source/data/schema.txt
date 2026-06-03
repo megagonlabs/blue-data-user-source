@@ -1,11 +1,45 @@
-NODE TYPES, ATTRIBUTES, KEYS:
-USER: attributes(first_name, last_name, preferred_name, birth_date, gender, nationality), keys(first_name + last_name)
-PERSON: attributes(first_name, last_name, preferred_name, birth_date, gender, nationality), keys(first_name + last_name)
-ORGANIZATION: attributes(name, type, industry, description, founded_date, size_range, headquarters, website), keys(name)
-SKILL: attributes(name, type, description), keys(name)
 
-RELATIONSHIP TYPES, ATTRIBUTES:
-PERSON.WORKED_AT.ORGANIZATION: attributes(start_date, end_date)
-PERSON.HAS_SKILL.SKILL: attributes(level, duration_days)
-PERSON.IS_FRIEND.PERSON: attributes(start_date, end_date)
+
+ENTITIES:
+* PERSON
+Type: PERSON
+Properties:last_name, preferred_name, birth_date, gender, nationality
+Key: first_name + last_name
+
+* USER
+Type: USER
+Super Type: PERSON
+
+* ORGANIZATION: 
+Type: ORGANIZATION
+Properties: name, type, industry, description, founded_date, size_range, headquarters, website
+Key: name
+
+* COMPANY
+Type: COMPANY
+Super Type: ORGANIZATION
+
+* SKILL
+Type: SKILL
+Properties: name 
+
+
+RELATIONS:
+* PERSON.WORKED_AT.ORGANIZATION
+Source Type: PERSON
+Relation Type: WORKED_AT
+Target Type: ORGANIZATION
+Properties: start_date, end_date
+
+* PERSON.HAS_SKILL.SKILL
+Source Type: PERSON
+Relation Type: HAS_SKILL
+Target Type: SKILL
+Properties: level, duration
+
+* PERSON.IS_FRIEND.PERSON: 
+Source Type: PERSON
+Relation Type: IS_FRIEND
+Target Type: PERSON
+Properties: start_date, end_date
 

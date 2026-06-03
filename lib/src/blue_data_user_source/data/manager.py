@@ -159,20 +159,14 @@ class UserDataManager:
             "* Use both Query and Content as context to interpret the schema and extract relevant data. \n"
             "* Do not return data that cannot be clearly supported by the content. \n"
             "* Be as specific as possible and do not include irrelevant information.\n"
+            "* Check the extracted values to make sure each value is atomic and cannot be further broken down into more specific schema entries. If it can be broken down, break it down each into specific values. \n"
             "* Return a JSON object where each key is a matched entry from the schema and each value is an object with:\n"
             "**  \"values\": a JSON array of the extracted values\n"
             "**  \"source\": the verbatim excerpt from the content that the values were extracted from, potentially including the query, especially if it provides referential context.\n"
             "* Double-check if source text is present for each extracted value.\n"
             "* If multiple values are extracted from different parts of the content but map to the same schema entry, combine them into a single array under the same key and concatenate the source text with clear delimiters.\n"
             "* If no matching value is extracted, return an empty JSON object.\n\n"
-            "Additional Instructions:\n"
-            "* Use the below instructions for refining paths based on schema:\n"
-            "** Subsitute entity key for entity types in the schema for SOURCE.ATTRIBUTE, e.g. replace SOURCE.description with python.description if python is the key for the SOURCE entity.\n"
-            "** Subsitute entity keys when referencing source and target entities in the schema for relations SOURCE.RELATION.TARGET, e.g. replace alice.RELATION.SKILL with alice.RELATION.python if alice and python are keys for SOURCE and TARGET respectively.\n"
-            f"** Replace all occurences of USER in key with the database value ({database}), for USER.ATTRIBUTE, e.g. replace USER.gender with {database}.gender, if {database} is the database value.\n"
-            "** Double-check relations SOURCE.RELATION.TARGET to ensure the correct entity keys are used for SOURCE and TARGET, never return source and target types, when makes sense generate keys and use keys.\n"
         )
-        print(prompt)
         response = await llm.acomplete(prompt)
         print(f"LLM response: {response}")
         result_str = str(response).strip()
@@ -223,23 +217,30 @@ class UserDataManager:
             f"Query: {query}\n"
             f"Schema:\n{self._schema_reference}\n\n"
             "Instructions:\n"
-            "* Do not return schema paths that cannot be clearly referenced by the query. \n"
-            "* Map the query to the most appropriate schema paths in the schema."
+            "* Do not return paths that are not relevant to the query. \n"
+            "* Map the query to the most appropriate paths based on the schema."
             "* Be as specific as possible and do not include irrelevant information.\n"
-            "* Return result JSON as a list of schema paths and nothing else."
-            "* Additional Instructions for schema path formatting:\n"
-            "* If matched schema path is a node attribute, i.e. NODE.ATTRIBUTE, return matching NODE key value and NODE ATTRIBUTE name in the format 'node_key_value.attribute_name', e.g. alice.gender where alice is PERSON.first_name and PERSON.first_name is a key of PERSON node, gender is PERSON.gender attribute"
-            "* If matched schema path is a relation, i.e. SOURCE.RELATION.TARGET, return matching source NODE key value and RELATION name in the format 'source_node_key_value.relation_name.target_node_key_value', e.g. alice.IS_FRIEND.bob where alice is PERSON.key, IS_FRIEND is the relationship, bob is PERSON.key"
-            "* If matched schema path is a relation attribute, i.e. SOURCE.RELATION.TARGET.RELATION_ATTRIBUTE, return matching source NODE key value and RELATION name and target NODE key and RELATION ATTRIBUTE name in the format 'source_node_key_value.relation_name.target_node_key_value.relation_attribute_name', e.g. alice.IS_FRIEND.bob.start_date where alice is PERSON.key, IS_FRIEND is the relationship, bob is PERSON.key, start_date is PERSON.IS_FRIEND.PERSON attribute"
+            "* Return result JSON as a list of paths and nothing else."
+            "* Additional Instructions for identifying paths:\n"
+            "* If query is referring to \"you\" as a second-person pronoun, consider that as referring to the user and use database (i.e. {database}) as the key of the entity in the schema paths.\n"
+            "* If query is referring to the user by name, use database (i.e. {database}) as the key of the entity in the schema paths.\n"
+            "* If query is referring to another entity, use the key of that entity as the key of the entity key in the schema paths.\n"
+            "* If query is referring to a generic entity type, use the type of the entity in the schema path"
+            "* If query is referring to an attribute of a a specific entity return the matching entity key and entity attribute name as the path, in the format 'entity_key_value.attribute_name', e.g. alice.first_name\n"
+            "* If query is referring to an attribute of a a generic entity return the matching entity type and entity attribute name as the path, in the format 'entity_type.attribute_name', e.g. PERSON.first_name\n"
+            "* If query is referring to a specific relation with specific source and target entities, return matching source entity key value, relation name, and target entity key value as the path, in the format 'source_entity_key_value.relation_name.target_entity_key_value', e.g. alice.HAS_SKILL.python\n"
+            "* If query is referring to a partially specific relation with specific source entity but a generic target type, return matching source entity key value, relation name, and target entity type value as the path, in the format 'source_entity_key_value.relation_name.target_entity_type', e.g. alice.HAS_SKILL.SKILL\n"
+            "* If query is referrring to a specific relation attribute with specific source and target entities, return matching source entity key value and relation name and target entity key value and relation attribute key as the path, in the format 'source_entity_key_value.relation_name.target_entity_key_value.relation_attribute_key'\n"
             "* If no exact schema path matches, extend using the same conventions"
         )
         response = await llm.acomplete(prompt)
         result_str = str(response).strip()
+        print(f"LLM response: {result_str}")
         try:
             parsed = json.loads(result_str)
         except (json.JSONDecodeError, ValueError):
             return []
-        print(f"Extracted schema paths: {json.dumps(parsed, indent=2)}")
+        print(f"Extracted paths: {json.dumps(parsed, indent=2)}")
         return parsed
 
     async def _persist_source_metadata(
