@@ -150,21 +150,28 @@ class UserDataManager:
         llm = Settings.llm
         content_str = "\n".join(str(item) for item in raw_content)
         prompt = (
-            f"Extract data relevant to the following query from the content below using the schema as the data to extract. Follow the instructions below.\n"
+            f"Extract data for each of the schema paths relevant to the following query from the content below using the schema as a guide to extract.\n"
             f"Database: {database}\n\n"
             f"Query: {query}\n\n"
-            f"Schema: {schema}\n\n"
+            f"Schema Paths: {schema}\n\n"
             f"Content:\n```{content_str}```\n\n"
             "Instructions:\n"
-            "* Use both Query and Content as context to interpret the schema and extract relevant data. \n"
+            "* Use both Query and Content as context to interpret the schema paths and extract relevant data. \n"
             "* Do not return data that cannot be clearly supported by the content. \n"
             "* Be as specific as possible and do not include irrelevant information.\n"
+            "* Interpret the schema paths carefully and ensure each extracted value corresponds to the correct path, following the schema path notation as below:\n"
+            "** 'entity_key_value.attribute_name' for specific entity attributes, e.g. 'alice.first_name'\n"
+            "** 'entity_key_value.relation_name.target_entity_key_value' for specific relations, e.g. 'alice.HAS_SKILL.python'\n"
+            "** 'entity_key_value.relation_name.target_entity_key_value.relation_attribute_key' for specific relation attributes, e.g. 'alice.HAS_SKILL.python.proficiency_level'\n"
             "* Check the extracted values to make sure each value is atomic and cannot be further broken down into more specific schema entries. If it can be broken down, break it down each into specific values. \n"
-            "* Return a JSON object where each key is a matched entry from the schema and each value is an object with:\n"
+            "* Return a JSON object where each key is a schema path and each value is an object with:\n"
             "**  \"values\": a JSON array of the extracted values\n"
             "**  \"source\": the verbatim excerpt from the content that the values were extracted from, potentially including the query, especially if it provides referential context.\n"
+            "* If schema path refers to a entity_type (e.g. alice.HAS_SKILL.SKILL) but extraction has a specific value, e.g. 'alice.HAS_SKILL.python' return object should have as key, the specific path.\n"
             "* Double-check if source text is present for each extracted value.\n"
-            "* If multiple values are extracted from different parts of the content but map to the same schema entry, combine them into a single array under the same key and concatenate the source text with clear delimiters.\n"
+
+            
+            "* If multiple values are extracted from different parts of the content but map to the same schema path entry, combine them into a single array under the same key and concatenate the source text with clear delimiters.\n"
             "* If no matching value is extracted, return an empty JSON object.\n\n"
         )
         response = await llm.acomplete(prompt)

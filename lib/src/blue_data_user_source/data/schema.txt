@@ -1,45 +1,501 @@
 
+# ENTITIES
 
-ENTITIES:
-* PERSON
+### * PERSON
+
 Type: PERSON
-Properties:last_name, preferred_name, birth_date, gender, nationality
+Properties: first_name, last_name, preferred_name, birth_date, gender, nationality
 Key: first_name + last_name
 
-* USER
+### * USER
+
 Type: USER
 Super Type: PERSON
 
-* ORGANIZATION: 
+### * ORGANIZATION
+
 Type: ORGANIZATION
 Properties: name, type, industry, description, founded_date, size_range, headquarters, website
 Key: name
 
-* COMPANY
+### * COMPANY
+
 Type: COMPANY
 Super Type: ORGANIZATION
 
-* SKILL
+### * SKILL
+
 Type: SKILL
-Properties: name 
+Properties: name
+Key: name
 
+---
 
-RELATIONS:
-* PERSON.WORKED_AT.ORGANIZATION
+## Generic Knowledge Entities
+
+### * LOCATION
+
+Type: LOCATION
+Properties: name, type, address, city, state, country, latitude, longitude
+Key: name + country
+
+### * ADDRESS
+
+Type: ADDRESS
+Properties: street, city, state, postal_code, country
+
+### * EVENT
+
+Type: EVENT
+Properties: name, description, start_date, end_date, event_type
+Key: name + start_date
+
+### * PROJECT
+
+Type: PROJECT
+Properties: name, description, start_date, end_date, status
+Key: name
+
+### * TASK
+
+Type: TASK
+Properties: title, description, status, priority, due_date
+Key: title
+
+### * DOCUMENT
+
+Type: DOCUMENT
+Properties: title, type, description, created_date, modified_date, version
+Key: title + version
+
+### * NOTE
+
+Type: NOTE
+Super Type: DOCUMENT
+
+### * ARTICLE
+
+Type: ARTICLE
+Super Type: DOCUMENT
+
+### * POLICY
+
+Type: POLICY
+Super Type: DOCUMENT
+
+### * PRODUCT
+
+Type: PRODUCT
+Properties: name, category, description, release_date, version
+Key: name + version
+
+### * SERVICE
+
+Type: SERVICE
+Properties: name, category, description
+Key: name
+
+### * ASSET
+
+Type: ASSET
+Properties: name, type, description, created_date
+Key: name
+
+### * TECHNOLOGY
+
+Type: TECHNOLOGY
+Properties: name, category, description
+Key: name
+
+### * CERTIFICATION
+
+Type: CERTIFICATION
+Properties: name, issuing_authority, description
+Key: name
+
+### * EDUCATIONAL_INSTITUTION
+
+Type: EDUCATIONAL_INSTITUTION
+Super Type: ORGANIZATION
+
+### * DEGREE
+
+Type: DEGREE
+Properties: name, level, field_of_study
+Key: name + field_of_study
+
+### * TEAM
+
+Type: TEAM
+Properties: name, description
+Key: name
+
+### * DEPARTMENT
+
+Type: DEPARTMENT
+Properties: name, function
+Key: name
+
+### * ROLE
+
+Type: ROLE
+Properties: title, description, level
+Key: title
+
+### * TOPIC
+
+Type: TOPIC
+Properties: name, description
+Key: name
+
+### * TAG
+
+Type: TAG
+Properties: name
+Key: name
+
+### * CATEGORY
+
+Type: CATEGORY
+Properties: name, description
+Key: name
+
+### * CONTACT_METHOD
+
+Type: CONTACT_METHOD
+Properties: type, value, verified
+Key: type + value
+
+### * ACCOUNT
+
+Type: ACCOUNT
+Properties: account_id, provider, account_type, created_date
+Key: account_id
+
+---
+
+# RELATIONS
+
+## Employment & Organizational Structure
+
+### * PERSON.WORKED_AT.ORGANIZATION
+
 Source Type: PERSON
 Relation Type: WORKED_AT
 Target Type: ORGANIZATION
+Properties: start_date, end_date, title
+
+### * PERSON.HOLDS_ROLE.ROLE
+
+Source Type: PERSON
+Relation Type: HOLDS_ROLE
+Target Type: ROLE
 Properties: start_date, end_date
 
-* PERSON.HAS_SKILL.SKILL
+### * PERSON.MEMBER_OF.TEAM
+
+Source Type: PERSON
+Relation Type: MEMBER_OF
+Target Type: TEAM
+Properties: start_date, end_date
+
+### * TEAM.PART_OF.DEPARTMENT
+
+Source Type: TEAM
+Relation Type: PART_OF
+Target Type: DEPARTMENT
+
+### * DEPARTMENT.PART_OF.ORGANIZATION
+
+Source Type: DEPARTMENT
+Relation Type: PART_OF
+Target Type: ORGANIZATION
+
+### * ORGANIZATION.SUBSIDIARY_OF.ORGANIZATION
+
+Source Type: ORGANIZATION
+Relation Type: SUBSIDIARY_OF
+Target Type: ORGANIZATION
+
+### * PERSON.MANAGES.PERSON
+
+Source Type: PERSON
+Relation Type: MANAGES
+Target Type: PERSON
+Properties: start_date, end_date
+
+---
+
+## Skills, Expertise, and Education
+
+### * PERSON.HAS_SKILL.SKILL
+
 Source Type: PERSON
 Relation Type: HAS_SKILL
 Target Type: SKILL
 Properties: level, duration
 
-* PERSON.IS_FRIEND.PERSON: 
+### * PERSON.CERTIFIED_IN.CERTIFICATION
+
+Source Type: PERSON
+Relation Type: CERTIFIED_IN
+Target Type: CERTIFICATION
+Properties: issue_date, expiration_date
+
+### * PERSON.EARNED.DEGREE
+
+Source Type: PERSON
+Relation Type: EARNED
+Target Type: DEGREE
+Properties: graduation_date
+
+### * DEGREE.ISSUED_BY.EDUCATIONAL_INSTITUTION
+
+Source Type: DEGREE
+Relation Type: ISSUED_BY
+Target Type: EDUCATIONAL_INSTITUTION
+
+### * SKILL.RELATED_TO.SKILL
+
+Source Type: SKILL
+Relation Type: RELATED_TO
+Target Type: SKILL
+
+---
+
+## Social & Personal Relationships
+
+### * PERSON.IS_FRIEND.PERSON
+
 Source Type: PERSON
 Relation Type: IS_FRIEND
 Target Type: PERSON
 Properties: start_date, end_date
 
+### * PERSON.KNOWS.PERSON
+
+Source Type: PERSON
+Relation Type: KNOWS
+Target Type: PERSON
+Properties: since_date
+
+### * PERSON.COLLABORATED_WITH.PERSON
+
+Source Type: PERSON
+Relation Type: COLLABORATED_WITH
+Target Type: PERSON
+Properties: start_date, end_date
+
+### * PERSON.REPORTS_TO.PERSON
+
+Source Type: PERSON
+Relation Type: REPORTS_TO
+Target Type: PERSON
+Properties: start_date, end_date
+
+---
+
+## Projects & Work
+
+### * PERSON.WORKS_ON.PROJECT
+
+Source Type: PERSON
+Relation Type: WORKS_ON
+Target Type: PROJECT
+Properties: role, start_date, end_date
+
+### * ORGANIZATION.OWNS.PROJECT
+
+Source Type: ORGANIZATION
+Relation Type: OWNS
+Target Type: PROJECT
+
+### * PROJECT.CONTAINS.TASK
+
+Source Type: PROJECT
+Relation Type: CONTAINS
+Target Type: TASK
+
+### * TASK.DEPENDS_ON.TASK
+
+Source Type: TASK
+Relation Type: DEPENDS_ON
+Target Type: TASK
+
+### * PROJECT.USES.TECHNOLOGY
+
+Source Type: PROJECT
+Relation Type: USES
+Target Type: TECHNOLOGY
+
+---
+
+## Documents & Knowledge
+
+### * PERSON.AUTHORED.DOCUMENT
+
+Source Type: PERSON
+Relation Type: AUTHORED
+Target Type: DOCUMENT
+Properties: date
+
+### * DOCUMENT.RELATED_TO.TOPIC
+
+Source Type: DOCUMENT
+Relation Type: RELATED_TO
+Target Type: TOPIC
+
+### * DOCUMENT.TAGGED_WITH.TAG
+
+Source Type: DOCUMENT
+Relation Type: TAGGED_WITH
+Target Type: TAG
+
+### * DOCUMENT.REFERENCES.DOCUMENT
+
+Source Type: DOCUMENT
+Relation Type: REFERENCES
+Target Type: DOCUMENT
+
+### * DOCUMENT.BELONGS_TO.CATEGORY
+
+Source Type: DOCUMENT
+Relation Type: BELONGS_TO
+Target Type: CATEGORY
+
+---
+
+## Products, Services & Technology
+
+### * ORGANIZATION.PRODUCES.PRODUCT
+
+Source Type: ORGANIZATION
+Relation Type: PRODUCES
+Target Type: PRODUCT
+
+### * ORGANIZATION.PROVIDES.SERVICE
+
+Source Type: ORGANIZATION
+Relation Type: PROVIDES
+Target Type: SERVICE
+
+### * PRODUCT.USES.TECHNOLOGY
+
+Source Type: PRODUCT
+Relation Type: USES
+Target Type: TECHNOLOGY
+
+### * PRODUCT.RELATED_TO.PRODUCT
+
+Source Type: PRODUCT
+Relation Type: RELATED_TO
+Target Type: PRODUCT
+
+---
+
+## Events
+
+### * PERSON.ATTENDED.EVENT
+
+Source Type: PERSON
+Relation Type: ATTENDED
+Target Type: EVENT
+
+### * ORGANIZATION.HOSTED.EVENT
+
+Source Type: ORGANIZATION
+Relation Type: HOSTED
+Target Type: EVENT
+
+### * EVENT.HELD_AT.LOCATION
+
+Source Type: EVENT
+Relation Type: HELD_AT
+Target Type: LOCATION
+
+---
+
+## Location & Contact Information
+
+### * PERSON.LOCATED_IN.LOCATION
+
+Source Type: PERSON
+Relation Type: LOCATED_IN
+Target Type: LOCATION
+
+### * ORGANIZATION.LOCATED_IN.LOCATION
+
+Source Type: ORGANIZATION
+Relation Type: LOCATED_IN
+Target Type: LOCATION
+
+### * LOCATION.CONTAINS.LOCATION
+
+Source Type: LOCATION
+Relation Type: CONTAINS
+Target Type: LOCATION
+
+### * PERSON.HAS_CONTACT_METHOD.CONTACT_METHOD
+
+Source Type: PERSON
+Relation Type: HAS_CONTACT_METHOD
+Target Type: CONTACT_METHOD
+
+### * ORGANIZATION.HAS_CONTACT_METHOD.CONTACT_METHOD
+
+Source Type: ORGANIZATION
+Relation Type: HAS_CONTACT_METHOD
+Target Type: CONTACT_METHOD
+
+---
+
+## Generic Semantic Relations
+
+### * ENTITY.RELATED_TO.ENTITY
+
+Source Type: ENTITY
+Relation Type: RELATED_TO
+Target Type: ENTITY
+
+### * ENTITY.OWNS.ENTITY
+
+Source Type: ENTITY
+Relation Type: OWNS
+Target Type: ENTITY
+
+### * ENTITY.CREATED.ENTITY
+
+Source Type: ENTITY
+Relation Type: CREATED
+Target Type: ENTITY
+Properties: date
+
+### * ENTITY.USES.ENTITY
+
+Source Type: ENTITY
+Relation Type: USES
+Target Type: ENTITY
+
+### * ENTITY.ASSOCIATED_WITH.ENTITY
+
+Source Type: ENTITY
+Relation Type: ASSOCIATED_WITH
+Target Type: ENTITY
+
+### * ENTITY.PART_OF.ENTITY
+
+Source Type: ENTITY
+Relation Type: PART_OF
+Target Type: ENTITY
+
+### * ENTITY.DEPENDS_ON.ENTITY
+
+Source Type: ENTITY
+Relation Type: DEPENDS_ON
+Target Type: ENTITY
+
+### * ENTITY.TAGGED_WITH.TAG
+
+Source Type: ENTITY
+Relation Type: TAGGED_WITH
+Target Type: TAG
