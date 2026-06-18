@@ -93,13 +93,14 @@ async def test_stdio_manager_send_strips_trailing_newline(
 
 # ── non-empty methods list ────────────────────────────────────────────────────
 
-async def test_get_contact_methods_returns_entries_stored_in_json(
+async def test_get_contact_methods_returns_entries_stored_in_graph(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(
-        f"{user_id}:metadata:contacts:email",
-        {"type": "email", "value": "user@example.com", "preference": 1},
+    await reg.add_node(
+        f"{user_id}:contact:email",
+        ["CONTACT"],
+        {"type": "email", "value": "user@example.com", "preference": 1, "database": user_id},
     )
     cm = ContactManager(database=user_id, data_manager=data_manager)
     methods = await cm.get_contact_methods()
@@ -111,13 +112,15 @@ async def test_identify_contact_method_picks_lowest_preference(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(
-        f"{user_id}:contacts:a",
-        {"type": "email", "value": "a@example.com", "preference": 5},
+    await reg.add_node(
+        f"{user_id}:contact:a",
+        ["CONTACT"],
+        {"type": "email", "value": "a@example.com", "preference": 5, "database": user_id},
     )
-    await reg.set_json(
-        f"{user_id}:contacts:b",
-        {"type": "sms", "value": "+1555", "preference": 1},
+    await reg.add_node(
+        f"{user_id}:contact:b",
+        ["CONTACT"],
+        {"type": "sms", "value": "+1555", "preference": 1, "database": user_id},
     )
     cm = ContactManager(database=user_id, data_manager=data_manager)
     method = await cm.identify_contact_method("any query")
@@ -128,9 +131,10 @@ async def test_get_contact_methods_filters_unsupported_protocols(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(
-        f"{user_id}:contacts:bad",
-        {"type": "carrier-pigeon", "value": "coo"},
+    await reg.add_node(
+        f"{user_id}:contact:bad",
+        ["CONTACT"],
+        {"type": "carrier-pigeon", "value": "coo", "database": user_id},
     )
     cm = ContactManager(database=user_id, data_manager=data_manager)
     methods = await cm.get_contact_methods()
@@ -150,9 +154,16 @@ async def test_get_contact_methods_protocol_filter_excludes_non_matching(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(f"{user_id}:c:1", {"type": "email", "value": "a@b.com"})
-    await reg.set_json(f"{user_id}:c:2", {"type": "sms", "value": "+1555"})
-
+    await reg.add_node(
+        f"{user_id}:contact:1",
+        ["CONTACT"],
+        {"type": "email", "value": "a@b.com", "database": user_id},
+    )
+    await reg.add_node(
+        f"{user_id}:contact:2",
+        ["CONTACT"],
+        {"type": "sms", "value": "+1555", "database": user_id},
+    )
     cm = ContactManager(database=user_id, data_manager=data_manager)
     methods = await cm.get_contact_methods(protocol="email")
     assert len(methods) == 1
@@ -163,9 +174,16 @@ async def test_get_contact_methods_name_filter_excludes_non_matching(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(f"{user_id}:c:work", {"type": "email", "value": "w@b.com", "name": "work"})
-    await reg.set_json(f"{user_id}:c:home", {"type": "email", "value": "h@b.com", "name": "home"})
-
+    await reg.add_node(
+        f"{user_id}:contact:work",
+        ["CONTACT"],
+        {"type": "email", "value": "w@b.com", "name": "work", "database": user_id},
+    )
+    await reg.add_node(
+        f"{user_id}:contact:home",
+        ["CONTACT"],
+        {"type": "email", "value": "h@b.com", "name": "home", "database": user_id},
+    )
     cm = ContactManager(database=user_id, data_manager=data_manager)
     methods = await cm.get_contact_methods(name="work")
     assert len(methods) == 1

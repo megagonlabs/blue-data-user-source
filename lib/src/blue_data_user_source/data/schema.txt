@@ -1,501 +1,400 @@
+# SCHEMA 
 
-# ENTITIES
+## NOTATION AND DESCRIPTION:
 
-### * PERSON
+Below is a description of the node and edge types used to define the schema of the graph.
 
-Type: PERSON
-Properties: first_name, last_name, preferred_name, birth_date, gender, nationality
-Key: first_name + last_name
+Note: The notation below follows closely with Neo4J CYPHER syntax.
 
-### * USER
+### Node Types:
 
-Type: USER
-Super Type: PERSON
+* :CLASS
+  * Definition: Defines a category or type
+  * Properties:
+    * name: name of the class
+    * description: description of the class
+  * Example: PERSON, COMPANY
 
-### * ORGANIZATION
+* :RELATION
+  * Definition: Defines the nature of a relationship between two entity classes
+  * Properties:
+    * name: name of the relation
+    * description: description of the relation
+    * is_symmetric: boolean indicating symmetry
+  * Example: WORKED_AT, LIVES_IN, PURCHASED
 
-Type: ORGANIZATION
-Properties: name, type, industry, description, founded_date, size_range, headquarters, website
-Key: name
+* :PROPERTY
+  * Definition: Feature of an entity, class, relation, or fact
+  * Properties:
+    * name: name of the property
+    * description: description of the property
+  * Example: AGE, START_DATE
 
-### * COMPANY
+* :FACT
+  * Definition: Represents a specific factual relation between entities
+  * Properties: NONE
+  * Example: Alice_WORKED_AT_IBM
 
-Type: COMPANY
-Super Type: ORGANIZATION
+* :ENTITY
+  * Definition: A specific instance of a class
+  * Properties:
+    * id: unique id of an entity
+  * Example: Alice, IBM
 
-### * SKILL
+* :LITERAL
+  * Definition: Specifies a property value
+  * Properties:
+    * value: value of the property
+    * type: NUMBER or DATE or BOOLEAN or STRING
+  * Example: 18, 1998
 
-Type: SKILL
-Properties: name
-Key: name
+* :SOURCE
+  * Definition: A source of data
+  * Properties:
+    * id: id of the source
+    * name: name of the source
+    * description: description of the source
 
----
-
-## Generic Knowledge Entities
-
-### * LOCATION
-
-Type: LOCATION
-Properties: name, type, address, city, state, country, latitude, longitude
-Key: name + country
-
-### * ADDRESS
-
-Type: ADDRESS
-Properties: street, city, state, postal_code, country
-
-### * EVENT
-
-Type: EVENT
-Properties: name, description, start_date, end_date, event_type
-Key: name + start_date
-
-### * PROJECT
-
-Type: PROJECT
-Properties: name, description, start_date, end_date, status
-Key: name
-
-### * TASK
-
-Type: TASK
-Properties: title, description, status, priority, due_date
-Key: title
-
-### * DOCUMENT
-
-Type: DOCUMENT
-Properties: title, type, description, created_date, modified_date, version
-Key: title + version
-
-### * NOTE
-
-Type: NOTE
-Super Type: DOCUMENT
-
-### * ARTICLE
-
-Type: ARTICLE
-Super Type: DOCUMENT
-
-### * POLICY
-
-Type: POLICY
-Super Type: DOCUMENT
-
-### * PRODUCT
-
-Type: PRODUCT
-Properties: name, category, description, release_date, version
-Key: name + version
-
-### * SERVICE
-
-Type: SERVICE
-Properties: name, category, description
-Key: name
-
-### * ASSET
-
-Type: ASSET
-Properties: name, type, description, created_date
-Key: name
-
-### * TECHNOLOGY
-
-Type: TECHNOLOGY
-Properties: name, category, description
-Key: name
-
-### * CERTIFICATION
-
-Type: CERTIFICATION
-Properties: name, issuing_authority, description
-Key: name
-
-### * EDUCATIONAL_INSTITUTION
-
-Type: EDUCATIONAL_INSTITUTION
-Super Type: ORGANIZATION
-
-### * DEGREE
-
-Type: DEGREE
-Properties: name, level, field_of_study
-Key: name + field_of_study
-
-### * TEAM
-
-Type: TEAM
-Properties: name, description
-Key: name
-
-### * DEPARTMENT
-
-Type: DEPARTMENT
-Properties: name, function
-Key: name
-
-### * ROLE
-
-Type: ROLE
-Properties: title, description, level
-Key: title
-
-### * TOPIC
-
-Type: TOPIC
-Properties: name, description
-Key: name
-
-### * TAG
-
-Type: TAG
-Properties: name
-Key: name
-
-### * CATEGORY
-
-Type: CATEGORY
-Properties: name, description
-Key: name
-
-### * CONTACT_METHOD
-
-Type: CONTACT_METHOD
-Properties: type, value, verified
-Key: type + value
-
-### * ACCOUNT
-
-Type: ACCOUNT
-Properties: account_id, provider, account_type, created_date
-Key: account_id
+* :EXTRACTION
+  * Definition: Extraction from a source
+  * Properties:
+    * text: text segment of extraction from source
 
 ---
 
-# RELATIONS
+### Edge Types:
 
-## Employment & Organizational Structure
 
-### * PERSON.WORKED_AT.ORGANIZATION
+* :IS_SUBCLASS_OF
+  * Definition: Defines hierarchical inheritance between two schema elements. The child inherits properties and semantics from the parent.
+  * From: :CLASS or :RELATION
+  * To: :CLASS or :RELATION
+  * Example: EMPLOYEE IS_SUBCLASS_OF PERSON
 
-Source Type: PERSON
-Relation Type: WORKED_AT
-Target Type: ORGANIZATION
-Properties: start_date, end_date, title
+* :IS_INSTANCE_OF
+  * Definition: Connects a specific entity to a class, asserting that the entity is a concrete realization of that class.
+  * From: :ENTITY
+  * To: :CLASS
+  * Example: IBM IS_INSTANCE_OF COMPANY
 
-### * PERSON.HOLDS_ROLE.ROLE
+* :DEFINE_PROPERTY
+  * Definition: Declares that a class or relation has a given property in its schema definition.
+  * From: :CLASS or :RELATION
+  * To: :PROPERTY
+  * Example: PERSON DEFINE_PROPERTY AGE
 
-Source Type: PERSON
-Relation Type: HOLDS_ROLE
-Target Type: ROLE
-Properties: start_date, end_date
 
-### * PERSON.MEMBER_OF.TEAM
+* :IS_VALUE_OF
+  * Definition: Links a literal value to the property it instantiates.
+  * From: :LITERAL
+  * To: :PROPERTY
+  * Example: 18 IS_VALUE_OF AGE
 
-Source Type: PERSON
-Relation Type: MEMBER_OF
-Target Type: TEAM
-Properties: start_date, end_date
+* :HAS_PROPERTY
+  * Definition: Assigns a literal value or attribute to an entity or fact instance.
+  * From: :ENTITY or :FACT
+  * To: :LITERAL
+  * Example: Alice HAS_PROPERTY 28
 
-### * TEAM.PART_OF.DEPARTMENT
+* :REPRESENTS
+  * Definition: Connects a fact instance to the relation type it instantiates, grounding the fact in schema semantics.
+  * From: :FACT
+  * To: :RELATION
+  * Example: Alice_WORKED_AT_IBM REPRESENTS WORKED_AT
 
-Source Type: TEAM
-Relation Type: PART_OF
-Target Type: DEPARTMENT
+* :HEAD
+  * Definition: Specifies the subject (from) entity of a fact.
+  * From: :FACT
+  * To: :ENTITY
+  * Example: FACT → Alice
 
-### * DEPARTMENT.PART_OF.ORGANIZATION
+* :TAIL
+  * Definition: Specifies the object (to) entity of a fact.
+  * From: :FACT
+  * To: :ENTITY
+  * Example: FACT → IBM
 
-Source Type: DEPARTMENT
-Relation Type: PART_OF
-Target Type: ORGANIZATION
+* :DOMAIN
+  * Definition: Declares the valid source class of a relation (what type of entity can appear in HEAD position).
+  * From: :RELATION
+  * To: :CLASS
+  * Example: WORKED_AT DOMAIN EMPLOYEE
 
-### * ORGANIZATION.SUBSIDIARY_OF.ORGANIZATION
 
-Source Type: ORGANIZATION
-Relation Type: SUBSIDIARY_OF
-Target Type: ORGANIZATION
+* :RANGE
+  * Definition: Declares the valid target class of a relation (what type of entity can appear in TAIL position).
+  * From: :RELATION
+  * To: :CLASS
+  * Example: WORKED_AT RANGE ORGANIZATION
 
-### * PERSON.MANAGES.PERSON
 
-Source Type: PERSON
-Relation Type: MANAGES
-Target Type: PERSON
-Properties: start_date, end_date
+* :EXTRACTED_FROM
+  * Definition: Links any schema element (entity, fact, or literal) to its originating extraction record or source evidence.
+  * From: :ENTITY or :LITERAL or :FACT
+  * To: :EXTRACTION
+  * Example: Alice WORKED_AT IBM EXTRACTED_FROM Resume_Text_1
 
----
 
-## Skills, Expertise, and Education
+# SCHEMA
 
-### * PERSON.HAS_SKILL.SKILL
+## BASE ENTITIES
 
-Source Type: PERSON
-Relation Type: HAS_SKILL
-Target Type: SKILL
-Properties: level, duration
+(person:CLASS {name: 'PERSON', description: 'Human individual'})
+(user:CLASS {name: 'USER', description: 'Digital user profile extending PERSON'})
+(user)-[:IS_SUBCLASS_OF]->(person)
 
-### * PERSON.CERTIFIED_IN.CERTIFICATION
+(employee:CLASS {name: 'EMPLOYEE', description: 'Person employed by an organization'})
+(employee)-[:IS_SUBCLASS_OF]->(person)
 
-Source Type: PERSON
-Relation Type: CERTIFIED_IN
-Target Type: CERTIFICATION
-Properties: issue_date, expiration_date
+(company:CLASS {name: 'COMPANY', description: 'For-profit organization'})
+(organization:CLASS {name: 'ORGANIZATION', description: 'General organization'})
 
-### * PERSON.EARNED.DEGREE
-
-Source Type: PERSON
-Relation Type: EARNED
-Target Type: DEGREE
-Properties: graduation_date
-
-### * DEGREE.ISSUED_BY.EDUCATIONAL_INSTITUTION
-
-Source Type: DEGREE
-Relation Type: ISSUED_BY
-Target Type: EDUCATIONAL_INSTITUTION
-
-### * SKILL.RELATED_TO.SKILL
-
-Source Type: SKILL
-Relation Type: RELATED_TO
-Target Type: SKILL
-
----
-
-## Social & Personal Relationships
-
-### * PERSON.IS_FRIEND.PERSON
-
-Source Type: PERSON
-Relation Type: IS_FRIEND
-Target Type: PERSON
-Properties: start_date, end_date
-
-### * PERSON.KNOWS.PERSON
-
-Source Type: PERSON
-Relation Type: KNOWS
-Target Type: PERSON
-Properties: since_date
-
-### * PERSON.COLLABORATED_WITH.PERSON
-
-Source Type: PERSON
-Relation Type: COLLABORATED_WITH
-Target Type: PERSON
-Properties: start_date, end_date
-
-### * PERSON.REPORTS_TO.PERSON
-
-Source Type: PERSON
-Relation Type: REPORTS_TO
-Target Type: PERSON
-Properties: start_date, end_date
+(company)-[:IS_SUBCLASS_OF]->(organization)
 
 ---
 
-## Projects & Work
+## DEMOGRAPHICS & IDENTITY
 
-### * PERSON.WORKS_ON.PROJECT
+(demographic:CLASS {name: 'DEMOGRAPHIC_PROFILE', description: 'User demographic attributes'})
+(location:CLASS {name: 'LOCATION', description: 'Geographic location'})
+(city:CLASS {name: 'CITY', description: 'City-level location'})
+(country:CLASS {name: 'COUNTRY', description: 'Country-level location'})
 
-Source Type: PERSON
-Relation Type: WORKS_ON
-Target Type: PROJECT
-Properties: role, start_date, end_date
+(city)-[:IS_SUBCLASS_OF]->(location)
+(country)-[:IS_SUBCLASS_OF]->(location)
 
-### * ORGANIZATION.OWNS.PROJECT
+(gender:PROPERTY {name: 'GENDER', description: 'Gender identity'})
+(dob:PROPERTY {name: 'DATE_OF_BIRTH', description: 'Birth date'})
+(nationality:PROPERTY {name: 'NATIONALITY', description: 'Nationality'})
+(age:PROPERTY {name: 'AGE', description: 'Age in years'})
 
-Source Type: ORGANIZATION
-Relation Type: OWNS
-Target Type: PROJECT
+(user)-[:DEFINE_PROPERTY]->(gender)
+(user)-[:DEFINE_PROPERTY]->(dob)
+(user)-[:DEFINE_PROPERTY]->(nationality)
+(user)-[:DEFINE_PROPERTY]->(age)
 
-### * PROJECT.CONTAINS.TASK
+(has_demographics:RELATION {name: 'HAS_DEMOGRAPHICS', description: 'Links user to demographic profile', is_symmetric: false})
+(has_demographics)-[:DOMAIN]->(user)
+(has_demographics)-[:RANGE]->(demographic)
 
-Source Type: PROJECT
-Relation Type: CONTAINS
-Target Type: TASK
+(lives_in:RELATION {name: 'LIVES_IN', description: 'Residence location', is_symmetric: false})
+(lives_in)-[:DOMAIN]->(person)
+(lives_in)-[:RANGE]->(location)
 
-### * TASK.DEPENDS_ON.TASK
-
-Source Type: TASK
-Relation Type: DEPENDS_ON
-Target Type: TASK
-
-### * PROJECT.USES.TECHNOLOGY
-
-Source Type: PROJECT
-Relation Type: USES
-Target Type: TECHNOLOGY
-
----
-
-## Documents & Knowledge
-
-### * PERSON.AUTHORED.DOCUMENT
-
-Source Type: PERSON
-Relation Type: AUTHORED
-Target Type: DOCUMENT
-Properties: date
-
-### * DOCUMENT.RELATED_TO.TOPIC
-
-Source Type: DOCUMENT
-Relation Type: RELATED_TO
-Target Type: TOPIC
-
-### * DOCUMENT.TAGGED_WITH.TAG
-
-Source Type: DOCUMENT
-Relation Type: TAGGED_WITH
-Target Type: TAG
-
-### * DOCUMENT.REFERENCES.DOCUMENT
-
-Source Type: DOCUMENT
-Relation Type: REFERENCES
-Target Type: DOCUMENT
-
-### * DOCUMENT.BELONGS_TO.CATEGORY
-
-Source Type: DOCUMENT
-Relation Type: BELONGS_TO
-Target Type: CATEGORY
+(born_in:RELATION {name: 'BORN_IN', description: 'Birth location', is_symmetric: false})
+(born_in)-[:DOMAIN]->(person)
+(born_in)-[:RANGE]->(location)
 
 ---
 
-## Products, Services & Technology
+## EDUCATION
 
-### * ORGANIZATION.PRODUCES.PRODUCT
+(education_institution:CLASS {name: 'EDUCATION_INSTITUTION', description: 'School or university'})
+(degree:CLASS {name: 'DEGREE', description: 'Academic degree'})
+(course:CLASS {name: 'COURSE', description: 'Course or subject'})
 
-Source Type: ORGANIZATION
-Relation Type: PRODUCES
-Target Type: PRODUCT
+(studied_at:RELATION {name: 'STUDIED_AT', description: 'Enrollment relationship', is_symmetric: false})
+(studied_at)-[:DOMAIN]->(person)
+(studied_at)-[:RANGE]->(education_institution)
 
-### * ORGANIZATION.PROVIDES.SERVICE
+(has_degree:RELATION {name: 'HAS_DEGREE', description: 'Degree attainment', is_symmetric: false})
+(has_degree)-[:DOMAIN]->(person)
+(has_degree)-[:RANGE]->(degree)
 
-Source Type: ORGANIZATION
-Relation Type: PROVIDES
-Target Type: SERVICE
-
-### * PRODUCT.USES.TECHNOLOGY
-
-Source Type: PRODUCT
-Relation Type: USES
-Target Type: TECHNOLOGY
-
-### * PRODUCT.RELATED_TO.PRODUCT
-
-Source Type: PRODUCT
-Relation Type: RELATED_TO
-Target Type: PRODUCT
+(took_course:RELATION {name: 'TOOK_COURSE', description: 'Course enrollment', is_symmetric: false})
+(took_course)-[:DOMAIN]->(person)
+(took_course)-[:RANGE]->(course)
 
 ---
 
-## Events
+## EMPLOYMENT & JOBS
 
-### * PERSON.ATTENDED.EVENT
+(job_posting:CLASS {name: 'JOB_POSTING', description: 'Job advertisement'})
+(job_application:CLASS {name: 'JOB_APPLICATION', description: 'Application to a job'})
 
-Source Type: PERSON
-Relation Type: ATTENDED
-Target Type: EVENT
+(applied_to:RELATION {name: 'APPLIED_TO', description: 'User applied to job', is_symmetric: false})
+(applied_to)-[:DOMAIN]->(user)
+(applied_to)-[:RANGE]->(job_posting)
 
-### * ORGANIZATION.HOSTED.EVENT
-
-Source Type: ORGANIZATION
-Relation Type: HOSTED
-Target Type: EVENT
-
-### * EVENT.HELD_AT.LOCATION
-
-Source Type: EVENT
-Relation Type: HELD_AT
-Target Type: LOCATION
+(saves_job:RELATION {name: 'SAVES_JOB', description: 'User saved job', is_symmetric: false})
+(saves_job)-[:DOMAIN]->(user)
+(saves_job)-[:RANGE]->(job_posting)
 
 ---
 
-## Location & Contact Information
+## SKILLS & INTERESTS
 
-### * PERSON.LOCATED_IN.LOCATION
+(skill:CLASS {name: 'SKILL', description: 'User skill or capability'})
+(interest:CLASS {name: 'INTEREST', description: 'User interest or preference'})
 
-Source Type: PERSON
-Relation Type: LOCATED_IN
-Target Type: LOCATION
+(has_skill:RELATION {name: 'HAS_SKILL', description: 'Skill possession', is_symmetric: false})
+(has_skill)-[:DOMAIN]->(person)
+(has_skill)-[:RANGE]->(skill)
 
-### * ORGANIZATION.LOCATED_IN.LOCATION
-
-Source Type: ORGANIZATION
-Relation Type: LOCATED_IN
-Target Type: LOCATION
-
-### * LOCATION.CONTAINS.LOCATION
-
-Source Type: LOCATION
-Relation Type: CONTAINS
-Target Type: LOCATION
-
-### * PERSON.HAS_CONTACT_METHOD.CONTACT_METHOD
-
-Source Type: PERSON
-Relation Type: HAS_CONTACT_METHOD
-Target Type: CONTACT_METHOD
-
-### * ORGANIZATION.HAS_CONTACT_METHOD.CONTACT_METHOD
-
-Source Type: ORGANIZATION
-Relation Type: HAS_CONTACT_METHOD
-Target Type: CONTACT_METHOD
+(has_interest:RELATION {name: 'HAS_INTEREST', description: 'Interest association', is_symmetric: false})
+(has_interest)-[:DOMAIN]->(user)
+(has_interest)-[:RANGE]->(interest)
 
 ---
 
-## Generic Semantic Relations
+## PRODUCTS & CONSUMPTION
 
-### * ENTITY.RELATED_TO.ENTITY
+(product:CLASS {name: 'PRODUCT', description: 'Physical or digital product'})
+(product_category:CLASS {name: 'PRODUCT_CATEGORY', description: 'Category of products'})
+(purchase:CLASS {name: 'PURCHASE', description: 'Product purchase event'})
 
-Source Type: ENTITY
-Relation Type: RELATED_TO
-Target Type: ENTITY
+(belongs_to_category:RELATION {name: 'BELONGS_TO_CATEGORY', description: 'Product category mapping', is_symmetric: false})
+(belongs_to_category)-[:DOMAIN]->(product)
+(belongs_to_category)-[:RANGE]->(product_category)
 
-### * ENTITY.OWNS.ENTITY
+(purchased:RELATION {name: 'PURCHASED', description: 'User purchased product', is_symmetric: false})
+(purchased)-[:DOMAIN]->(user)
+(purchased)-[:RANGE]->(product)
 
-Source Type: ENTITY
-Relation Type: OWNS
-Target Type: ENTITY
+(liked_product:RELATION {name: 'LIKED_PRODUCT', description: 'User liked product', is_symmetric: false})
+(liked_product)-[:DOMAIN]->(user)
+(liked_product)-[:RANGE]->(product)
 
-### * ENTITY.CREATED.ENTITY
+---
 
-Source Type: ENTITY
-Relation Type: CREATED
-Target Type: ENTITY
-Properties: date
+## TRAVEL
 
-### * ENTITY.USES.ENTITY
+(travel_trip:CLASS {name: 'TRAVEL_TRIP', description: 'Travel event or itinerary'})
+(travel_destination:CLASS {name: 'TRAVEL_DESTINATION', description: 'Destination location'})
 
-Source Type: ENTITY
-Relation Type: USES
-Target Type: ENTITY
+(traveled_to:RELATION {name: 'TRAVELED_TO', description: 'User travel history', is_symmetric: false})
+(traveled_to)-[:DOMAIN]->(user)
+(traveled_to)-[:RANGE]->(location)
 
-### * ENTITY.ASSOCIATED_WITH.ENTITY
+(visited:RELATION {name: 'VISITED', description: 'Visited destination', is_symmetric: false})
+(visited)-[:DOMAIN]->(travel_trip)
+(visited)-[:RANGE]->(travel_destination)
 
-Source Type: ENTITY
-Relation Type: ASSOCIATED_WITH
-Target Type: ENTITY
+---
 
-### * ENTITY.PART_OF.ENTITY
+## DEVICES & DIGITAL FOOTPRINT
 
-Source Type: ENTITY
-Relation Type: PART_OF
-Target Type: ENTITY
+(device:CLASS {name: 'DEVICE', description: 'User device'})
+(uses_device:RELATION {name: 'USES_DEVICE', description: 'Device usage', is_symmetric: false})
+(uses_device)-[:DOMAIN]->(user)
+(uses_device)-[:RANGE]->(device)
 
-### * ENTITY.DEPENDS_ON.ENTITY
+---
 
-Source Type: ENTITY
-Relation Type: DEPENDS_ON
-Target Type: ENTITY
+## EXISTING RELATIONS (UNCHANGED CORE)
 
-### * ENTITY.TAGGED_WITH.TAG
+(worked_at:RELATION {name: 'WORKED_AT', description: 'Employment relationship', is_symmetric: false})
+(worked_at)-[:DOMAIN]->(employee)
+(worked_at)-[:RANGE]->(organization)
 
-Source Type: ENTITY
-Relation Type: TAGGED_WITH
-Target Type: TAG
+(start_date:PROPERTY {name: 'START_DATE', description: 'Start date of relation'})
+(end_date:PROPERTY {name: 'END_DATE', description: 'End date of relation'})
+
+(worked_at)-[:DEFINE_PROPERTY]->(start_date)
+(worked_at)-[:DEFINE_PROPERTY]->(end_date)
+
+---
+
+# EXAMPLE GRAPH USING SCHEMA
+
+(alice:ENTITY {name: 'Alice'})
+(alice)-[:IS_INSTANCE_OF]->(user)
+
+(bob:ENTITY {name: 'Bob'})
+(bob)-[:IS_INSTANCE_OF]->(employee)
+
+(acme:ENTITY {name: 'ACME Corp'})
+(acme)-[:IS_INSTANCE_OF]->(company)
+
+---
+
+## DEMOGRAPHICS EXAMPLE
+
+(sf:ENTITY {name: 'San Francisco'})
+(sf)-[:IS_INSTANCE_OF]->(city)
+
+(usa:ENTITY {name: 'United States'})
+(usa)-[:IS_INSTANCE_OF]->(country)
+
+(alice)-[:LIVES_IN]->(sf)
+(alice)-[:HAS_PROPERTY]->((28:LITERAL {value: 28}))
+
+---
+
+## EDUCATION EXAMPLE
+
+(stanford:ENTITY {name: 'Stanford University'})
+(stanford)-[:IS_INSTANCE_OF]->(education_institution)
+
+(cs_degree:ENTITY {name: 'BSc Computer Science'})
+(cs_degree)-[:IS_INSTANCE_OF]->(degree)
+
+(alice)-[:STUDIED_AT]->(stanford)
+(alice)-[:HAS_DEGREE]->(cs_degree)
+
+---
+
+## JOBS EXAMPLE
+
+(job1:ENTITY {name: 'ML Engineer Posting'})
+(job1)-[:IS_INSTANCE_OF]->(job_posting)
+
+(alice_applied_job1:FACT)
+(alice_applied_job1)-[:REPRESENTS]->(applied_to)
+(alice_applied_job1)-[:HEAD]->(alice)
+(alice_applied_job1)-[:TAIL]->(job1)
+
+---
+
+## SKILLS & INTERESTS EXAMPLE
+
+(python:ENTITY {name: 'Python'})
+(python)-[:IS_INSTANCE_OF]->(skill)
+
+(ai:ENTITY {name: 'Artificial Intelligence'})
+(ai)-[:IS_INSTANCE_OF]->(interest)
+
+(alice)-[:HAS_SKILL]->(python)
+(alice)-[:HAS_INTEREST]->(ai)
+
+---
+
+## PRODUCTS EXAMPLE
+
+(laptop:ENTITY {name: 'Laptop X'})
+(laptop)-[:IS_INSTANCE_OF]->(product)
+
+(alice)-[:PURCHASED]->(laptop)
+
+---
+
+## TRAVEL EXAMPLE
+
+(paris:ENTITY {name: 'Paris'})
+(paris)-[:IS_INSTANCE_OF]->(city)
+
+(trip1:ENTITY {name: 'Paris Trip 2025'})
+(trip1)-[:IS_INSTANCE_OF]->(travel_trip)
+
+(alice)-[:TRAVELED_TO]->(paris)
+
+(trip1)-[:VISITED]->(paris)
+
+---
+
+## EMPLOYMENT EXAMPLE (existing preserved)
+
+(eser:ENTITY {name: 'Eser'})
+(eser)-[:IS_INSTANCE_OF]->(person)
+
+(megagon:ENTITY {name: 'Megagon'})
+(megagon)-[:IS_INSTANCE_OF]->(company)
+
+(eser_worked_at_megagon:FACT)
+(eser_worked_at_megagon)-[:REPRESENTS]->(worked_at)
+(eser_worked_at_megagon)-[:HEAD]->(eser)
+(eser_worked_at_megagon)-[:TAIL]->(megagon)
+
+(2019:LITERAL {value: 2019})
+(2019)-[:IS_VALUE_OF]->(start_date)
+(eser_worked_at_megagon)-[:HAS_PROPERTY]->(2019)

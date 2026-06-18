@@ -1,5 +1,5 @@
-from blue_data_user_source.backends.memory import MemoryJsonSource, MemoryVectorSource
+from blue_data_user_source.backends.memory import MemoryGraphSource, MemoryVectorSource
 
 # Aliases used throughout the test suite
-InMemoryJsonSource = MemoryJsonSource
+InMemoryGraphSource = MemoryGraphSource
 InMemoryVectorSource = MemoryVectorSource

@@ -1,30 +1,94 @@
+import uuid
 from typing import Any
 
-from blue_data_user_source.interfaces import JSONSource, VectorSource
+from blue_data_user_source.interfaces import GraphSource, VectorSource
 
 
-class MemoryJsonSource(JSONSource):
-    """In-memory JSON key-value store. Data is not persisted between process restarts."""
+class MemoryGraphSource(GraphSource):
+    """In-memory property graph. Data is not persisted between process restarts."""
 
     def __init__(self) -> None:
-        self._data: dict[str, dict[str, Any]] = {}
+        self._nodes: dict[str, dict[str, Any]] = {}
+        self._edges: dict[str, dict[str, Any]] = {}
 
-    async def set(self, key: str, value: dict[str, Any]) -> None:
-        self._data[key] = value
+    async def add_node(
+        self,
+        node_id: str,
+        labels: list[str],
+        properties: dict[str, Any],
+    ) -> str:
+        self._nodes[node_id] = {"id": node_id, "labels": labels, "properties": properties}
+        return node_id
 
-    async def get(self, key: str) -> dict[str, Any] | None:
-        return self._data.get(key)
+    async def get_node(self, node_id: str) -> dict[str, Any] | None:
+        return self._nodes.get(node_id)
 
-    async def delete(self, key: str) -> None:
-        self._data.pop(key, None)
+    async def delete_node(self, node_id: str) -> None:
+        self._nodes.pop(node_id, None)
+        incident = [eid for eid, e in self._edges.items() if e["from"] == node_id or e["to"] == node_id]
+        for eid in incident:
+            self._edges.pop(eid)
 
-    async def query(self, expression: str) -> list[dict[str, Any]]:
-        return list(self._data.values())
+    async def add_edge(
+        self,
+        from_id: str,
+        to_id: str,
+        edge_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> str:
+        edge_id = str(uuid.uuid4())
+        self._edges[edge_id] = {
+            "id": edge_id,
+            "from": from_id,
+            "to": to_id,
+            "type": edge_type,
+            "properties": properties or {},
+        }
+        return edge_id
 
-    async def keys(self, prefix: str | None = None) -> list[str]:
-        if prefix is not None:
-            return [k for k in self._data if k.startswith(prefix)]
-        return list(self._data.keys())
+    async def delete_edge(self, edge_id: str) -> None:
+        self._edges.pop(edge_id, None)
+
+    async def query_nodes(
+        self,
+        labels: list[str] | None = None,
+        properties: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        results = []
+        for node in self._nodes.values():
+            if labels and not any(lbl in node["labels"] for lbl in labels):
+                continue
+            if properties and not all(node["properties"].get(k) == v for k, v in properties.items()):
+                continue
+            results.append(node)
+        return results
+
+    async def query_neighbors(
+        self,
+        node_id: str,
+        edge_type: str | None = None,
+        direction: str = "out",
+    ) -> list[dict[str, Any]]:
+        results = []
+        for edge in self._edges.values():
+            if edge_type and edge["type"] != edge_type:
+                continue
+            if direction in ("out", "both") and edge["from"] == node_id:
+                neighbor = self._nodes.get(edge["to"])
+                if neighbor:
+                    results.append(neighbor)
+            if direction in ("in", "both") and edge["to"] == node_id:
+                neighbor = self._nodes.get(edge["from"])
+                if neighbor:
+                    results.append(neighbor)
+        return results
+
+    async def cypher(
+        self,
+        query: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        raise NotImplementedError("Cypher queries require Neo4jGraphSource")
 
 
 class MemoryVectorSource(VectorSource):
@@ -72,6 +136,6 @@ class MemoryVectorSource(VectorSource):
         return results
 
 
-def memory_store_factory(name: str) -> tuple[MemoryJsonSource, MemoryVectorSource]:
+def memory_store_factory(name: str) -> tuple[MemoryGraphSource, MemoryVectorSource]:
     """Factory that creates a fresh in-memory store pair for a given database name."""
-    return MemoryJsonSource(), MemoryVectorSource()
+    return MemoryGraphSource(), MemoryVectorSource()

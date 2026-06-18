@@ -8,12 +8,12 @@ import pytest
 
 from blue_data_user_source.data.manager import StoreFactory, UserDataManager
 from blue_data_user_source.data.registry import UserDataRegistry
-from blue_data_user_source.interfaces import JSONSource, VectorSource
-from tests.doubles.sources import InMemoryJsonSource, InMemoryVectorSource
+from blue_data_user_source.interfaces import GraphSource, VectorSource
+from tests.doubles.sources import InMemoryGraphSource, InMemoryVectorSource
 
 
-def _in_memory_store_factory(name: str) -> tuple[JSONSource, VectorSource]:
-    return InMemoryJsonSource(), InMemoryVectorSource()
+def _in_memory_store_factory(name: str) -> tuple[GraphSource, VectorSource]:
+    return InMemoryGraphSource(), InMemoryVectorSource()
 
 
 @pytest.fixture
@@ -22,8 +22,8 @@ def store_factory() -> StoreFactory:
 
 
 @pytest.fixture
-def json_store() -> InMemoryJsonSource:
-    return InMemoryJsonSource()
+def graph_store() -> InMemoryGraphSource:
+    return InMemoryGraphSource()
 
 
 @pytest.fixture
@@ -38,10 +38,10 @@ def user_id() -> str:
 
 @pytest.fixture
 async def registry(
-    json_store: InMemoryJsonSource, vector_store: InMemoryVectorSource
+    graph_store: InMemoryGraphSource, vector_store: InMemoryVectorSource
 ) -> UserDataRegistry:
-    reg = UserDataRegistry(json_store, vector_store)
-    await reg.register_source("test-user-001:json", json_store)
+    reg = UserDataRegistry(graph_store, vector_store)
+    await reg.register_source("test-user-001:graph", graph_store)
     await reg.register_source("test-user-001:vector", vector_store)
     return reg
 

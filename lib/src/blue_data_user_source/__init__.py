@@ -1,14 +1,15 @@
 from blue_data_user_source.backends.file import (
-    FileJsonSource,
+    FileGraphSource,
     FileVectorSource,
     file_store_factory,
 )
 from blue_data_user_source.backends.memory import (
-    MemoryJsonSource,
+    MemoryGraphSource,
     MemoryVectorSource,
     memory_store_factory,
 )
-from blue_data_user_source.interfaces import DataSource, JSONSource, VectorSource
+from blue_data_user_source.backends.neo4j import Neo4jGraphSource
+from blue_data_user_source.interfaces import DataSource, GraphSource, VectorSource
 from blue_data_user_source.source import UserSource
 from blue_data_user_source.sources.file import FileSource
 from blue_data_user_source.types import (
@@ -21,14 +22,15 @@ from blue_data_user_source.types import (
 
 __all__ = [
     "DataSource",
-    "FileJsonSource",
+    "FileGraphSource",
     "FileSource",
     "FileVectorSource",
+    "GraphSource",
     "ImportError",
     "InteractionError",
-    "JSONSource",
-    "MemoryJsonSource",
+    "MemoryGraphSource",
     "MemoryVectorSource",
+    "Neo4jGraphSource",
     "QueryError",
     "QueryResult",
     "UserDbError",

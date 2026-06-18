@@ -179,23 +179,8 @@ async def test_import_source_type1_registers_source_in_registry(
 ) -> None:
     await source.import_source(_NoOpSource(), database=user_id)
     reg = source._data_manager._registries[user_id]
-    json_vals = await reg.execute_json("$")
-    assert any("source_id" in v for v in json_vals)
-
-
-async def test_import_source_type2_stores_query_results_in_both_stores(
-    source: UserSource, user_id: str
-) -> None:
-    await source.import_source(
-        _FixedSource(["Python", "SQL"]),
-        database=user_id,
-        optional_properties={"queries": ["What skills?"]},
-    )
-    reg = source._data_manager._registries[user_id]
-    json_vals = await reg.execute_json("$")
-    assert any(v.get("key") == "What skills?" for v in json_vals)
-    vector_vals = await reg.execute_vector("skills")
-    assert len(vector_vals) >= 1
+    source_nodes = await reg.query_nodes(labels=["SOURCE"])
+    assert any("source_id" in n["properties"] for n in source_nodes)
 
 
 async def test_import_source_non_list_queries_treated_as_type1(
@@ -205,8 +190,8 @@ async def test_import_source_non_list_queries_treated_as_type1(
         _NoOpSource(), database=user_id, optional_properties={"queries": "not-a-list"}
     )
     reg = source._data_manager._registries[user_id]
-    json_vals = await reg.execute_json("$")
-    assert any("source_id" in v for v in json_vals)
+    source_nodes = await reg.query_nodes(labels=["SOURCE"])
+    assert any("source_id" in n["properties"] for n in source_nodes)
 
 
 async def test_import_source_raises_when_no_database_configured() -> None:

@@ -3,91 +3,149 @@ from pathlib import Path
 import pytest
 
 from blue_data_user_source.backends.file import (
-    FileJsonSource,
+    FileGraphSource,
     FileVectorSource,
     file_store_factory,
 )
 
 
-# ── FileJsonSource ────────────────────────────────────────────────────────────
+# ── FileGraphSource ───────────────────────────────────────────────────────────
 
-async def test_json_set_and_get(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("k1", {"a": 1})
-    assert await store.get("k1") == {"a": 1}
-
-
-async def test_json_persists_across_instances(tmp_path: Path) -> None:
-    path = tmp_path / "data.json"
-    await FileJsonSource(path).set("k", {"v": 42})
-    assert await FileJsonSource(path).get("k") == {"v": 42}
+async def test_graph_add_and_get_node(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {"key": "alice", "database": "db"})
+    node = await g.get_node("n1")
+    assert node is not None
+    assert node["id"] == "n1"
+    assert "ENTITY" in node["labels"]
+    assert node["properties"]["key"] == "alice"
 
 
-async def test_json_get_missing_returns_none(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    assert await store.get("nope") is None
+async def test_graph_persists_across_instances(tmp_path: Path) -> None:
+    path = tmp_path / "graph.json"
+    await FileGraphSource(path).add_node("n1", ["ENTITY"], {"key": "alice"})
+    node = await FileGraphSource(path).get_node("n1")
+    assert node is not None
+    assert node["properties"]["key"] == "alice"
 
 
-async def test_json_get_on_missing_file_returns_none(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "nonexistent.json")
-    assert await store.get("x") is None
+async def test_graph_get_missing_node_returns_none(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    assert await g.get_node("nope") is None
 
 
-async def test_json_delete_removes_key(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("k", {"v": 1})
-    await store.delete("k")
-    assert await store.get("k") is None
+async def test_graph_get_on_missing_file_returns_none(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "nonexistent.json")
+    assert await g.get_node("x") is None
 
 
-async def test_json_delete_missing_is_noop(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.delete("not-there")
+async def test_graph_add_node_upserts_existing(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {"key": "alice"})
+    await g.add_node("n1", ["ENTITY"], {"key": "alice_updated"})
+    node = await g.get_node("n1")
+    assert node is not None
+    assert node["properties"]["key"] == "alice_updated"
 
 
-async def test_json_query_returns_all_values(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("a", {"x": 1})
-    await store.set("b", {"x": 2})
-    results = await store.query("*")
-    assert len(results) == 2
+async def test_graph_delete_node_removes_it(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    await g.delete_node("n1")
+    assert await g.get_node("n1") is None
 
 
-async def test_json_query_on_empty_store_returns_empty_list(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    assert await store.query("*") == []
+async def test_graph_delete_node_also_removes_incident_edges(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    await g.add_node("n2", ["LITERAL"], {})
+    eid = await g.add_edge("n1", "n2", "HAS_PROPERTY")
+    await g.delete_node("n1")
+    data = g._read()
+    assert eid not in data["edges"]
 
 
-async def test_json_keys_returns_all_keys(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("foo:1", {})
-    await store.set("bar:1", {})
-    assert set(await store.keys()) == {"foo:1", "bar:1"}
+async def test_graph_delete_missing_node_is_noop(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.delete_node("not-there")
 
 
-async def test_json_keys_with_prefix_filters(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("foo:1", {})
-    await store.set("foo:2", {})
-    await store.set("bar:1", {})
-    assert set(await store.keys(prefix="foo:")) == {"foo:1", "foo:2"}
+async def test_graph_add_edge_and_query_neighbors(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {"key": "alice"})
+    await g.add_node("n2", ["LITERAL"], {"value": "28"})
+    await g.add_edge("n1", "n2", "HAS_PROPERTY")
+    neighbors = await g.query_neighbors("n1", edge_type="HAS_PROPERTY", direction="out")
+    assert len(neighbors) == 1
+    assert neighbors[0]["id"] == "n2"
 
 
-async def test_json_keys_on_empty_store_returns_empty_list(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    assert await store.keys() == []
+async def test_graph_delete_edge(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    await g.add_node("n2", ["LITERAL"], {})
+    eid = await g.add_edge("n1", "n2", "HAS_PROPERTY")
+    await g.delete_edge(eid)
+    neighbors = await g.query_neighbors("n1")
+    assert neighbors == []
 
 
-async def test_json_creates_parent_directories(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "nested" / "deep" / "data.json")
-    await store.set("k", {"v": 1})
-    assert await store.get("k") == {"v": 1}
+async def test_graph_delete_missing_edge_is_noop(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.delete_edge("not-there")
 
 
-async def test_json_atomic_write_leaves_no_tmp_file(tmp_path: Path) -> None:
-    store = FileJsonSource(tmp_path / "data.json")
-    await store.set("k", {"v": 1})
-    assert not (tmp_path / "data.tmp").exists()
+async def test_graph_query_nodes_returns_all_when_no_filter(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    await g.add_node("n2", ["LITERAL"], {})
+    nodes = await g.query_nodes()
+    assert len(nodes) == 2
+
+
+async def test_graph_query_nodes_filters_by_label(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    await g.add_node("n2", ["LITERAL"], {})
+    nodes = await g.query_nodes(labels=["ENTITY"])
+    assert len(nodes) == 1
+    assert nodes[0]["id"] == "n1"
+
+
+async def test_graph_query_nodes_filters_by_property(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {"database": "db-a"})
+    await g.add_node("n2", ["ENTITY"], {"database": "db-b"})
+    nodes = await g.query_nodes(properties={"database": "db-a"})
+    assert len(nodes) == 1
+    assert nodes[0]["id"] == "n1"
+
+
+async def test_graph_text_search(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["LITERAL"], {"value": "Python programming"})
+    await g.add_node("n2", ["LITERAL"], {"value": "SQL databases"})
+    results = await g.query("python")
+    assert len(results) == 1
+    assert results[0]["id"] == "n1"
+
+
+async def test_graph_cypher_raises_not_implemented(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    with pytest.raises(NotImplementedError):
+        await g.cypher("MATCH (n) RETURN n")
+
+
+async def test_graph_creates_parent_directories(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "nested" / "deep" / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    assert await g.get_node("n1") is not None
+
+
+async def test_graph_atomic_write_leaves_no_tmp_file(tmp_path: Path) -> None:
+    g = FileGraphSource(tmp_path / "graph.json")
+    await g.add_node("n1", ["ENTITY"], {})
+    assert not (tmp_path / "graph.tmp").exists()
 
 
 # ── FileVectorSource ──────────────────────────────────────────────────────────
@@ -180,10 +238,10 @@ async def test_vector_atomic_write_leaves_no_tmp_file(tmp_path: Path) -> None:
 
 # ── file_store_factory ────────────────────────────────────────────────────────
 
-def test_factory_returns_file_json_and_vector_source(tmp_path: Path) -> None:
+def test_factory_returns_file_graph_and_vector_source(tmp_path: Path) -> None:
     factory = file_store_factory(tmp_path)
-    json_src, vec_src = factory("db-a")
-    assert isinstance(json_src, FileJsonSource)
+    graph_src, vec_src = factory("db-a")
+    assert isinstance(graph_src, FileGraphSource)
     assert isinstance(vec_src, FileVectorSource)
 
 
@@ -195,17 +253,17 @@ def test_factory_creates_database_directory(tmp_path: Path) -> None:
 
 def test_factory_returns_independent_instances_per_database(tmp_path: Path) -> None:
     factory = file_store_factory(tmp_path)
-    a_json, _ = factory("db-a")
-    b_json, _ = factory("db-b")
-    assert a_json is not b_json
+    a_graph, _ = factory("db-a")
+    b_graph, _ = factory("db-b")
+    assert a_graph is not b_graph
 
 
 async def test_factory_stores_are_isolated_per_database(tmp_path: Path) -> None:
     factory = file_store_factory(tmp_path)
-    a_json, _ = factory("db-a")
-    b_json, _ = factory("db-b")
-    await a_json.set("k", {"v": "a"})
-    assert await b_json.get("k") is None
+    a_graph, _ = factory("db-a")
+    b_graph, _ = factory("db-b")
+    await a_graph.add_node("n1", ["ENTITY"], {"key": "alice"})
+    assert await b_graph.get_node("n1") is None
 
 
 def test_factory_expands_tilde_in_base_dir(tmp_path: Path) -> None:

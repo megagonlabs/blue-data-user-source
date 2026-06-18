@@ -20,12 +20,10 @@ class UserDataPlanner(DataPlanner):
 
     async def plan(self, query: str, database: str) -> list[SubqueryPlan]:
         """Return an execution plan for query against the given user database."""
-        json_source_id = f"{database}:json"
+        graph_source_id = f"{database}:graph"
         vector_source_id = f"{database}:vector"
 
-        # Emit one subquery per generic store; registered user-specific sources
-        # would be appended here once the registry exposes source enumeration.
         return [
             SubqueryPlan(subquery=query, source_id=vector_source_id),
-            SubqueryPlan(subquery=query, source_id=json_source_id),
+            SubqueryPlan(subquery=query, source_id=graph_source_id),
         ]

@@ -17,13 +17,13 @@ class _FixedResultSource(DataSource):
         return self._results
 
 
-async def test_create_user_registers_json_and_vector_stores(
+async def test_create_user_registers_graph_and_vector_stores(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    json_src = await reg.get_source(f"{user_id}:json")
+    graph_src = await reg.get_source(f"{user_id}:graph")
     vector_src = await reg.get_source(f"{user_id}:vector")
-    assert json_src is not None
+    assert graph_src is not None
     assert vector_src is not None
 
 
@@ -31,7 +31,11 @@ async def test_execute_query_returns_aggregated_results(
     data_manager: UserDataManager, user_id: str
 ) -> None:
     reg = data_manager._registries[user_id]
-    await reg.set_json(f"{user_id}:data:e1", {"key": "skills", "value": ["Python"]})
+    await reg.add_node(
+        f"{user_id}:entity:alice",
+        ["ENTITY"],
+        {"key": "alice", "database": user_id, "schema_path": "alice"},
+    )
 
     results, metadata = await data_manager.execute_query("what skills?", user_id)
     assert isinstance(results, list)
@@ -56,39 +60,9 @@ async def test_import_source_type1_registers_source_in_registry(
     await data_manager.import_source(source, user_id, queries=None)
 
     reg = data_manager._registries[user_id]
-    json_values = await reg.execute_json("$")
-    source_entries = [v for v in json_values if "source_id" in v]
-    assert len(source_entries) == 1
-
-
-async def test_import_source_type2_writes_to_both_stores(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    source = _FixedResultSource(["Python", "SQL"])
-    await data_manager.import_source(source, user_id, queries=["What skills?"])
-
-    reg = data_manager._registries[user_id]
-
-    json_values = await reg.execute_json("$")
-    data_entries = [v for v in json_values if v.get("key") == "What skills?"]
-    assert len(data_entries) == 1
-
-    vector_entries = await reg.execute_vector("skills")
-    assert len(vector_entries) >= 1
-
-
-async def test_import_source_type2_dual_write_both_stores_populated(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    source = _FixedResultSource(["remote"])
-    await data_manager.import_source(source, user_id, queries=["location preference?"])
-
-    reg = data_manager._registries[user_id]
-    json_entries = await reg.execute_json("$")
-    vector_entries = await reg.execute_vector("location")
-
-    assert any(e.get("key") == "location preference?" for e in json_entries)
-    assert len(vector_entries) >= 1
+    source_nodes = await reg.query_nodes(labels=["SOURCE"])
+    assert len(source_nodes) == 1
+    assert "source_id" in source_nodes[0]["properties"]
 
 
 async def test_import_source_type2_raises_import_error_when_source_query_fails(

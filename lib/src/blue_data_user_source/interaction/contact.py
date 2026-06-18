@@ -63,9 +63,12 @@ class ContactManager:
     ) -> list[ContactMethod]:
         """Return all contact methods, optionally filtered by name or protocol."""
         try:
-            raw: list[dict[str, Any]] = await self._data_manager._registries[
-                self._database
-            ].execute_json(f"$.{self._database}.metadata.contacts[*]")
+            registry = self._data_manager._registries[self._database]
+            nodes = await registry.query_nodes(
+                labels=["CONTACT"],
+                properties={"database": self._database},
+            )
+            raw: list[dict[str, Any]] = [n["properties"] for n in nodes]
         except KeyError:
             raw = []
 

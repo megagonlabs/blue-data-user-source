@@ -5,12 +5,12 @@ from typing import Any, Callable
 
 from llama_index.core import Settings  # type: ignore[import-untyped]
 
-from blue_data_user_source.interfaces import DataSource, JSONSource, VectorSource
+from blue_data_user_source.interfaces import DataSource, GraphSource, VectorSource
 from blue_data_user_source.data.planner import UserDataPlanner
 from blue_data_user_source.data.registry import UserDataRegistry
 from blue_data_user_source.types import ImportError
 
-StoreFactory = Callable[[str], tuple[JSONSource, VectorSource]]
+StoreFactory = Callable[[str], tuple[GraphSource, VectorSource]]
 
 
 class UserDataManager:
@@ -22,13 +22,13 @@ class UserDataManager:
         self._schema_reference = open(schema_path).read() if schema_path else ""
 
     async def create_user(self, name: str) -> None:
-        """Initialize JSON and vector stores for a new user database."""
+        """Initialize graph and vector stores for a new user database."""
         if self._store_factory is None:
             raise ValueError("No store_factory configured. Pass 'store_factory' in UserSource properties.")
-        json_store, vector_store = self._store_factory(name)
-        registry = UserDataRegistry(json_store, vector_store)
+        graph_store, vector_store = self._store_factory(name)
+        registry = UserDataRegistry(graph_store, vector_store)
 
-        await registry.register_source(f"{name}:json", json_store)
+        await registry.register_source(f"{name}:graph", graph_store)
         await registry.register_source(f"{name}:vector", vector_store)
 
         self._registries[name] = registry
@@ -100,32 +100,25 @@ class UserDataManager:
             await self._persist_source_metadata(registry, database, source, source_id, queries)
 
     async def list_data(self, database: str, key: str | None = None) -> list[dict[str, Any]]:
-        """Return data entries for the database, optionally filtered by attribute key name."""
+        """Return data entries for the database, optionally filtered by schema path key."""
         registry = await self._ensure_loaded(database)
-        prefix = f"{database}:data:"
-        keys = await registry.json_keys(prefix)
-        entries: list[dict[str, Any]] = []
-        for k in keys:
-            entry = await registry.get_json(k)
-            if entry is None:
-                continue
-            if key is None or entry.get("key") == key:
-                entries.append(entry)
-        return entries
+        filters: dict[str, Any] = {"database": database}
+        if key is not None:
+            filters["schema_path"] = key
+        nodes = await registry.query_nodes(
+            labels=["ENTITY", "FACT", "LITERAL"],
+            properties=filters,
+        )
+        return nodes
 
     async def list_metadata(self, database: str, source_id: str | None = None) -> list[dict[str, Any]]:
         """Return source metadata entries for the database, optionally filtered by source_id."""
         registry = await self._ensure_loaded(database)
-        prefix = f"{database}:metadata:sources:"
-        keys = await registry.json_keys(prefix)
-        entries: list[dict[str, Any]] = []
-        for k in keys:
-            entry = await registry.get_json(k)
-            if entry is None:
-                continue
-            if source_id is None or entry.get("source_id") == source_id:
-                entries.append(entry)
-        return entries
+        filters: dict[str, Any] = {"database": database}
+        if source_id is not None:
+            filters["source_id"] = source_id
+        nodes = await registry.query_nodes(labels=["SOURCE"], properties=filters)
+        return [n["properties"] for n in nodes]
 
     async def store_data(
         self,
@@ -135,15 +128,227 @@ class UserDataManager:
         source_id: str = "interaction",
         source_text: str | None = None,
     ) -> None:
-        """Write a data entry to the user DB JSON store."""
+        """Write a data entry to the user DB graph and vector stores."""
         registry = await self._ensure_loaded(database)
-        await self._write_data_entry(registry, database, key, self._normalize_to_list(value), source_id, source_text=source_text)
+        await self._write_data_entry(
+            registry, database, key, self._normalize_to_list(value), source_id, source_text=source_text
+        )
 
     @staticmethod
     def _normalize_to_list(value: Any) -> list[Any]:
         if isinstance(value, list):
             return value
         return [value]
+
+    @staticmethod
+    def _infer_literal_type(value: Any) -> str:
+        """Infer the LITERAL type tag from a Python value."""
+        import re
+        if isinstance(value, bool):
+            return "BOOLEAN"
+        if isinstance(value, (int, float)):
+            return "NUMBER"
+        if isinstance(value, str) and re.match(r"\d{4}-\d{2}-\d{2}", value):
+            return "DATE"
+        return "STRING"
+
+    async def _write_graph_entry(
+        self,
+        registry: UserDataRegistry,
+        database: str,
+        schema_path: str,
+        value: Any,
+        source_id: str,
+        source_text: str | None = None,
+    ) -> tuple[str, str]:
+        """Create graph nodes and edges for one extracted data value.
+
+        Returns (graph_node_id, graph_node_type) — the "primary" node that the
+        corresponding vector entry should reference.
+
+        Schema path conventions:
+          entity                      → bare ENTITY
+          entity.attr                 → ENTITY -[HAS_PROPERTY]-> LITERAL -[IS_VALUE_OF]-> PROPERTY
+          entity.RELATION.target      → head -[RELATION]-> tail + FACT -[REPRESENTS]-> RELATION
+                                         + FACT -[HAS_PROPERTY]-> LITERAL
+          entity.RELATION.target.attr → same FACT + LITERAL -[IS_VALUE_OF]-> PROPERTY
+
+        All created primary nodes (ENTITY/FACT/LITERAL) receive an
+        EXTRACTED_FROM edge to an EXTRACTION node when source_text is supplied.
+        """
+        parts = schema_path.split(".")
+        now = datetime.now(timezone.utc).isoformat()
+        base_props: dict[str, Any] = {"database": database, "source_id": source_id}
+
+        # ── helpers ───────────────────────────────────────────────────────────
+
+        async def _make_entity(key: str) -> str:
+            eid = f"{database}:entity:{key}"
+            await registry.add_node(eid, ["ENTITY"], {
+                **base_props, "key": key, "schema_path": key, "date": now,
+            })
+            return eid
+
+        async def _make_property(prop_name: str) -> str:
+            pid = f"{database}:property:{prop_name}"
+            await registry.add_node(pid, ["PROPERTY"], {
+                "name": prop_name, "database": database,
+            })
+            return pid
+
+        async def _make_literal(v: Any, prop_name: str, s_path: str) -> str:
+            lid = str(uuid.uuid4())
+            await registry.add_node(lid, ["LITERAL"], {
+                **base_props,
+                "value": v,
+                "type": self._infer_literal_type(v),
+                "property": prop_name,
+                "schema_path": s_path,
+                "date": now,
+            })
+            # IS_VALUE_OF: LITERAL → PROPERTY
+            prop_id = await _make_property(prop_name)
+            await registry.add_edge(lid, prop_id, "IS_VALUE_OF")
+            return lid
+
+        async def _make_relation(rel_name: str) -> str:
+            rid = f"{database}:relation:{rel_name}"
+            await registry.add_node(rid, ["RELATION"], {
+                "name": rel_name, "database": database,
+            })
+            return rid
+
+        async def _make_extraction() -> str | None:
+            if source_text is None:
+                return None
+            xid = str(uuid.uuid4())
+            await registry.add_node(xid, ["EXTRACTION"], {
+                "text": source_text,
+                "database": database,
+                "source_id": source_id,
+            })
+            return xid
+
+        # ── path dispatch ─────────────────────────────────────────────────────
+
+        if len(parts) == 1:
+            # Bare entity
+            entity_id = await _make_entity(parts[0])
+            xid = await _make_extraction()
+            if xid:
+                await registry.add_edge(entity_id, xid, "EXTRACTED_FROM")
+            return entity_id, "ENTITY"
+
+        if len(parts) == 2:
+            # entity.attr  →  ENTITY -[HAS_PROPERTY]-> LITERAL -[IS_VALUE_OF]-> PROPERTY
+            entity_key, attr_name = parts
+            entity_id = await _make_entity(entity_key)
+            literal_id = await _make_literal(value, attr_name, schema_path)
+            await registry.add_edge(entity_id, literal_id, "HAS_PROPERTY")
+            xid = await _make_extraction()
+            if xid:
+                await registry.add_edge(literal_id, xid, "EXTRACTED_FROM")
+            return literal_id, "LITERAL"
+
+        if len(parts) == 3:
+            # entity.RELATION.target
+            head_key, relation_name, tail_key = parts
+            head_id = await _make_entity(head_key)
+            tail_id = await _make_entity(tail_key)
+            # Direct entity-to-entity edge (simple graph traversal)
+            await registry.add_edge(head_id, tail_id, relation_name)
+            # FACT node carries provenance + optional HAS_PROPERTY values
+            fact_id = str(uuid.uuid4())
+            await registry.add_node(fact_id, ["FACT"], {
+                **base_props,
+                "relation": relation_name,
+                "schema_path": schema_path,
+                "date": now,
+            })
+            await registry.add_edge(fact_id, head_id, "HEAD")
+            await registry.add_edge(fact_id, tail_id, "TAIL")
+            # REPRESENTS: FACT → RELATION
+            rel_id = await _make_relation(relation_name)
+            await registry.add_edge(fact_id, rel_id, "REPRESENTS")
+            # Value as LITERAL property of the fact
+            literal_id = await _make_literal(value, "value", schema_path)
+            await registry.add_edge(fact_id, literal_id, "HAS_PROPERTY")
+            xid = await _make_extraction()
+            if xid:
+                await registry.add_edge(fact_id, xid, "EXTRACTED_FROM")
+            return fact_id, "FACT"
+
+        if len(parts) == 4:
+            # entity.RELATION.target.attr  →  FACT + named LITERAL attribute
+            head_key, relation_name, tail_key, attr_name = parts
+            head_id = await _make_entity(head_key)
+            tail_id = await _make_entity(tail_key)
+            await registry.add_edge(head_id, tail_id, relation_name)
+            # Stable FACT id so attr writes converge on the same fact node
+            fact_id = f"{database}:fact:{head_key}:{relation_name}:{tail_key}"
+            await registry.add_node(fact_id, ["FACT"], {
+                **base_props,
+                "relation": relation_name,
+                "schema_path": f"{head_key}.{relation_name}.{tail_key}",
+                "date": now,
+            })
+            await registry.add_edge(fact_id, head_id, "HEAD")
+            await registry.add_edge(fact_id, tail_id, "TAIL")
+            rel_id = await _make_relation(relation_name)
+            await registry.add_edge(fact_id, rel_id, "REPRESENTS")
+            # Named attribute literal
+            literal_id = await _make_literal(value, attr_name, schema_path)
+            await registry.add_edge(fact_id, literal_id, "HAS_PROPERTY")
+            xid = await _make_extraction()
+            if xid:
+                await registry.add_edge(literal_id, xid, "EXTRACTED_FROM")
+            return literal_id, "LITERAL"
+
+        # Fallback: treat entire path as a bare ENTITY
+        entity_id = str(uuid.uuid4())
+        await registry.add_node(entity_id, ["ENTITY"], {
+            **base_props,
+            "key": schema_path,
+            "value": value,
+            "schema_path": schema_path,
+            "date": now,
+        })
+        xid = await _make_extraction()
+        if xid:
+            await registry.add_edge(entity_id, xid, "EXTRACTED_FROM")
+        return entity_id, "ENTITY"
+
+    async def _write_data_entry(
+        self,
+        registry: UserDataRegistry,
+        database: str,
+        key: str,
+        value: list[Any],
+        source_id: str,
+        source_text: str | None = None,
+    ) -> None:
+        """Write extracted data to the graph and vector stores.
+
+        Each value in the list gets:
+        - A graph node (ENTITY / FACT / LITERAL) derived from the schema path.
+        - A vector entry that references the graph node id in its metadata.
+        """
+        for item in value:
+            graph_node_id, graph_node_type = await self._write_graph_entry(
+                registry, database, key, item, source_id, source_text=source_text
+            )
+            metadata: dict[str, Any] = {
+                "date": datetime.now(timezone.utc).isoformat(),
+                "agent": "import-agent-v1",
+                "source_id": source_id,
+                "graph_node_id": graph_node_id,
+                "graph_node_type": graph_node_type,
+            }
+            if source_text is not None:
+                metadata["source_text"] = source_text
+            vector_key = str(uuid.uuid4())
+            vector_text = f"{key}: {item}"
+            await registry.set_vector(vector_key, vector_text, metadata)
 
     async def _llm_extract_data(self, database: str, query: str, schema: list[str], raw_content: list[Any]) -> tuple[dict[str, Any], dict[str, str]]:
         """Extract query-relevant data and the source text segment for each extracted value."""
@@ -169,8 +374,6 @@ class UserDataManager:
             "**  \"source\": the verbatim excerpt from the content that the values were extracted from, potentially including the query, especially if it provides referential context.\n"
             "* If schema path refers to a entity_type (e.g. alice.HAS_SKILL.SKILL) but extraction has a specific value, e.g. 'alice.HAS_SKILL.python' return object should have as key, the specific path.\n"
             "* Double-check if source text is present for each extracted value.\n"
-
-            
             "* If multiple values are extracted from different parts of the content but map to the same schema path entry, combine them into a single array under the same key and concatenate the source text with clear delimiters.\n"
             "* If no matching value is extracted, return an empty JSON object.\n\n"
         )
@@ -183,13 +386,13 @@ class UserDataManager:
             return {}, {}
         values: dict[str, Any] = {}
         sources: dict[str, str] = {}
-        for key, entry in parsed.items():
+        for k, entry in parsed.items():
             if isinstance(entry, dict) and "values" in entry:
-                values[key] = entry["values"]
+                values[k] = entry["values"]
                 if "source" in entry:
-                    sources[key] = entry["source"]
+                    sources[k] = entry["source"]
             else:
-                values[key] = entry
+                values[k] = entry
         print(f"Extracted data: {json.dumps(values, indent=2)}")
         return values, sources
 
@@ -216,7 +419,7 @@ class UserDataManager:
             return []
 
     async def _llm_extract_schema(self, database: str, query: str) -> list[str]:
-        """Derive a schema 'NodeType.attribute_name' path from a query."""
+        """Derive schema path(s) relevant to a query."""
         llm = Settings.llm
         prompt = (
             f"Extract schema paths relevant to the following query from the content below using the schema as the data to extract. Follow the instructions below.\n"
@@ -258,35 +461,14 @@ class UserDataManager:
         source_id: str,
         queries: list[str],
     ) -> None:
-        entry = {
+        node_id = f"{database}:source:{source_id}"
+        properties = {
+            "id": node_id,
             "source_id": source_id,
             "source_type": getattr(source, "source_type", "unknown"),
             "location": getattr(source, "location", ""),
             "registered_at": datetime.now(timezone.utc).isoformat(),
-            "queries": queries,
+            "queries": json.dumps(queries),
+            "database": database,
         }
-        await registry.set_json(f"{database}:metadata:sources:{source_id}", entry)
-
-    async def _write_data_entry(
-        self,
-        registry: UserDataRegistry,
-        database: str,
-        key: str,
-        value: list[Any],
-        source_id: str,
-        source_text: str | None = None,
-    ) -> None:
-        for item in value:
-            metadata: dict[str, Any] = {
-                "date": datetime.now(timezone.utc).isoformat(),
-                "agent": "import-agent-v1",
-                "source_id": source_id,
-            }
-            if source_text is not None:
-                metadata["source_text"] = source_text
-            entry = {"key": key, "value": item, "metadata": metadata}
-            entry_id = str(uuid.uuid4())
-            json_key = f"{database}:data:{entry_id}"
-            await registry.set_json(json_key, entry)
-            vector_text = f"{key}: {item}"
-            await registry.set_vector(json_key, vector_text, metadata)
+        await registry.add_node(node_id, ["SOURCE"], properties)

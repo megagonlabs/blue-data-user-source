@@ -14,28 +14,106 @@ class DataSource(ABC):
         """Execute a query against this source and return raw results."""
 
 
-class JSONSource(ABC):
-    """Abstract interface for a structured key-value store."""
+class GraphSource(ABC):
+    """Abstract interface for a property graph store.
+
+    The graph is governed by the schema defined in schema.txt.  Each user
+    database is a logical namespace within the graph, addressed by user id.
+
+    Node labels
+    -----------
+    ENTITY      – concrete instance of a class (Alice, IBM, Python)
+    FACT        – reified relation between two entities
+    LITERAL     – typed property value (STRING / NUMBER / DATE / BOOLEAN)
+    CLASS       – category definition (PERSON, COMPANY, …)
+    RELATION    – relation-type definition (WORKED_AT, HAS_SKILL, …)
+    PROPERTY    – property definition (AGE, START_DATE, …)
+    SOURCE      – data source metadata
+    EXTRACTION  – verbatim text segment extracted from a source
+
+    Edge types and their direction
+    --------------------------------
+    IS_SUBCLASS_OF   CLASS/RELATION → CLASS/RELATION
+    IS_INSTANCE_OF   ENTITY → CLASS
+    DEFINE_PROPERTY  CLASS/RELATION → PROPERTY
+    HAS_PROPERTY     ENTITY/FACT → LITERAL
+    IS_VALUE_OF      LITERAL → PROPERTY
+    REPRESENTS       FACT → RELATION
+    HEAD             FACT → ENTITY  (subject)
+    TAIL             FACT → ENTITY  (object)
+    DOMAIN           RELATION → CLASS
+    RANGE            RELATION → CLASS
+    EXTRACTED_FROM   ENTITY/FACT/LITERAL → EXTRACTION
+    <RELATION_NAME>  ENTITY → ENTITY  (direct shortcut edge)
+    """
 
     @abstractmethod
-    async def set(self, key: str, value: dict[str, Any]) -> None:
-        """Store or overwrite a JSON value."""
+    async def add_node(
+        self,
+        node_id: str,
+        labels: list[str],
+        properties: dict[str, Any],
+    ) -> str:
+        """Add or update a node. Returns node_id."""
 
     @abstractmethod
-    async def get(self, key: str) -> dict[str, Any] | None:
-        """Retrieve by key."""
+    async def get_node(self, node_id: str) -> dict[str, Any] | None:
+        """Return node dict (keys: id, labels, properties) or None."""
 
     @abstractmethod
-    async def delete(self, key: str) -> None:
-        """Remove a key."""
+    async def delete_node(self, node_id: str) -> None:
+        """Delete a node and all its incident edges."""
 
     @abstractmethod
-    async def query(self, expression: str) -> list[dict[str, Any]]:
-        """Query using a JSONPath or equivalent expression."""
+    async def add_edge(
+        self,
+        from_id: str,
+        to_id: str,
+        edge_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> str:
+        """Add a directed edge. Returns a unique edge_id."""
 
     @abstractmethod
-    async def keys(self, prefix: str | None = None) -> list[str]:
-        """List all keys, optionally filtered by prefix."""
+    async def delete_edge(self, edge_id: str) -> None:
+        """Delete an edge by id."""
+
+    @abstractmethod
+    async def query_nodes(
+        self,
+        labels: list[str] | None = None,
+        properties: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return nodes matching the given labels and/or property filters (AND semantics)."""
+
+    @abstractmethod
+    async def query_neighbors(
+        self,
+        node_id: str,
+        edge_type: str | None = None,
+        direction: str = "out",
+    ) -> list[dict[str, Any]]:
+        """Return neighboring nodes, optionally filtered by edge type.
+
+        direction: "out" (default), "in", or "both".
+        """
+
+    @abstractmethod
+    async def cypher(
+        self,
+        query: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute a Cypher query. Raises NotImplementedError on non-Neo4j backends."""
+
+    async def query(self, text: str) -> list[dict[str, Any]]:
+        """Text search across node property values. Returns matching nodes."""
+        text_lower = text.lower()
+        all_nodes = await self.query_nodes()
+        return [
+            node for node in all_nodes
+            if any(text_lower in str(v).lower() for v in node["properties"].values())
+        ]
 
 
 class VectorSource(ABC):
