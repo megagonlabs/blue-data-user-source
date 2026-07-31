@@ -1,0 +1,537 @@
+{
+  "entities": {
+    "PERSON": {
+      "name": "PERSON",
+      "index": 0,
+      "description": "Human individual",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {
+          "GENDER": {
+            "name": "GENDER",
+            "info": "str",
+            "description": "Gender identity"
+          },
+          "DATE_OF_BIRTH": {
+            "name": "DATE_OF_BIRTH",
+            "info": "str",
+            "description": "Birth date"
+          },
+          "NATIONALITY": {
+            "name": "NATIONALITY",
+            "info": "str",
+            "description": "Nationality"
+          },
+          "AGE": {
+            "name": "AGE",
+            "info": "str",
+            "description": "Age in years"
+          },
+          "NAME": {
+            "name": "NAME",
+            "info": "str",
+            "description": "Name"
+          },
+          "FIRST_NAME": {
+            "name": "FIRST_NAME",
+            "info": "str",
+            "description": "First Name"
+          },
+          "LAST_NAME": {
+            "name": "LAST_NAME",
+            "info": "str",
+            "description": "Last Name"
+          },
+          "NICK_NAME": {
+            "name": "NICK_NAME",
+            "info": "str",
+            "description": "Nick Name"
+          }
+        }
+      },
+      "icon": null
+    },
+    "USER": {
+      "name": "USER",
+      "index": 0,
+      "description": "Digital user profile extending PERSON",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "EMPLOYEE": {
+      "name": "EMPLOYEE",
+      "index": 0,
+      "description": "Person employed by an organization",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "COMPANY": {
+      "name": "COMPANY",
+      "index": 0,
+      "description": "For-profit organization",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "ORGANIZATION": {
+      "name": "ORGANIZATION",
+      "index": 0,
+      "description": "General organization",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "DEMOGRAPHIC_PROFILE": {
+      "name": "DEMOGRAPHIC_PROFILE",
+      "index": 0,
+      "description": "User demographic attributes",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "LOCATION": {
+      "name": "LOCATION",
+      "index": 0,
+      "description": "Geographic location",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "CITY": {
+      "name": "CITY",
+      "index": 0,
+      "description": "City-level location",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "COUNTRY": {
+      "name": "COUNTRY",
+      "index": 0,
+      "description": "Country-level location",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "EDUCATION_INSTITUTION": {
+      "name": "EDUCATION_INSTITUTION",
+      "index": 0,
+      "description": "School or university",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "DEGREE": {
+      "name": "DEGREE",
+      "index": 0,
+      "description": "Academic degree",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "COURSE": {
+      "name": "COURSE",
+      "index": 0,
+      "description": "Course or subject",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "JOB_POSTING": {
+      "name": "JOB_POSTING",
+      "index": 0,
+      "description": "Job advertisement",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "JOB_APPLICATION": {
+      "name": "JOB_APPLICATION",
+      "index": 0,
+      "description": "Application to a job",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "SKILL": {
+      "name": "SKILL",
+      "index": 0,
+      "description": "User skill or capability",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "INTEREST": {
+      "name": "INTEREST",
+      "index": 0,
+      "description": "User interest or preference",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "PRODUCT": {
+      "name": "PRODUCT",
+      "index": 0,
+      "description": "Physical or digital product",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "PRODUCT_CATEGORY": {
+      "name": "PRODUCT_CATEGORY",
+      "index": 0,
+      "description": "Category of products",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "PURCHASE": {
+      "name": "PURCHASE",
+      "index": 0,
+      "description": "Product purchase event",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "TRAVEL_TRIP": {
+      "name": "TRAVEL_TRIP",
+      "index": 0,
+      "description": "Travel event or itinerary",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "TRAVEL_DESTINATION": {
+      "name": "TRAVEL_DESTINATION",
+      "index": 0,
+      "description": "Destination location",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    },
+    "DEVICE": {
+      "name": "DEVICE",
+      "index": 0,
+      "description": "User device",
+      "created_by": null,
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      },
+      "icon": null
+    }
+  },
+  "relations": {
+    "USER__HAS_DEMOGRAPHICS__DEMOGRAPHIC_PROFILE": {
+      "name": "HAS_DEMOGRAPHICS",
+      "index": 0,
+      "source": "USER",
+      "target": "DEMOGRAPHIC_PROFILE",
+      "description": "Links user to demographic profile",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__LIVES_IN__LOCATION": {
+      "name": "LIVES_IN",
+      "index": 0,
+      "source": "PERSON",
+      "target": "LOCATION",
+      "description": "Residence location",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__BORN_IN__LOCATION": {
+      "name": "BORN_IN",
+      "index": 0,
+      "source": "PERSON",
+      "target": "LOCATION",
+      "description": "Birth location",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__STUDIED_AT__EDUCATION_INSTITUTION": {
+      "name": "STUDIED_AT",
+      "index": 0,
+      "source": "PERSON",
+      "target": "EDUCATION_INSTITUTION",
+      "description": "Enrollment relationship",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__HAS_DEGREE__DEGREE": {
+      "name": "HAS_DEGREE",
+      "index": 0,
+      "source": "PERSON",
+      "target": "DEGREE",
+      "description": "Degree attainment",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__TOOK_COURSE__COURSE": {
+      "name": "TOOK_COURSE",
+      "index": 0,
+      "source": "PERSON",
+      "target": "COURSE",
+      "description": "Course enrollment",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__APPLIED_TO__JOB_POSTING": {
+      "name": "APPLIED_TO",
+      "index": 0,
+      "source": "USER",
+      "target": "JOB_POSTING",
+      "description": "User applied to job",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__SAVES_JOB__JOB_POSTING": {
+      "name": "SAVES_JOB",
+      "index": 0,
+      "source": "USER",
+      "target": "JOB_POSTING",
+      "description": "User saved job",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PERSON__HAS_SKILL__SKILL": {
+      "name": "HAS_SKILL",
+      "index": 0,
+      "source": "PERSON",
+      "target": "SKILL",
+      "description": "Skill possession",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__HAS_INTEREST__INTEREST": {
+      "name": "HAS_INTEREST",
+      "index": 0,
+      "source": "USER",
+      "target": "INTEREST",
+      "description": "Interest association",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "PRODUCT__BELONGS_TO_CATEGORY__PRODUCT_CATEGORY": {
+      "name": "BELONGS_TO_CATEGORY",
+      "index": 0,
+      "source": "PRODUCT",
+      "target": "PRODUCT_CATEGORY",
+      "description": "Product category mapping",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__PURCHASED__PRODUCT": {
+      "name": "PURCHASED",
+      "index": 0,
+      "source": "USER",
+      "target": "PRODUCT",
+      "description": "User purchased product",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__LIKED_PRODUCT__PRODUCT": {
+      "name": "LIKED_PRODUCT",
+      "index": 0,
+      "source": "USER",
+      "target": "PRODUCT",
+      "description": "User liked product",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__TRAVELED_TO__LOCATION": {
+      "name": "TRAVELED_TO",
+      "index": 0,
+      "source": "USER",
+      "target": "LOCATION",
+      "description": "User travel history",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "TRAVEL_TRIP__VISITED__TRAVEL_DESTINATION": {
+      "name": "VISITED",
+      "index": 0,
+      "source": "TRAVEL_TRIP",
+      "target": "TRAVEL_DESTINATION",
+      "description": "Visited destination",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "USER__USES_DEVICE__DEVICE": {
+      "name": "USES_DEVICE",
+      "index": 0,
+      "source": "USER",
+      "target": "DEVICE",
+      "description": "Device usage",
+      "properties": {},
+      "contents": {
+        "attributes": {}
+      }
+    },
+    "EMPLOYEE__WORKED_AT__ORGANIZATION": {
+      "name": "WORKED_AT",
+      "index": 0,
+      "source": "EMPLOYEE",
+      "target": "ORGANIZATION",
+      "description": "Employment relationship",
+      "properties": {},
+      "contents": {
+        "attributes": {
+          "START_DATE": {
+            "name": "START_DATE",
+            "info": "str",
+            "description": "Start date of relation"
+          },
+          "END_DATE": {
+            "name": "END_DATE",
+            "info": "str",
+            "description": "End date of relation"
+          }
+        }
+      }
+    }
+  },
+  "subclasses": [
+    {
+      "child": "USER",
+      "child_label": "CLASS",
+      "parent": "PERSON",
+      "parent_label": "CLASS"
+    },
+    {
+      "child": "EMPLOYEE",
+      "child_label": "CLASS",
+      "parent": "PERSON",
+      "parent_label": "CLASS"
+    },
+    {
+      "child": "COMPANY",
+      "child_label": "CLASS",
+      "parent": "ORGANIZATION",
+      "parent_label": "CLASS"
+    },
+    {
+      "child": "CITY",
+      "child_label": "CLASS",
+      "parent": "LOCATION",
+      "parent_label": "CLASS"
+    },
+    {
+      "child": "COUNTRY",
+      "child_label": "CLASS",
+      "parent": "LOCATION",
+      "parent_label": "CLASS"
+    },
+    {
+      "child": "FIRST_NAME",
+      "child_label": "PROPERTY",
+      "parent": "NAME",
+      "parent_label": "PROPERTY"
+    },
+    {
+      "child": "LAST_NAME",
+      "child_label": "PROPERTY",
+      "parent": "NAME",
+      "parent_label": "PROPERTY"
+    },
+    {
+      "child": "NICK_NAME",
+      "child_label": "PROPERTY",
+      "parent": "NAME",
+      "parent_label": "PROPERTY"
+    }
+  ]
+}

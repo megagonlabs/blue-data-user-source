@@ -7,9 +7,8 @@ name = "blue-data-user-source"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "llama-index-core",
-    "llama-index-llms-openai",
-    "llama-index-embeddings-openai",
+    "blue-data>=0.1.0",
+    "blue-data-kb-source>=0.1.0",
 ]
 
 [project.optional-dependencies]

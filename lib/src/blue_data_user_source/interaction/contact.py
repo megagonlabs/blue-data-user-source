@@ -21,7 +21,6 @@ class ContactMethod:
         self.protocol = protocol
 
     def interact(self) -> InteractionManager:
-        """Return an InteractionManager configured for this contact method."""
         if self.protocol == "stdio":
             return self._stdio_manager()
         raise InteractionError(
@@ -51,25 +50,19 @@ class ContactManager:
         self._data_manager = data_manager
 
     async def identify_contact_method(self, query: str) -> ContactMethod:
-        """Return the ContactMethod most suitable for the given interaction context."""
         methods = await self.get_contact_methods()
         if not methods:
             return ContactMethod(details={}, protocol="stdio")
-        # Prefer the method with the lowest preference value (highest priority).
         return min(methods, key=lambda m: m.details.get("preference", 999))
 
     async def get_contact_methods(
         self, name: str | None = None, protocol: str | None = None
     ) -> list[ContactMethod]:
-        """Return all contact methods, optionally filtered by name or protocol."""
         try:
-            registry = self._data_manager._registries[self._database]
-            nodes = await registry.query_nodes(
-                labels=["CONTACT"],
-                properties={"database": self._database},
-            )
-            raw: list[dict[str, Any]] = [n["properties"] for n in nodes]
-        except KeyError:
+            kb = self._data_manager._kb()
+            nodes = kb.match_nodes(self._database, label="CONTACT")
+            raw: list[dict[str, Any]] = [n.get("properties", {}) for n in nodes]
+        except Exception:
             raw = []
 
         methods: list[ContactMethod] = []

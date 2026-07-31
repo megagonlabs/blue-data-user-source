@@ -1,11 +1,9 @@
 from pathlib import Path
 from typing import Any
 
-from blue_data_user_source.interfaces import DataSource
 
-
-class FileSource(DataSource):
-    """DataSource that reads a plain-text file and returns its lines as results."""
+class FileSource:
+    """Reads a plain-text file and returns its lines as query results."""
 
     source_type = "file"
 

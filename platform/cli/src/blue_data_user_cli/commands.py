@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import sys
@@ -9,7 +11,6 @@ from rich.console import Console
 from rich.table import Table
 
 from blue_data_user_source import FileSource, UserDbError, UserSource
-from blue_data_user_source.backends.file import file_store_factory
 
 _DEFAULT_DATA_DIR = Path.home() / ".userdb"
 
@@ -17,35 +18,47 @@ _console = Console()
 _err = Console(stderr=True)
 
 
-def _make_source(user: str | None, data_dir: Path, schema_path: Path | None = None) -> UserSource:
-    props: dict[str, Any] = {"store_factory": file_store_factory(data_dir)}
-    if user:
-        props["database"] = user
-    if schema_path:
-        props["schema_path"] = str(schema_path)
-    return UserSource(properties=props)
+def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
+    """Build a UserSource backed by files under *data_dir*."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return UserSource({
+        "store": {"backend": "file", "path": str(data_dir / "users.json")},
+        "schema": str(schema_path) if schema_path else None,
+    })
+
+
+def _user_registry_props(data_dir: Path, name: str) -> dict:
+    return {"backend": "file", "path": str(data_dir / "registries" / f"{name}.json")}
+
+
+def _user_kb_props(data_dir: Path, kb_backend: str, **kb_extras: Any) -> dict:
+    props: dict[str, Any] = {"backend": kb_backend}
+    if kb_backend == "file":
+        props["directory"] = str(data_dir / "kb")
+    props.update(kb_extras)
+    return props
 
 
 @click.group()
 @click.option(
     "--user",
-    envvar="USERDB_DATABASE",
+    envvar="USERDB_USER",
     default=None,
-    help="User database ID. Overrides USERDB_DATABASE env var.",
+    help="User name. Overrides USERDB_USER env var.",
 )
 @click.option(
     "--data-dir",
     envvar="USERDB_DATA_DIR",
     default=str(_DEFAULT_DATA_DIR),
     show_default=True,
-    help="Directory where database files are stored. Overrides USERDB_DATA_DIR env var.",
+    help="Directory where user data is stored. Overrides USERDB_DATA_DIR env var.",
     type=click.Path(path_type=Path),
 )
 @click.option(
     "--schema-path",
     envvar="USERDB_SCHEMA_PATH",
     default=None,
-    help="Path to schema reference file for attribute name generation. Overrides USERDB_SCHEMA_PATH env var.",
+    help="Path to schema.json for KB schema seeding. Overrides USERDB_SCHEMA_PATH env var.",
     type=click.Path(exists=True, path_type=Path),
 )
 @click.pass_context
@@ -65,47 +78,29 @@ def cli(ctx: click.Context, user: str | None, data_dir: Path, schema_path: Path 
     type=click.Choice(["table", "json", "nl"]),
     default="table",
     show_default=True,
-    help="Output format: table or json for structured results, nl for natural language.",
 )
-@click.option(
-    "--top-k",
-    "top_k",
-    default=10,
-    type=int,
-    help="Maximum number of vector results to retrieve (default: 10).",
-)
-@click.option(
-    "--threshold",
-    "threshold",
-    default=10.0,
-    type=float,
-    help=(
-        "Cumulative percentage-drop squared threshold for cutting vector results. "
-        "Cuts at the ith cumulative consecutive pair where sum ((S_i - S_{i+1}) / S_i)^2 exceeds this value (default: 10.0)"
-    ),
-)
+@click.option("--top-k", "top_k", default=10, type=int)
 @click.pass_context
 def query_cmd(
     ctx: click.Context,
     text: str,
     session: str | None,
     fmt: str,
-    top_k: int | None,
-    threshold: float | None,
+    top_k: int,
 ) -> None:
     """Execute a natural language query against a user database."""
-    source = _make_source(ctx.obj.get("user"), ctx.obj["data_dir"], ctx.obj.get("schema_path"))
-    props: dict[str, Any] = {}
+    user = ctx.obj.get("user")
+    if not user:
+        _err.print("[red]Error:[/red] --user is required for this command.")
+        sys.exit(1)
+    source = _make_source(ctx.obj["data_dir"], ctx.obj.get("schema_path"))
+    props: dict[str, Any] = {"top_k": top_k}
     if session:
         props["session"] = session
     if fmt == "nl":
         props["output_form"] = "nl"
-    if top_k is not None:
-        props["top_k"] = top_k
-    if threshold is not None:
-        props["threshold"] = threshold
     try:
-        results = asyncio.run(source.execute_query(text, optional_properties=props or None))
+        results = asyncio.run(source.execute_query(text, database=user, optional_properties=props))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -138,23 +133,22 @@ def query_cmd(
 )
 @click.pass_context
 def import_cmd(ctx: click.Context, file: Path, queries: tuple[str, ...]) -> None:
-    """Import a file into a user database.
-
-    Omit --query to register the file as a source (Type 1).
-    Provide --query to extract and store specific data (Type 2).
-    """
-    source = _make_source(ctx.obj.get("user"), ctx.obj["data_dir"], ctx.obj.get("schema_path"))
+    """Import a file into a user database."""
+    user = ctx.obj.get("user")
+    if not user:
+        _err.print("[red]Error:[/red] --user is required for this command.")
+        sys.exit(1)
+    source = _make_source(ctx.obj["data_dir"], ctx.obj.get("schema_path"))
     props: dict[str, Any] | None = {"queries": list(queries)} if queries else None
     try:
-        asyncio.run(source.import_source(FileSource(file), optional_properties=props))
+        asyncio.run(source.import_source(FileSource(file), database=user, optional_properties=props))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
     if queries:
         n = len(queries)
-        label = "query" if n == 1 else "queries"
-        _console.print(f"Imported: {file} ({n} {label})")
+        _console.print(f"Imported: {file} ({n} {'query' if n == 1 else 'queries'})")
     else:
         _console.print(f"Registered: {file}")
 
@@ -166,16 +160,96 @@ def user_group() -> None:
 
 @user_group.command("create")
 @click.argument("name")
+@click.option(
+    "--kb-backend",
+    default="file",
+    type=click.Choice(["memory", "file", "neo4j"]),
+    show_default=True,
+    help="KBSource backend to use.",
+)
+@click.option("--neo4j-uri", default=None, help="Neo4j bolt URI (neo4j backend only).")
+@click.option("--neo4j-user", default=None, help="Neo4j username.")
+@click.option("--neo4j-password", default=None, help="Neo4j password.")
 @click.pass_context
-def database_create(ctx: click.Context, name: str) -> None:
+def user_create(
+    ctx: click.Context,
+    name: str,
+    kb_backend: str,
+    neo4j_uri: str | None,
+    neo4j_user: str | None,
+    neo4j_password: str | None,
+) -> None:
     """Create a new user database."""
-    source = _make_source(None, ctx.obj["data_dir"], ctx.obj.get("schema_path"))
+    data_dir: Path = ctx.obj["data_dir"]
+    schema_path: Path | None = ctx.obj.get("schema_path")
+    source = _make_source(data_dir, schema_path)
+
+    if name in source.list_users():
+        _err.print(f"[red]Error:[/red] User '{name}' already exists.")
+        sys.exit(1)
+
+    kb_extras: dict[str, Any] = {}
+    if kb_backend == "neo4j":
+        if not (neo4j_uri and neo4j_user and neo4j_password):
+            _err.print("[red]Error:[/red] neo4j backend requires --neo4j-uri, --neo4j-user, --neo4j-password.")
+            sys.exit(1)
+        kb_extras = {"uri": neo4j_uri, "username": neo4j_user, "password": neo4j_password}
+
+    registry_props = _user_registry_props(data_dir, name)
+    kb_props = _user_kb_props(data_dir, kb_backend, **kb_extras)
     try:
-        asyncio.run(source.create_database(name))
+        asyncio.run(source.create_user(name, registry_props, kb_props))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    _console.print(f"Created database: {name}")
+
+    _console.print(f"Created user: {name}")
+
+
+@user_group.command("delete")
+@click.argument("name")
+@click.pass_context
+def user_delete(ctx: click.Context, name: str) -> None:
+    """Delete a user database and all its KB data."""
+    source = _make_source(ctx.obj["data_dir"])
+    try:
+        asyncio.run(source.delete_user(name))
+    except UserDbError as exc:
+        _err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    _console.print(f"Deleted user: {name}")
+
+
+@user_group.command("reset")
+@click.argument("name")
+@click.pass_context
+def user_reset(ctx: click.Context, name: str) -> None:
+    """Clear KB data for a user and reseed the schema."""
+    source = _make_source(ctx.obj["data_dir"], ctx.obj.get("schema_path"))
+    try:
+        asyncio.run(source.reset_user(name))
+    except UserDbError as exc:
+        _err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    _console.print(f"Reset user: {name}")
+
+
+@user_group.command("ls")
+@click.pass_context
+def user_list(ctx: click.Context) -> None:
+    """List all registered users."""
+    source = _make_source(ctx.obj["data_dir"])
+    names = source.list_users()
+    if not names:
+        return
+    table = Table(show_header=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Registry")
+    for name in names:
+        entry = source.get_user(name) or {}
+        reg_backend = entry.get("registry", {}).get("backend", "memory")
+        table.add_row(name, reg_backend)
+    _console.print(table)
 
 
 @user_group.group("show")
@@ -184,28 +258,23 @@ def show_group() -> None:
 
 
 @show_group.command("data")
-@click.argument("key", required=False, default=None)
 @click.option(
     "--format",
     "fmt",
     type=click.Choice(["table", "json", "nl"]),
     default="table",
     show_default=True,
-    help="Output format: table or json for structured results, nl for natural language.",
 )
 @click.pass_context
-def show_data(ctx: click.Context, key: str | None, fmt: str) -> None:
-    """Show data entries for the current user database.
-
-    Optionally filter by KEY (attribute name).
-    """
+def show_data(ctx: click.Context, fmt: str) -> None:
+    """Show data entries for the current user database."""
     user = ctx.obj.get("user")
     if not user:
         _err.print("[red]Error:[/red] --user is required for this command.")
         sys.exit(1)
-    source = _make_source(user, ctx.obj["data_dir"])
+    source = _make_source(ctx.obj["data_dir"])
     try:
-        entries = asyncio.run(source.list_data(key=key))
+        entries = asyncio.run(source.list_data(database=user))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -215,26 +284,17 @@ def show_data(ctx: click.Context, key: str | None, fmt: str) -> None:
         click.echo(json.dumps(entries, indent=2))
     elif fmt == "nl":
         try:
-            description = asyncio.run(source.describe_data(key=key))
+            description = asyncio.run(source.describe_data(database=user))
         except UserDbError as exc:
             _err.print(f"[red]Error:[/red] {exc}")
             sys.exit(1)
         click.echo(description)
     else:
         table = Table(show_header=True)
-        table.add_column("Key", style="cyan")
+        table.add_column("Name", style="cyan")
         table.add_column("Value")
-        table.add_column("Date")
-        table.add_column("Source ID")
         for entry in entries:
-            meta = entry.get("metadata") or {}
-            value = entry.get("value", "")
-            table.add_row(
-                str(entry.get("key", "")),
-                value,
-                str(meta.get("date", "")),
-                str(meta.get("source_id", "")),
-            )
+            table.add_row(str(entry.get("name", "")), str(entry.get("value", "")))
         _console.print(table)
 
 
@@ -246,21 +306,17 @@ def show_data(ctx: click.Context, key: str | None, fmt: str) -> None:
     type=click.Choice(["table", "json", "nl"]),
     default="table",
     show_default=True,
-    help="Output format: table or json for structured results, nl for natural language.",
 )
 @click.pass_context
 def show_metadata(ctx: click.Context, source_id: str | None, fmt: str) -> None:
-    """Show source metadata for the current user database.
-
-    Optionally filter by SOURCE_ID.
-    """
+    """Show source metadata for the current user database."""
     user = ctx.obj.get("user")
     if not user:
         _err.print("[red]Error:[/red] --user is required for this command.")
         sys.exit(1)
-    source = _make_source(user, ctx.obj["data_dir"])
+    source = _make_source(ctx.obj["data_dir"])
     try:
-        entries = asyncio.run(source.list_metadata(source_id=source_id))
+        entries = asyncio.run(source.list_metadata(database=user, source_id=source_id))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -270,7 +326,7 @@ def show_metadata(ctx: click.Context, source_id: str | None, fmt: str) -> None:
         click.echo(json.dumps(entries, indent=2))
     elif fmt == "nl":
         try:
-            description = asyncio.run(source.describe_metadata(source_id=source_id))
+            description = asyncio.run(source.describe_metadata(database=user, source_id=source_id))
         except UserDbError as exc:
             _err.print(f"[red]Error:[/red] {exc}")
             sys.exit(1)
@@ -278,34 +334,7 @@ def show_metadata(ctx: click.Context, source_id: str | None, fmt: str) -> None:
     else:
         table = Table(show_header=True)
         table.add_column("Source ID", style="cyan")
-        table.add_column("Type")
         table.add_column("Location")
-        table.add_column("Registered At")
-        table.add_column("Queries")
         for entry in entries:
-            queries = ", ".join(str(q) for q in entry.get("queries", []))
-            table.add_row(
-                str(entry.get("source_id", "")),
-                str(entry.get("source_type", "")),
-                str(entry.get("location", "")),
-                str(entry.get("registered_at", "")),
-                queries,
-            )
+            table.add_row(str(entry.get("id", "")), str(entry.get("location", "")))
         _console.print(table)
-
-
-@user_group.command("ls")
-@click.pass_context
-def database_list(ctx: click.Context) -> None:
-    """List all user databases."""
-    data_dir: Path = ctx.obj["data_dir"]
-    if not data_dir.exists():
-        return
-    databases = sorted(p.name for p in data_dir.iterdir() if p.is_dir())
-    if not databases:
-        return
-    table = Table(show_header=True)
-    table.add_column("Database", style="cyan")
-    for name in databases:
-        table.add_row(name)
-    _console.print(table)

@@ -163,15 +163,30 @@ Note: The notation below follows closely with Neo4J CYPHER syntax.
 (city)-[:IS_SUBCLASS_OF]->(location)
 (country)-[:IS_SUBCLASS_OF]->(location)
 
+(name:PROPERTY) {name: 'NAME', description: 'Name'}
+(first_name:PROPERTY) {name: 'FIRST_NAME', description: 'First Name'}
+(last_name:PROPERTY) {name: 'LAST_NAME', description: 'Last Name'}
+(nick_name:PROPERTY) {name: 'NICK_NAME', description: 'Nick Name'}
+
+(first_name)-[:IS_SUBCLASS_OF]->(name)
+(last_name)-[:IS_SUBCLASS_OF]->(name)
+(nick_name)-[:IS_SUBCLASS_OF]->(name)
+
+
+(person)-[:DEFINE_PROPERTY]->(name)
+(person)-[:DEFINE_PROPERTY]->(first_name)
+(person)-[:DEFINE_PROPERTY]->(last_name)
+(person)-[:DEFINE_PROPERTY]->(nick_name)
+
 (gender:PROPERTY {name: 'GENDER', description: 'Gender identity'})
 (dob:PROPERTY {name: 'DATE_OF_BIRTH', description: 'Birth date'})
 (nationality:PROPERTY {name: 'NATIONALITY', description: 'Nationality'})
 (age:PROPERTY {name: 'AGE', description: 'Age in years'})
 
-(user)-[:DEFINE_PROPERTY]->(gender)
-(user)-[:DEFINE_PROPERTY]->(dob)
-(user)-[:DEFINE_PROPERTY]->(nationality)
-(user)-[:DEFINE_PROPERTY]->(age)
+(person)-[:DEFINE_PROPERTY]->(gender)
+(person)-[:DEFINE_PROPERTY]->(dob)
+(person)-[:DEFINE_PROPERTY]->(nationality)
+(person)-[:DEFINE_PROPERTY]->(age)
 
 (has_demographics:RELATION {name: 'HAS_DEMOGRAPHICS', description: 'Links user to demographic profile', is_symmetric: false})
 (has_demographics)-[:DOMAIN]->(user)

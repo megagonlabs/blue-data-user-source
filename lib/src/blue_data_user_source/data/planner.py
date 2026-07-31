@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
-from blue_data_user_source.interfaces import DataPlanner
-from blue_data_user_source.data.registry import UserDataRegistry
+from blue_data.registry.data_registry import DataRegistry
 
 
 @dataclass
@@ -12,18 +13,11 @@ class SubqueryPlan:
     source_id: str
 
 
-class UserDataPlanner(DataPlanner):
-    """Decomposes a query into subqueries mapped to relevant sources."""
+class UserDataPlanner:
+    """Decomposes a query into subqueries mapped to registered sources."""
 
-    def __init__(self, registry: UserDataRegistry) -> None:
+    def __init__(self, registry: DataRegistry) -> None:
         self._registry = registry
 
-    async def plan(self, query: str, database: str) -> list[SubqueryPlan]:
-        """Return an execution plan for query against the given user database."""
-        graph_source_id = f"{database}:graph"
-        vector_source_id = f"{database}:vector"
-
-        return [
-            SubqueryPlan(subquery=query, source_id=vector_source_id),
-            SubqueryPlan(subquery=query, source_id=graph_source_id),
-        ]
+    async def plan(self, query: str) -> list[SubqueryPlan]:
+        return [SubqueryPlan(subquery=query, source_id=name) for name in self._registry.list_sources()]

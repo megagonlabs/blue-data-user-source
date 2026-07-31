@@ -2,8 +2,6 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from llama_index.core import Settings  # type: ignore[import-untyped]
-
 
 @dataclass
 class MetricEvaluation:
@@ -51,15 +49,18 @@ class CompletenessMetric(UserDataMetric):
         query_results_metadata: dict[str, Any],
     ) -> MetricEvaluation:
         """Return completeness score based on result volume."""
-        llm = Settings.llm
+        from blue_data_user_source.reasoning.reasoner import _llm_complete
         prompt = (
             f"Query: {query}\n"
             f"Results: {query_results}\n"
             "On a scale of 0.0 to 1.0, how complete is this result set for answering "
-            "the query? Reply with a JSON object: {\"score\": <float>, \"reasoning\": <string>}"
+            'the query? Reply with a JSON object: {"score": <float>, "reasoning": <string>}'
         )
-        response = await llm.acomplete(prompt)
-        parsed = json.loads(str(response))
+        response = await _llm_complete(prompt)
+        try:
+            parsed = json.loads(response)
+        except (json.JSONDecodeError, ValueError):
+            parsed = {}
         score: float = float(parsed.get("score", 0.0))
         reasoning: str = str(parsed.get("reasoning", ""))
         return MetricEvaluation(
