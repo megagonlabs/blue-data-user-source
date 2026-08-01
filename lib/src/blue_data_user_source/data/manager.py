@@ -16,6 +16,7 @@ def _build_json_source(props: dict) -> Any:
     """Build a JSONSource from backend config props."""
     if props.get("backend") == "file":
         from blue_data.source.json.file_json_source import FileJSONSource
+        Path(props["path"]).parent.mkdir(parents=True, exist_ok=True)
         return FileJSONSource(props["path"])
     from blue_data.source.json.memory_json_source import MemoryJSONSource
     return MemoryJSONSource()

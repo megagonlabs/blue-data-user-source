@@ -8,11 +8,13 @@ from blue_data_user_source.types import QueryError, QueryResult
 
 
 class UserSource:
-    """Multi-user knowledge base source.
+    """
+    Multi-user knowledge base source.
 
-    Stores user entries in a JSONSource backend. Each user entry
-    points to a per-user DataRegistry (backed by its own JSONSource), which
-    holds the ``"kb"`` KBSource and any sources added via imports.
+    Stores user entries in a JSONSource backend. 
+    Each user entry points to a per-user DataRegistry (backed by its own JSONSource), 
+    which holds user data including a ``"kb"`` KBSource and any sources added via imports,
+    along with metadata, including preferences, contacts, etc.
 
     Usage::
 
