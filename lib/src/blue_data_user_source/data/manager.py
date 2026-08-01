@@ -8,6 +8,8 @@ from blue_data.registry.data_registry import DataRegistry
 from blue_data_kb_source.kb_source import KBSource
 
 
+_DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "schema.json")
+
 # ------------------------------------------------------------------ #
 # Private builders                                                     #
 # ------------------------------------------------------------------ #
@@ -109,7 +111,7 @@ class UserDataManager:
         """
         if not kb_props.get("backend"):
             raise ValueError("kb_props must include a 'backend' key")
-        self._schema_path = kb_props.get("schema_path")
+        self._schema_path = kb_props.get("schema_path") or _DEFAULT_SCHEMA_PATH
         registry_store = _build_json_source(self._registry_props)
         self._registry = DataRegistry(store=registry_store)
         kb = _build_kb_source(kb_props)
