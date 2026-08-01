@@ -83,7 +83,8 @@ class UserSource:
         await self._get_manager(name).reset()
 
     async def delete_user(self, name: str) -> None:
-        await self.reset_user(name)
+        manager = self._get_manager(name)
+        manager.destroy()
         self.remove_user(name)
 
     # ------------------------------------------------------------------ #

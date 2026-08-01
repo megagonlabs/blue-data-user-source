@@ -156,6 +156,25 @@ class UserDataManager:
         if self._schema_path:
             await self.seed_schema(self._schema_path)
 
+    def destroy(self) -> None:
+        """Delete all backing files for this user (file backends only).
+
+        For non-file KB backends the caller is responsible for clearing
+        the database namespace first (e.g. via ``reset()``).
+        """
+        # KB data file
+        if self._registry is not None:
+            props = self._registry.get_source_properties("kb") or {}
+            connection = props.get("connection", {})
+            if connection.get("backend") == "file":
+                directory = connection.get("directory", ".")
+                kb_file = Path(directory) / f"{self._database}.json"
+                kb_file.unlink(missing_ok=True)
+
+        # Per-user registry file
+        if self._registry_props.get("backend") == "file":
+            Path(self._registry_props["path"]).unlink(missing_ok=True)
+
     # ------------------------------------------------------------------ #
     # Internal                                                             #
     # ------------------------------------------------------------------ #
