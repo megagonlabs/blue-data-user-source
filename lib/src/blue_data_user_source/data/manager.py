@@ -8,8 +8,6 @@ from blue_data.registry.data_registry import DataRegistry
 from blue_data_kb_source.kb_source import KBSource
 
 
-_DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "schema.json")
-
 # ------------------------------------------------------------------ #
 # Private builders                                                     #
 # ------------------------------------------------------------------ #
@@ -31,16 +29,14 @@ def _build_kb_source(kb_props: dict) -> Any:
     plus backend-specific keys (``directory`` for file, ``uri`` / ``username``
     / ``password`` for neo4j).
 
-    ``.properties`` stores ``connection`` (for reconnect) and ``schema_path``
-    (if present) so both survive a ``DataRegistry.register_source`` round-trip
-    and can be read back by ``connect()``.
+    ``.properties`` stores ``connection`` so it survives a
+    ``DataRegistry.register_source`` round-trip and can be read back by
+    ``connect()``.
     """
     backend = kb_props.get("backend", "memory")
     extras = {k: v for k, v in kb_props.items() if k not in ("backend", "schema_path")}
     connection = {"backend": backend, **extras}
     stored_props: dict[str, Any] = {"connection": connection}
-    if kb_props.get("schema_path"):
-        stored_props["schema_path"] = kb_props["schema_path"]
 
     if backend == "neo4j":
         from blue_data.source.graph.neo4j.neo4j_graph_source import NEO4JSource
@@ -50,7 +46,7 @@ def _build_kb_source(kb_props: dict) -> Any:
 
         return _Neo4jKBSource(
             "kb",
-            properties={"connection": {"protocol": "neo4j", **connection}, **stored_props},
+            properties={"connection": {"protocol": "neo4j", **connection}},
         )
 
     if backend == "file":
@@ -94,7 +90,6 @@ class UserDataManager:
     def __init__(self, database: str, registry_props: dict) -> None:
         self._database = database
         self._registry_props = registry_props
-        self._schema_path: str | None = None
         self._registry: DataRegistry | None = None
 
     # ------------------------------------------------------------------ #
@@ -105,19 +100,17 @@ class UserDataManager:
         """Build a fresh DataRegistry + KBSource, register KB, and seed schema.
 
         ``kb_props`` keys: ``backend`` (required), plus backend-specific keys
-        and optional ``schema_path``.  Connection info and ``schema_path`` are
-        persisted in the registry's JSONSource so ``connect()`` can reconstruct
-        without needing ``kb_props`` again.
+        and optional ``schema_path``.
         """
         if not kb_props.get("backend"):
             raise ValueError("kb_props must include a 'backend' key")
-        self._schema_path = kb_props.get("schema_path") or _DEFAULT_SCHEMA_PATH
         registry_store = _build_json_source(self._registry_props)
         self._registry = DataRegistry(store=registry_store)
         kb = _build_kb_source(kb_props)
         self._registry.register_source(kb)
-        if self._schema_path:
-            await self.seed_schema(self._schema_path)
+        schema_path = kb_props.get("schema_path")
+        if schema_path:
+            await self.seed_schema(schema_path)
 
     def connect(self) -> None:
         """Build DataRegistry from stored props and reconnect the KBSource.
@@ -136,25 +129,19 @@ class UserDataManager:
                 f"No 'kb' source found in registry for user {self._database!r}. "
                 "Call create_user() to initialise."
             )
-        self._schema_path = props.get("schema_path")
         kb = _build_kb_source(connection)
         self._registry.sources["kb"] = kb
 
-    async def reset(self) -> None:
-        """Wipe KB data, remove non-KB registry sources, then reseed schema.
-
-        Uses ``self._schema_path`` (set at construction). Preserves the
-        ``"kb"`` source registration so the backend connection is still
-        available after reset.
-        """
+    async def reset(self, schema_path: str | None = None) -> None:
+        """Wipe KB data, remove non-KB registry sources, then reseed schema."""
         await self.clear_database()
         source_records = self._registry.list_records(record_type="source", scope="/")  # type: ignore[union-attr]
         for record in source_records:
             if record["name"] != "kb":
                 self._registry.deregister(record)  # type: ignore[union-attr]
                 self._registry.sources.pop(record["name"], None)  # type: ignore[union-attr]
-        if self._schema_path:
-            await self.seed_schema(self._schema_path)
+        if schema_path:
+            await self.seed_schema(schema_path)
 
     def destroy(self) -> None:
         """Delete all backing files for this user (file backends only).

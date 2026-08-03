@@ -1,21 +1,34 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from blue_data_user_source.data.manager import UserDataManager, _build_json_source
+
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult
+
+_DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 
 
 class UserSource:
     """
-    Multi-user knowledge base source.
+    A multi-user knowledge base source to store user data and execute queries against it. 
+    It is designed to manage multiple users, each with their own knowledge base and data registry, 
+    storing supplementary data sources through an import mechanism. 
+    
+    UserSource applies various metrics to assess the quality of query results and can interact 
+    with users for clarification when needed through various contact methods, including email, 
+    chat, or other messaging platforms.
 
-    Stores user entries in a JSONSource backend. 
-    Each user entry points to a per-user DataRegistry (backed by its own JSONSource), 
-    which holds user data including a ``"kb"`` KBSource and any sources added via imports,
-    along with metadata, including preferences, contacts, etc.
-
+    User entries are stored in a JSONSource backend, where each entry contains a reference to a 
+    per-user DataRegistry. The DataRegistry itself is backed by its own JSONSource and holds 
+    various data and metadata sources, including:
+    - a ``"kb"`` KBSource that contains the user's knowledge base data extracted from various sources,
+    - a ``"metadata"`` source that contains user metadata, such as preferences and settings,
+    - a ``"contact"`` source that contains user contact information in multiple contact methods, and
+    - any additional sources added via imports.
+    
     Usage::
 
         us = UserSource({
@@ -32,21 +45,28 @@ class UserSource:
 
     def __init__(self, props: dict) -> None:
         self._store = _build_json_source(props.get("store", {"backend": "memory"}))
-        self._schema_path: str | None = props.get("schema")
         self._managers: dict[str, UserDataManager] = {}
         if self._store.get("users") is None:
             self._store.set("users", {})
+        # Persist schema path; props["schema"] overrides any previously stored value;
+        # fall back to the package default when the store has no entry yet.
+        if props.get("schema") is not None:
+            self._store.set("schema", props["schema"])
+        elif self._store.get("schema") is None:
+            self._store.set("schema", _DEFAULT_SCHEMA_PATH)
 
     # ------------------------------------------------------------------ #
-    # User management                                                      #
+    # User management                                                    #
     # ------------------------------------------------------------------ #
 
     def add_user(self, name: str, registry_props: dict) -> None:
         """Wire up an existing registry that already has a KB registered.
 
         Assumes the per-user DataRegistry JSONSource (``registry_props``)
-        already contains a registered ``"kb"`` source entry.  Use
-        ``create_user`` to build everything from scratch.
+        already contains a registered ``"kb"`` source entry, ``"metadata"`` 
+        source entry, and ``"contact"`` source entry. 
+        
+        Use `create_user` to build these sources from scratch.
         """
         manager = UserDataManager(name, registry_props)
         manager.connect()
@@ -61,7 +81,7 @@ class UserSource:
         already present in ``kb_props``.
         """
         effective_kb_props = {**kb_props}
-        effective_kb_props.setdefault("schema_path", self._schema_path)
+        effective_kb_props.setdefault("schema_path", self._store.get("schema"))
         manager = UserDataManager(name, registry_props)
         await manager.initialize(effective_kb_props)
         self._store.set(f"users.{name}", {"registry": registry_props})
@@ -80,7 +100,7 @@ class UserSource:
         self._managers.pop(name, None)
 
     async def reset_user(self, name: str) -> None:
-        await self._get_manager(name).reset()
+        await self._get_manager(name).reset(self._store.get("schema"))
 
     async def delete_user(self, name: str) -> None:
         manager = self._get_manager(name)

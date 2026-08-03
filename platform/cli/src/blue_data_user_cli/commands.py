@@ -22,7 +22,7 @@ def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
     """Build a UserSource backed by files under *data_dir*."""
     data_dir.mkdir(parents=True, exist_ok=True)
     return UserSource({
-        "store": {"backend": "file", "path": str(data_dir / "users.json")},
+        "store": {"backend": "file", "path": str(data_dir / "db.json")},
         "schema": str(schema_path) if schema_path else None,
     })
 
