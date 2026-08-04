@@ -107,7 +107,7 @@ class UserQueryReasoner:
         contact_manager = ContactManager(
             database=self._manager._database, data_manager=self._manager
         )
-        channel = await contact_manager.identify_contact_method(query)
+        channel = await contact_manager.identify_contact_method()
         interaction = channel.interact()
 
         failing_names = [m.name for m in metrics if not m.passes]

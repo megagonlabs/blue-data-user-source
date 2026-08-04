@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from blue_data_user_source.data.manager import UserDataManager, _build_json_source
-
+from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult
 
@@ -13,7 +13,8 @@ _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 
 class UserSource:
     """
-    A multi-user knowledge base source to store user data and execute queries against it. 
+    A multi-user source to store user data and execute queries against it. 
+    
     It is designed to manage multiple users, each with their own knowledge base and data registry, 
     storing supplementary data sources through an import mechanism. 
     
@@ -73,17 +74,24 @@ class UserSource:
         self._store.set(f"users.{name}", {"registry": registry_props})
         self._managers[name] = manager
 
-    async def create_user(self, name: str, registry_props: dict, kb_props: dict) -> None:
-        """Build a fresh registry + KB, seed schema, and register the user.
-
-        ``kb_props`` is passed directly to ``UserDataManager.initialize``;
-        ``schema_path`` from ``UserSource`` props is used as a default if not
-        already present in ``kb_props``.
+    async def create_user(
+        self,
+        name: str,
+        registry_props: dict,
+        kb_source_props: dict,
+        metadata_source_props: dict | None = None,
+        contact_source_props: dict | None = None,
+    ) -> None:
         """
-        effective_kb_props = {**kb_props}
-        effective_kb_props.setdefault("schema_path", self._store.get("schema"))
+        Create a new user.
+        Builds a fresh user-specific registry, builds and registers all three sources (kb, metadata, contact).
+        Initializess the kb source with the schema from ``UserSource`` props.
+        Persists the user entry in the user store.
+        """
+
+        schema_path = self._store.get("schema")
         manager = UserDataManager(name, registry_props)
-        await manager.initialize(effective_kb_props)
+        await manager.build(schema_path, kb_source_props, metadata_source_props, contact_source_props)
         self._store.set(f"users.{name}", {"registry": registry_props})
         self._managers[name] = manager
 
@@ -153,6 +161,8 @@ class UserSource:
             return await reasoner.synthesize_results_nl(query, results)
         return results
 
+
+
     # ------------------------------------------------------------------ #
     # Import                                                               #
     # ------------------------------------------------------------------ #
@@ -179,16 +189,63 @@ class UserSource:
     async def list_data(self, database: str) -> list[dict]:
         return await self._get_manager(database).list_data()
 
-    async def list_metadata(self, database: str, source_id: str | None = None) -> list[dict]:
-        return await self._get_manager(database).list_metadata(source_id)
+    async def list_sources(self, database: str, source_id: str | None = None) -> list[dict]:
+        return await self._get_manager(database).list_sources(source_id)
 
     async def describe_data(self, database: str) -> str:
         entries = await self.list_data(database)
         return await UserQueryReasoner(source=self).synthesize_data_nl(entries)
 
-    async def describe_metadata(self, database: str, source_id: str | None = None) -> str:
-        entries = await self.list_metadata(database, source_id)
+    async def describe_sources(self, database: str, source_id: str | None = None) -> str:
+        entries = await self.list_sources(database, source_id)
         return await UserQueryReasoner(source=self).synthesize_metadata_nl(entries)
+
+    # ------------------------------------------------------------------ #
+    # User metadata                                                        #
+    # ------------------------------------------------------------------ #
+
+    def get_metadata(self, database: str, key: str) -> Any:
+        return self._get_manager(database).get_metadata(key)
+
+    def set_metadata(self, database: str, key: str, value: Any) -> None:
+        self._get_manager(database).set_metadata(key, value)
+
+    def delete_metadata(self, database: str, key: str) -> None:
+        self._get_manager(database).delete_metadata(key)
+
+    def list_metadata(self, database: str) -> dict[str, Any]:
+        return self._get_manager(database).list_metadata()
+
+    # ------------------------------------------------------------------ #
+    # Contact methods                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _contact_manager(self, database: str) -> ContactManager:
+        return ContactManager(database=database, data_manager=self._get_manager(database))
+
+    async def add_contact_method(
+        self,
+        database: str,
+        name: str,
+        protocol: str,
+        details: dict[str, Any],
+        preference: int = 0,
+    ) -> None:
+        await self._contact_manager(database).create_contact_method(name, protocol, details, preference)
+
+    async def get_contact_method(self, database: str, name: str) -> ContactMethod | None:
+        return await self._contact_manager(database).get_contact_method(name)
+
+    async def update_contact_method(self, database: str, name: str, **updates: Any) -> None:
+        await self._contact_manager(database).update_contact_method(name, **updates)
+
+    async def remove_contact_method(self, database: str, name: str) -> None:
+        await self._contact_manager(database).delete_contact_method(name)
+
+    async def list_contact_methods(
+        self, database: str, protocol: str | None = None
+    ) -> list[ContactMethod]:
+        return await self._contact_manager(database).list_contact_methods(protocol)
 
     # ------------------------------------------------------------------ #
     # Internal                                                             #
