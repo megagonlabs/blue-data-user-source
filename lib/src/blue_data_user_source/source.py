@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
+from blue_data.source.source import DataSource
 from blue_data_user_source.data.manager import UserDataManager, _build_json_source
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.reasoning import UserQueryReasoner
@@ -11,64 +13,131 @@ from blue_data_user_source.types import QueryError, QueryResult
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 
 
-class UserSource:
+class UserSource(DataSource):
     """
-    A multi-user source to store user data and execute queries against it. 
-    
-    It is designed to manage multiple users, each with their own knowledge base and data registry, 
-    storing supplementary data sources through an import mechanism. 
-    
-    UserSource applies various metrics to assess the quality of query results and can interact 
-    with users for clarification when needed through various contact methods, including email, 
-    chat, or other messaging platforms.
+    A multi-user source to store user data and execute queries against it.
 
-    User entries are stored in a JSONSource backend, where each entry contains a reference to a 
-    per-user DataRegistry. The DataRegistry itself is backed by its own JSONSource and holds 
-    various data and metadata sources, including:
-    - a ``"kb"`` KBSource that contains the user's knowledge base data extracted from various sources,
-    - a ``"metadata"`` source that contains user metadata, such as preferences and settings,
-    - a ``"contact"`` source that contains user contact information in multiple contact methods, and
+    Extends ``DataSource`` with the following mapping:
+    - **database** → user name (e.g. ``"alice"``)
+    - **collection** → registered source name in the per-user DataRegistry
+      (``"kb"``, ``"metadata"``, ``"contacts"``, or any imported source)
+
+    User entries are stored in a JSONSource backend, where each entry contains a
+    reference to a per-user DataRegistry. The DataRegistry holds:
+    - ``"kb"`` KBSource — knowledge base data extracted from various sources,
+    - ``"metadata"`` source — user metadata such as preferences and settings,
+    - ``"contacts"`` source — user contact methods,
     - any additional sources added via imports.
-    
+
     Usage::
 
         us = UserSource({
-            "store": {"backend": "file", "path": "users.json"},
+            "store": {"backend": "file", "path": "~/.userdb/db.json"},
             "schema": "schema.json",
         })
-        await us.create_user(
-            "alice",
-            registry_props={"backend": "file", "path": "alice_registry.json"},
-            kb_props={"backend": "file", "directory": "alice_kb"},
-        )
-        results = await us.execute_query("skills", database="alice")
+        us.create_database("alice", properties={
+            "registry":        {"backend": "file", "path": "~/.userdb/registries/alice.json"},
+            "kb_source":       {"backend": "file", "directory": "~/.userdb/kb"},
+            "metadata_source": {"backend": "file", "path": "~/.userdb/sources/alice.metadata.json"},
+            "contact_source":  {"backend": "file", "path": "~/.userdb/sources/alice.contacts.json"},
+        })
+        results = us.execute_query("skills", database="alice")
     """
 
     def __init__(self, props: dict) -> None:
+        super().__init__(props.get("name", "user_source"), props)
         self._store = _build_json_source("store", props.get("store", {"backend": "memory"}))
         self._managers: dict[str, UserDataManager] = {}
         if self._store.get("users") is None:
             self._store.set("users", {})
-        # Persist schema path; props["schema"] overrides any previously stored value;
-        # fall back to the package default when the store has no entry yet.
         if props.get("schema") is not None:
             self._store.set("schema", props["schema"])
         elif self._store.get("schema") is None:
             self._store.set("schema", _DEFAULT_SCHEMA_PATH)
 
     # ------------------------------------------------------------------ #
-    # User management                                                    #
+    # DataSource: database = user                                          #
+    # ------------------------------------------------------------------ #
+
+    def fetch_databases(self) -> list[str]:
+        return self.list_users()
+
+    def fetch_database_metadata(self, database: str) -> dict:
+        return self.get_user(database) or {}
+
+    def create_database(self, database: str, properties: dict | None = None) -> dict:
+        """Create a new user.  ``properties`` must contain four keys:
+        ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``.
+        """
+        p = properties or {}
+        asyncio.run(self.create_user(
+            database,
+            registry_props=p["registry"],
+            kb_source_props=p["kb_source"],
+            metadata_source_props=p["metadata_source"],
+            contact_source_props=p["contact_source"],
+        ))
+        return {}
+
+    # ------------------------------------------------------------------ #
+    # DataSource: collection = registered source in per-user DataRegistry  #
+    # ------------------------------------------------------------------ #
+
+    def fetch_database_collections(self, database: str) -> list[str]:
+        manager = self._get_manager(database)
+        records = manager._registry.list_records(record_type="source", scope="/") or []
+        return [r["name"] for r in records]
+
+    def fetch_database_collection_metadata(self, database: str, collection: str) -> dict:
+        manager = self._get_manager(database)
+        return manager._registry.get_source_properties(collection) or {}
+
+    # ------------------------------------------------------------------ #
+    # DataSource: query                                                    #
+    # ------------------------------------------------------------------ #
+
+    def execute_query(
+        self,
+        query,
+        database: str | None = None,
+        collection: str | None = None,
+        optional_properties: dict | None = None,
+    ) -> list[dict]:
+        return asyncio.run(self._run_query(query, database, collection, optional_properties))
+
+    def execute_query_nl(
+        self,
+        query: str,
+        database: str | None = None,
+        collection: str | None = None,
+        schema: dict | None = None,
+        llm_fn=None,
+        optional_properties: dict | None = None,
+    ) -> list[dict]:
+        return asyncio.run(self._run_query(query, database, collection, optional_properties))
+
+    # ------------------------------------------------------------------ #
+    # DataSource: import                                                   #
+    # ------------------------------------------------------------------ #
+
+    def import_data(
+        self,
+        source: Any,
+        collection: str,
+        database: str = "default",
+        entity: str | None = None,  # noqa: ARG002
+        mode: str = "append",       # noqa: ARG002
+        options: dict | None = None,
+    ) -> dict:
+        asyncio.run(self.import_source(source, database, optional_properties=options))
+        return {}
+
+    # ------------------------------------------------------------------ #
+    # User management (UserSource-specific API)                            #
     # ------------------------------------------------------------------ #
 
     def add_user(self, name: str, registry_props: dict) -> None:
-        """Wire up an existing registry that already has a KB registered.
-
-        Assumes the per-user DataRegistry JSONSource (``registry_props``)
-        already contains a registered ``"kb"`` source entry, ``"metadata"`` 
-        source entry, and ``"contact"`` source entry. 
-        
-        Use `create_user` to build these sources from scratch.
-        """
+        """Wire up an existing registry that already has all three sources registered."""
         manager = UserDataManager(name, registry_props)
         manager.connect()
         self._store.set(f"users.{name}", {"registry": registry_props})
@@ -82,12 +151,7 @@ class UserSource:
         metadata_source_props: dict,
         contact_source_props: dict,
     ) -> None:
-        """
-        Create a new user.
-        Builds a fresh user-specific registry, builds and registers all three sources (kb, metadata, contact).
-        Seeds the kb source with the schema from ``UserSource`` props.
-        Persists the user entry in the user store.
-        """
+        """Build a fresh registry + all three sources, seed schema, and register the user."""
         schema_path = self._store.get("schema")
         manager = UserDataManager(name, registry_props)
         await manager.build(schema_path, kb_source_props, metadata_source_props, contact_source_props)
@@ -95,14 +159,13 @@ class UserSource:
         self._managers[name] = manager
 
     def list_users(self) -> list[str]:
-        users = self._store.get("users") or {}
-        return list(users.keys())
+        return list((self._store.get("users") or {}).keys())
 
     def get_user(self, name: str) -> dict | None:
         return self._store.get(f"users.{name}")
 
     def remove_user(self, name: str) -> None:
-        """Remove user from the main store; KB and registry data are untouched."""
+        """Remove user from the store; backing files are untouched."""
         self._store.delete(f"users.{name}")
         self._managers.pop(name, None)
 
@@ -115,71 +178,7 @@ class UserSource:
         self.remove_user(name)
 
     # ------------------------------------------------------------------ #
-    # Query                                                                #
-    # ------------------------------------------------------------------ #
-    async def execute_query(
-        self,
-        query: str,
-        database: str,
-        collection=None,
-        optional_properties: dict[str, object] | None = None,
-        ) -> list[QueryResult] | str:
-            return await self.execute_query_nl(
-                query=query,
-                database=database,
-                collection=collection,
-                optional_properties=optional_properties,
-            )
-
-    async def execute_query_nl(
-        self,
-        query: str,
-        database: str,
-        collection: str | None = None,
-        schema: dict | None = None,
-        llm_fn=None,
-        optional_properties: dict | None = None,
-    ) -> list[dict]:
-    
-        """Execute a natural language query against a user knowledge base.
-
-        optional_properties:
-            session     – session identifier string
-            output_form – ``"json"`` (default) or ``"nl"``
-        """
-        props = optional_properties or {}
-        session_id = str(props["session"]) if "session" in props else None
-        output_form = str(props.get("output_form", "json"))
-    
-
-        manager = self._get_manager(database)
-        reasoner = UserQueryReasoner(source=self, manager=manager, session_id=session_id)
-
-        rewritten = await reasoner.contextualize_query(query)
-        questions = await reasoner.expand_query(rewritten)
-        questions.append(rewritten)
-
-        results: list[QueryResult] = []
-        for question in questions:
-            data, metadata = await manager.execute_query(question)
-            metrics = await reasoner.assess_query_results(question, data, metadata)
-            needs_interaction = await reasoner.assess_user_verification(
-                question, data, metadata, metrics
-            )
-            if needs_interaction:
-                data, metadata = await reasoner.request_user_clarification(
-                    question, data, metadata, metrics
-                )
-            results.append(QueryResult(query=question, results=data))
-
-        if output_form == "nl":
-            return await reasoner.synthesize_results_nl(query, results)
-        return results
-
-
-
-    # ------------------------------------------------------------------ #
-    # Import                                                               #
+    # Import (UserSource-specific async API)                               #
     # ------------------------------------------------------------------ #
 
     async def import_source(
@@ -188,7 +187,6 @@ class UserSource:
         database: str,
         optional_properties: dict[str, object] | None = None,
     ) -> None:
-        """Import data from an external source into a user knowledge base."""
         props = optional_properties or {}
         queries: list[str] | None = None
         if "queries" in props:
@@ -265,6 +263,42 @@ class UserSource:
     # ------------------------------------------------------------------ #
     # Internal                                                             #
     # ------------------------------------------------------------------ #
+
+    async def _run_query(
+        self,
+        query: str,
+        database: str | None = None,
+        collection: str | None = None,  # noqa: ARG002 — routing to KB; collection unused
+        optional_properties: dict | None = None,
+    ) -> list[dict]:
+        """Async query implementation shared by execute_query and execute_query_nl."""
+        props = optional_properties or {}
+        session_id = str(props["session"]) if "session" in props else None
+        output_form = str(props.get("output_form", "json"))
+
+        manager = self._get_manager(database)
+        reasoner = UserQueryReasoner(source=self, manager=manager, session_id=session_id)
+
+        rewritten = await reasoner.contextualize_query(query)
+        questions = await reasoner.expand_query(rewritten)
+        questions.append(rewritten)
+
+        results: list[QueryResult] = []
+        for question in questions:
+            data, metadata = await manager.execute_query(question)
+            metrics = await reasoner.assess_query_results(question, data, metadata)
+            needs_interaction = await reasoner.assess_user_verification(
+                question, data, metadata, metrics
+            )
+            if needs_interaction:
+                data, metadata = await reasoner.request_user_clarification(
+                    question, data, metadata, metrics
+                )
+            results.append(QueryResult(query=question, results=data))
+
+        if output_form == "nl":
+            return await reasoner.synthesize_results_nl(query, results)
+        return results
 
     def _get_manager(self, name: str) -> UserDataManager:
         if name not in self._managers:
