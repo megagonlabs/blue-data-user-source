@@ -271,11 +271,25 @@ class UserDataManager:
         results = await self._ensure_kb_source().execute_query_nl(self._database, query)
         return list(results), {}
 
-    async def import_source(
+    async def import_data(
+        self,
+        source: Any,
+        collection: str,
+        entity: str | None = None,
+        mode: str = "append",
+        options: dict | None = None,
+    ) -> dict:
+        """Delegate to the KB source's import_data."""
+        return self._ensure_kb_source().import_data(
+            source, collection, self._database, entity, mode, options
+        )
+
+    async def add_source(
         self,
         source: Any,
         queries: list[str] | None = None,
     ) -> None:
+        """Register a source location in the KB and optionally ingest content via queries."""
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
         source_id = await kb.add_source(self._database, location)
@@ -284,6 +298,14 @@ class UserDataManager:
                 raw = await source.query(query)
                 text = "\n".join(str(r) for r in raw)
                 await kb.import_text(self._database, text, queries=[query], source_id=source_id)
+
+    def remove_source(self, source_name: str) -> None:
+        """Remove a source from the DataRegistry without touching KB data."""
+        records = self._registry.list_records(record_type="source", scope="/") or []  # type: ignore[union-attr]
+        for record in records:
+            if record.get("name") == source_name:
+                self._registry.deregister(record)  # type: ignore[union-attr]
+                return
 
     async def list_data(self) -> list[dict[str, Any]]:
         data = await self._ensure_kb_source().fetch_database_data(self._database, compact=True)

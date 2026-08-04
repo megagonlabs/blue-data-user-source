@@ -110,8 +110,8 @@ class UserSource(DataSource):
         query: str,
         database: str | None = None,
         collection: str | None = None,
-        schema: dict | None = None,
-        llm_fn=None,
+        schema: dict | None = None,    # noqa: ARG002 — UserSource uses its own reasoner
+        llm_fn=None,                   # noqa: ARG002 — UserSource uses its own reasoner
         optional_properties: dict | None = None,
     ) -> list[dict]:
         return asyncio.run(self._run_query(query, database, collection, optional_properties))
@@ -125,12 +125,13 @@ class UserSource(DataSource):
         source: Any,
         collection: str,
         database: str = "default",
-        entity: str | None = None,  # noqa: ARG002
-        mode: str = "append",       # noqa: ARG002
+        entity: str | None = None,
+        mode: str = "append",
         options: dict | None = None,
     ) -> dict:
-        asyncio.run(self.import_source(source, database, optional_properties=options))
-        return {}
+        return asyncio.run(
+            self._get_manager(database).import_data(source, collection, entity, mode, options)
+        )
 
     # ------------------------------------------------------------------ #
     # User management (UserSource-specific API)                            #
@@ -178,22 +179,27 @@ class UserSource(DataSource):
         self.remove_user(name)
 
     # ------------------------------------------------------------------ #
-    # Import (UserSource-specific async API)                               #
+    # Source management (UserSource-specific async API)                    #
     # ------------------------------------------------------------------ #
 
-    async def import_source(
+    async def add_source(
         self,
         source: Any,
         database: str,
         optional_properties: dict[str, object] | None = None,
     ) -> None:
+        """Register a source in the user's KB and optionally ingest via queries."""
         props = optional_properties or {}
         queries: list[str] | None = None
         if "queries" in props:
             raw = props["queries"]
             if isinstance(raw, list):
                 queries = [str(q) for q in raw]
-        await self._get_manager(database).import_source(source, queries)
+        await self._get_manager(database).add_source(source, queries)
+
+    def remove_source(self, database: str, source_name: str) -> None:
+        """Remove a source from the user's DataRegistry without touching KB data."""
+        self._get_manager(database).remove_source(source_name)
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #
