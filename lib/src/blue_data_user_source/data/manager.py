@@ -12,29 +12,32 @@ from blue_data_kb_source.kb_source import KBSource
 # Private builders                                                     #
 # ------------------------------------------------------------------ #
 
-def _build_json_source(props: dict) -> Any:
-    """Build a JSONSource from backend config props."""
+def _build_json_source(name: str, props: dict) -> Any:
+    """Build a named JSONSource with registry-compatible properties."""
     if props.get("backend") == "file":
         from blue_data.source.json.file_json_source import FileJSONSource
         Path(props["path"]).parent.mkdir(parents=True, exist_ok=True)
-        return FileJSONSource(props["path"])
-    from blue_data.source.json.memory_json_source import MemoryJSONSource
-    return MemoryJSONSource()
+        source = FileJSONSource(props["path"])
+    else:
+        from blue_data.source.json.memory_json_source import MemoryJSONSource
+        source = MemoryJSONSource()
+    source.name = name
+    source.properties = {"connection": props}
+    return source
 
 
-def _build_kb_source(kb_source_props: dict) -> Any:
-    """Instantiate a concrete KBSource from flat backend config props.
+def _build_kb_source(name: str, props: dict) -> Any:
+    """Instantiate a named KBSource from flat backend config props.
 
     Expected keys: ``backend`` (``"memory"`` | ``"file"`` | ``"neo4j"``),
     plus backend-specific keys (``directory`` for file, ``uri`` / ``username``
     / ``password`` for neo4j).
 
     ``.properties`` stores ``connection`` so it survives a
-    ``DataRegistry.register_source`` round-trip and can be read back by
-    ``_ensure_kb_source()``.
+    ``DataRegistry.register_source`` round-trip.
     """
-    backend = kb_source_props.get("backend", "memory")
-    extras = {k: v for k, v in kb_source_props.items() if k not in ("backend", "schema_path")}
+    backend = props.get("backend", "memory")
+    extras = {k: v for k, v in props.items() if k not in ("backend", "schema_path")}
     connection = {"backend": backend, **extras}
     stored_props: dict[str, Any] = {"connection": connection}
 
@@ -45,7 +48,7 @@ def _build_kb_source(kb_source_props: dict) -> Any:
             pass
 
         return _Neo4jKBSource(
-            "kb",
+            name,
             properties={"connection": {"protocol": "neo4j", **connection}},
         )
 
@@ -56,7 +59,7 @@ def _build_kb_source(kb_source_props: dict) -> Any:
             pass
 
         return _FileKBSource(
-            "kb",
+            name,
             directory=connection.get("directory", "."),
             properties=stored_props,
         )
@@ -66,7 +69,7 @@ def _build_kb_source(kb_source_props: dict) -> Any:
     class _MemoryKBSource(KBSource, MemoryGraphSource):  # type: ignore[misc]
         pass
 
-    return _MemoryKBSource("kb", properties=stored_props)
+    return _MemoryKBSource(name, properties=stored_props)
 
 
 # ------------------------------------------------------------------ #
@@ -108,41 +111,29 @@ class UserDataManager:
         schema_path: str,
         kb_source_props: dict,
         metadata_source_props: dict,
-        contact_source_props: dict
+        contact_source_props: dict,
     ) -> None:
-        
-        """
-        Build a fresh DataRegistry and all three sources.
-        """
-
-        # Create a new registry for user.
-        registry_store = _build_json_source(self._registry_props)
+        """Build a fresh DataRegistry and all three sources."""
+        registry_store = _build_json_source("registry", self._registry_props)
         self._registry = DataRegistry(store=registry_store)
 
-        # KB source 
-        kb_source = _build_kb_source(kb_source_props)
-        self._kb_source = kb_source
-        self._registry.register_source(kb_source)
-        # Seed the KB source schema if provided
+        self._kb_source = _build_kb_source("kb", kb_source_props)
+        self._registry.register_source(self._kb_source)
         await self.seed_kb_source_schema(schema_path)
 
-        # Metadata source
-        metadata_source = _build_json_source(metadata_source_props) 
-        self._metadata_source = metadata_source
-        self._registry.register_source(metadata_source)
+        self._metadata_source = _build_json_source("metadata", metadata_source_props)
+        self._registry.register_source(self._metadata_source)
 
-        # Contact source
-        contact_source = _build_json_source(contact_source_props)
-        self._contact_source = contact_source
-        self._registry.register_source(contact_source)
+        self._contact_source = _build_json_source("contacts", contact_source_props)
+        self._registry.register_source(self._contact_source)
 
-        
 
     def connect(self) -> None:
         """Create a DataRegistry instance; 
-        Sources will be connected lazily, through data registry's methods.
+        Sources within the registry will be connected lazily, 
+        through data registry's source related methods.
         """
-        registry_store = _build_json_source(self._registry_props)
+        registry_store = _build_json_source("registry", self._registry_props)
         self._registry = DataRegistry(store=registry_store)
 
 
@@ -153,27 +144,27 @@ class UserDataManager:
     ) -> None:
         """Clear and optionally reseed selected sources.
 
-        ``sources`` defaults to ``{"kb", "metadata", "contact"}``.
+        ``sources`` defaults to ``{"kb", "metadata", "contacts"}``.
         """
         if sources is None:
-            sources = {"kb", "metadata", "contact"}
+            sources = {"kb", "metadata", "contacts"}
 
         if "kb" in sources:
             await self.clear_kb()
             if schema_path:
-                await self.seed_kb_schema(schema_path)
+                await self.seed_kb_source_schema(schema_path)
 
         if "metadata" in sources:
-            await self.clear_metadata
+            self.clear_metadata()
 
-        if "contact" in sources:
-            await self.clear_contacts()
+        if "contacts" in sources:
+            self.clear_contacts()
 
-        # All other sources, just remove them from the registry 
-        source_records = self._registry.list_records(record_type="source", scope="/")  
+        # Deregister any additional imported sources from the registry
+        source_records = self._registry.list_records(record_type="source", scope="/")
         for record in source_records:
-            if record["name"] not in ("kb", "metadata", "contact"):
-                self._registry.deregister(record) 
+            if record["name"] not in ("kb", "metadata", "contacts"):
+                self._registry.deregister(record)
 
     def destroy(self) -> None:
         """Delete all backing files for this user, if file backends.
@@ -183,31 +174,22 @@ class UserDataManager:
         """
   
         if self._registry is not None:
-            # KB data file 
+            # KB — stored with a directory-based path
             props = self._registry.get_source_properties("kb") or {}
             connection = props.get("connection", {})
             if connection.get("backend") == "file":
-                kb_file = Path(connection.get("directory", ".")) / f"{self._database}.json"
-                kb_file.unlink(missing_ok=True)
+                (Path(connection.get("directory", ".")) / f"{self._database}.json").unlink(missing_ok=True)
 
-            # Metadata data file    
-            props = self._registry.get_source_properties("metadata") or {}
-            connection = props.get("connection", {})
-            if connection.get("backend") == "file":
-                metadata_file = Path(connection.get("directory", ".")) / f"{self._database}.metadata.json"
-                metadata_file.unlink(missing_ok=True)
-
-            # Contact data file
-            props = self._registry.get_source_properties("contacts") or {}
-            connection = props.get("connection", {})
-            if connection.get("backend") == "file":
-                contacts_file = Path(connection.get("directory", ".")) / f"{self._database}.contacts.json"
-                contacts_file.unlink(missing_ok=True)
+            # Metadata and contact — stored with an explicit path
+            for source_name in ("metadata", "contacts"):
+                props = self._registry.get_source_properties(source_name) or {}
+                connection = props.get("connection", {})
+                if connection.get("backend") == "file" and connection.get("path"):
+                    Path(connection["path"]).unlink(missing_ok=True)
 
         # Registry file
         if self._registry_props.get("backend") == "file":
-            p = Path(self._registry_props["path"])
-            p.unlink(missing_ok=True)
+            Path(self._registry_props["path"]).unlink(missing_ok=True)
 
 
     # ------------------------------------------------------------------ #
@@ -225,36 +207,31 @@ class UserDataManager:
                 raise ValueError(
                     f"No 'kb' source found in registry for user {self._database!r}."
                 )
-            self._kb_source = _build_kb_source(connection)
+            self._kb_source = _build_kb_source("kb", connection)
             
         return self._kb_source 
 
     def _ensure_metadata_source(self) -> Any:
         if self._registry is None:
-            raise ValueError("Registry not ready — call initialize() or connect() first.")
+            raise ValueError("Registry not ready — call build() or connect() first.")
         
         if self._metadata_source is None:
             props = self._registry.get_source_properties("metadata") or {}
             connection = props.get("connection", {})
             if not connection:
-                raise ValueError(
-                    f"No 'metadata' source found in registry for user {self._database!r}."
-                )
-            self._metadata_source = _build_json_source(connection)
+                raise ValueError(f"No 'metadata' source in registry for user {self._database!r}.")
+            self._metadata_source = _build_json_source("metadata", connection)
         return self._metadata_source
 
     def _ensure_contact_source(self) -> Any:
         if self._registry is None:
-            raise ValueError("Registry not ready — call initialize() or connect() first.")
-
+            raise ValueError("Registry not ready — call build() or connect() first.")
         if self._contact_source is None:
             props = self._registry.get_source_properties("contacts") or {}
             connection = props.get("connection", {})
             if not connection:
-                raise ValueError(
-                    f"No 'contacts' source found in registry for user {self._database!r}."
-                )
-            self._contact_source = _build_json_source(connection)
+                raise ValueError(f"No 'contacts' source in registry for user {self._database!r}.")
+            self._contact_source = _build_json_source("contacts", connection)
         return self._contact_source
 
     # ------------------------------------------------------------------ #
@@ -290,9 +267,8 @@ class UserDataManager:
     async def execute_query(
         self,
         query: str,
-        top_k: int = 10,
     ) -> tuple[list[Any], dict[str, Any]]:
-        results = await self._ensure_kb_source().search_data(self._database, query, k=top_k)
+        results = await self._ensure_kb_source().execute_query_nl(self._database, query)
         return list(results), {}
 
     async def import_source(
@@ -339,27 +315,27 @@ class UserDataManager:
     # Metadata operations                                                  #
     # ------------------------------------------------------------------ #
 
-    async def clear_metadata(self) -> None:
-        await self._ensure_metadata_source().set("metadata", {})
+    def clear_metadata(self) -> None:
+        self._ensure_metadata_source().set("metadata", {})
 
-    async def get_metadata(self, key: str) -> Any:
-        return await self._ensure_metadata_source().get(f"metadata.{key}")
+    def get_metadata(self, key: str) -> Any:
+        return self._ensure_metadata_source().get(f"metadata.{key}")
 
-    async def set_metadata(self, key: str, value: Any) -> None:
-        await self._ensure_metadata_source().set(f"metadata.{key}", value)
+    def set_metadata(self, key: str, value: Any) -> None:
+        self._ensure_metadata_source().set(f"metadata.{key}", value)
 
-    async def delete_metadata(self, key: str) -> None:
-        await  self._ensure_metadata_source().delete(f"metadata.{key}")
+    def delete_metadata(self, key: str) -> None:
+        self._ensure_metadata_source().delete(f"metadata.{key}")
 
-    async def list_metadata(self) -> dict[str, Any]:
-        return await self._ensure_metadata_source().get("metadata") or {}
+    def list_metadata(self) -> dict[str, Any]:
+        return self._ensure_metadata_source().get("metadata") or {}
 
     # ------------------------------------------------------------------ #
     # Contact source                                                       #
     # ------------------------------------------------------------------ #
 
-    async def clear_contacts(self) -> None:
-        await self._ensure_contact_source().set("contacts", {})
+    def clear_contacts(self) -> None:
+        self._ensure_contact_source().set("contacts", {})
 
-    async def get_contact_source(self) -> Any:
-        return await self._ensure_contact_source()
+    def get_contact_source(self) -> Any:
+        return self._ensure_contact_source()

@@ -39,6 +39,14 @@ def _user_kb_props(data_dir: Path, kb_backend: str, **kb_extras: Any) -> dict:
     return props
 
 
+def _user_metadata_props(data_dir: Path, name: str) -> dict:
+    return {"backend": "file", "path": str(data_dir / "sources" / f"{name}.metadata.json")}
+
+
+def _user_contact_props(data_dir: Path, name: str) -> dict:
+    return {"backend": "file", "path": str(data_dir / "sources" / f"{name}.contacts.json")}
+
+
 @click.group()
 @click.option(
     "--user",
@@ -197,8 +205,10 @@ def user_create(
 
     registry_props = _user_registry_props(data_dir, name)
     kb_props = _user_kb_props(data_dir, kb_backend, **kb_extras)
+    metadata_props = _user_metadata_props(data_dir, name)
+    contact_props = _user_contact_props(data_dir, name)
     try:
-        asyncio.run(source.create_user(name, registry_props, kb_props))
+        asyncio.run(source.create_user(name, registry_props, kb_props, metadata_props, contact_props))
     except UserDbError as exc:
         _err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)

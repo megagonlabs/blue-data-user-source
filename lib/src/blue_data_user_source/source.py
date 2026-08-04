@@ -45,7 +45,7 @@ class UserSource:
     """
 
     def __init__(self, props: dict) -> None:
-        self._store = _build_json_source(props.get("store", {"backend": "memory"}))
+        self._store = _build_json_source("store", props.get("store", {"backend": "memory"}))
         self._managers: dict[str, UserDataManager] = {}
         if self._store.get("users") is None:
             self._store.set("users", {})
@@ -79,16 +79,15 @@ class UserSource:
         name: str,
         registry_props: dict,
         kb_source_props: dict,
-        metadata_source_props: dict | None = None,
-        contact_source_props: dict | None = None,
+        metadata_source_props: dict,
+        contact_source_props: dict,
     ) -> None:
         """
         Create a new user.
         Builds a fresh user-specific registry, builds and registers all three sources (kb, metadata, contact).
-        Initializess the kb source with the schema from ``UserSource`` props.
+        Seeds the kb source with the schema from ``UserSource`` props.
         Persists the user entry in the user store.
         """
-
         schema_path = self._store.get("schema")
         manager = UserDataManager(name, registry_props)
         await manager.build(schema_path, kb_source_props, metadata_source_props, contact_source_props)
@@ -118,24 +117,40 @@ class UserSource:
     # ------------------------------------------------------------------ #
     # Query                                                                #
     # ------------------------------------------------------------------ #
-
     async def execute_query(
         self,
         query: str,
         database: str,
+        collection=None,
         optional_properties: dict[str, object] | None = None,
-    ) -> list[QueryResult] | str:
+        ) -> list[QueryResult] | str:
+            return await self.execute_query_nl(
+                query=query,
+                database=database,
+                collection=collection,
+                optional_properties=optional_properties,
+            )
+
+    async def execute_query_nl(
+        self,
+        query: str,
+        database: str,
+        collection: str | None = None,
+        schema: dict | None = None,
+        llm_fn=None,
+        optional_properties: dict | None = None,
+    ) -> list[dict]:
+    
         """Execute a natural language query against a user knowledge base.
 
         optional_properties:
             session     – session identifier string
             output_form – ``"json"`` (default) or ``"nl"``
-            top_k       – max results per sub-query (default: 10)
         """
         props = optional_properties or {}
         session_id = str(props["session"]) if "session" in props else None
         output_form = str(props.get("output_form", "json"))
-        top_k = int(props["top_k"]) if "top_k" in props else 10
+    
 
         manager = self._get_manager(database)
         reasoner = UserQueryReasoner(source=self, manager=manager, session_id=session_id)
@@ -146,7 +161,7 @@ class UserSource:
 
         results: list[QueryResult] = []
         for question in questions:
-            data, metadata = await manager.execute_query(question, top_k=top_k)
+            data, metadata = await manager.execute_query(question)
             metrics = await reasoner.assess_query_results(question, data, metadata)
             needs_interaction = await reasoner.assess_user_verification(
                 question, data, metadata, metrics
