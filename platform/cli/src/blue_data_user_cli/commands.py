@@ -19,6 +19,34 @@ console = Console()
 err = Console(stderr=True)
 
 
+def _truncate(text: str, limit: int = 80) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _status_tool_callbacks(
+    status: Any, label: str, verbose: bool = False, log: bool = False, log_limit: int = 80
+) -> tuple[Any, Any]:
+    def on_tool_call(name: str, args: dict) -> None:
+        if not (verbose or log):
+            return
+        if verbose and args:
+            args_str = _truncate(", ".join(f"{k}={v!r}" for k, v in args.items()), log_limit)
+            detail = f"({name}: {args_str})"
+        else:
+            detail = f"({name})"
+        status.update(f"{label}… [dim]{detail}[/dim]")
+        if log:
+            console.print(f"[dim]{label}… {detail}[/dim]")
+
+    def on_tool_result(name: str, args: dict, result: Any) -> None:
+        if not log:
+            return
+        result_str = _truncate(repr(result), log_limit)
+        console.print(f"[dim]{label}… ({name}) -> {result_str}[/dim]")
+
+    return on_tool_call, on_tool_result
+
+
 def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
     data_dir.mkdir(parents=True, exist_ok=True)
     return UserSource({
@@ -431,8 +459,14 @@ def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
     show_default=True,
 )
 @click.option("--top-k", "top_k", default=10, type=int, show_default=True)
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
+@click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
+@click.option("--log-limit", "log_limit", default=80, type=int, show_default=True, help="Truncation limit for logged values.")
 @click.pass_obj
-def data_query(obj: dict, text: str, session: str | None, fmt: str, top_k: int) -> None:
+def data_query(
+    obj: dict, text: str, session: str | None, fmt: str, top_k: int,
+    verbose: bool, log: bool, log_limit: int,
+) -> None:
     """Execute a natural-language query against the database."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -442,7 +476,13 @@ def data_query(obj: dict, text: str, session: str | None, fmt: str, top_k: int) 
     if fmt == "nl":
         props["output_form"] = "nl"
     try:
-        results = source.execute_query(text, database=db, optional_properties=props)
+        with console.status("Querying…") as status:
+            on_tool_call, on_tool_result = _status_tool_callbacks(
+                status, "Querying", verbose=verbose, log=log, log_limit=log_limit
+            )
+            props["on_tool_call"] = on_tool_call
+            props["on_tool_result"] = on_tool_result
+            results = source.execute_query(text, database=db, optional_properties=props)
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -585,7 +625,9 @@ def data_export(obj: dict, show_provenance: bool, output) -> None:
 @click.option("--query", "queries", multiple=True, help="Guiding question (repeatable).")
 @click.option("--source", "source_name", default=None, help="Source name for provenance.")
 @click.option("--model", default="gpt-4o", show_default=True, help="OpenAI model.")
-@click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
+@click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
+@click.option("--log-limit", "log_limit", default=80, type=int, show_default=True, help="Truncation limit for logged values.")
 @click.pass_obj
 def data_extract(
     obj: dict,
@@ -594,6 +636,8 @@ def data_extract(
     source_name: str | None,
     model: str,
     verbose: bool,
+    log: bool,
+    log_limit: int,
 ) -> None:
     """Extract entities, facts, and property values from free text.
 
@@ -615,12 +659,18 @@ def data_extract(
             if source_id is None:
                 err.print(f"[red]Error:[/red] Source '{source_name}' not found.")
                 sys.exit(1)
-        asyncio.run(kb.import_text(
-            db, text,
-            queries=list(queries) or None,
-            model=model,
-            source_id=source_id,
-        ))
+        with console.status("Extracting…") as status:
+            on_tool_call, on_tool_result = _status_tool_callbacks(
+                status, "Extracting", verbose=verbose, log=log, log_limit=log_limit
+            )
+            asyncio.run(kb.import_text(
+                db, text,
+                queries=list(queries) or None,
+                model=model,
+                source_id=source_id,
+                on_tool_call=on_tool_call,
+                on_tool_result=on_tool_result,
+            ))
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)

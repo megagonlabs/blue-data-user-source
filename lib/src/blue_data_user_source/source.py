@@ -289,9 +289,14 @@ class UserSource(DataSource):
         questions = await reasoner.expand_query(rewritten)
         questions.append(rewritten)
 
+        on_tool_call = props.get("on_tool_call")
+        on_tool_result = props.get("on_tool_result")
+
         results: list[QueryResult] = []
         for question in questions:
-            data, metadata = await manager.execute_query(question)
+            data, metadata = await manager.execute_query(
+                question, on_tool_call=on_tool_call, on_tool_result=on_tool_result
+            )
             metrics = await reasoner.assess_query_results(question, data, metadata)
             needs_interaction = await reasoner.assess_user_verification(
                 question, data, metadata, metrics

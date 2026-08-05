@@ -267,8 +267,14 @@ class UserDataManager:
     async def execute_query(
         self,
         query: str,
+        on_tool_call=None,
+        on_tool_result=None,
     ) -> tuple[list[Any], dict[str, Any]]:
-        result = await self._ensure_kb_source().answer(self._database, query)
+        result = await self._ensure_kb_source().answer(
+            self._database, query,
+            on_tool_call=on_tool_call,
+            on_tool_result=on_tool_result,
+        )
         if isinstance(result, list):
             return result, {}
         return [{"answer": result}] if result else [], {}
