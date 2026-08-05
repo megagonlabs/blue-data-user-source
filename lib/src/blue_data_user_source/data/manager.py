@@ -268,8 +268,10 @@ class UserDataManager:
         self,
         query: str,
     ) -> tuple[list[Any], dict[str, Any]]:
-        results = await self._ensure_kb_source().execute_query_nl(self._database, query)
-        return list(results), {}
+        result = await self._ensure_kb_source().answer(self._database, query)
+        if isinstance(result, list):
+            return result, {}
+        return [{"answer": result}] if result else [], {}
 
     async def import_data(
         self,
