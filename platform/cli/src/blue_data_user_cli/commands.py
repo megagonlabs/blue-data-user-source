@@ -336,22 +336,89 @@ def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
-        rows = asyncio.run(source.list_data(database=db))
+        manager = source._get_manager(db)
+        kb = manager._ensure_kb_source()
+        rows: list[dict] = asyncio.run(
+            kb.fetch_database_data(db, include_provenance=show_provenance, compact=True)
+        )
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     if fmt == "json":
         console.print_json(json.dumps(rows))
         return
-    if not rows:
+
+    entities   = [r for r in rows if r.get("relation_type") == "IS_INSTANCE_OF"]
+    all_props  = [r for r in rows if r.get("relation_type") == "IS_VALUE_OF"]
+    ent_props  = [r for r in all_props if r.get("owner_label") != "FACT"]
+    fact_props = [r for r in all_props if r.get("owner_label") == "FACT"]
+    facts      = [r for r in rows if r.get("relation_type") == "REPRESENTS"]
+
+    if entities:
+        t = Table(title="Entities", show_header=True, header_style="bold")
+        t.add_column("Name", style="bold")
+        t.add_column("Class", style="dim")
+        if show_provenance:
+            t.add_column("Provenance", style="dim")
+        for r in sorted(entities, key=lambda x: (x.get("class_name") or "", x.get("entity_name") or "")):
+            row = [r.get("entity_name") or "", r.get("class_name") or ""]
+            if show_provenance:
+                row.append(r.get("extraction", "") or "")
+            t.add_row(*row)
+        console.print(t)
+
+    if ent_props:
+        t = Table(title="Entity Property Values", show_header=True, header_style="bold")
+        t.add_column("Entity", style="bold")
+        t.add_column("Property", style="dim")
+        t.add_column("Value")
+        if show_provenance:
+            t.add_column("Provenance", style="dim")
+        for r in sorted(ent_props, key=lambda x: (x.get("entity_name") or "", x.get("property_name") or "")):
+            row = [r.get("entity_name") or "", r.get("property_name") or "", str(r.get("property_value", ""))]
+            if show_provenance:
+                row.append(r.get("extraction", "") or "")
+            t.add_row(*row)
+        console.print(t)
+
+    if facts:
+        t = Table(title="Facts", show_header=True, header_style="bold")
+        t.add_column("Head", style="bold")
+        t.add_column("Relation", style="dim")
+        t.add_column("Tail", style="bold")
+        if show_provenance:
+            t.add_column("Provenance", style="dim")
+        for r in sorted(facts, key=lambda x: (x.get("relation_name") or "", x.get("source_name") or "")):
+            row = [r.get("source_name") or "", r.get("relation_name") or "", r.get("target_name") or ""]
+            if show_provenance:
+                row.append(r.get("extraction", "") or "")
+            t.add_row(*row)
+        console.print(t)
+
+    if fact_props:
+        t = Table(title="Fact Property Values", show_header=True, header_style="bold")
+        t.add_column("Head", style="bold")
+        t.add_column("Relation", style="dim")
+        t.add_column("Tail", style="bold")
+        t.add_column("Property", style="dim")
+        t.add_column("Value")
+        if show_provenance:
+            t.add_column("Provenance", style="dim")
+        for r in sorted(fact_props, key=lambda x: (x.get("relation_name") or "", x.get("head_name") or "", x.get("property_name") or "")):
+            row = [
+                r.get("head_name") or "",
+                r.get("relation_name") or "",
+                r.get("tail_name") or "",
+                r.get("property_name") or "",
+                str(r.get("property_value", "")),
+            ]
+            if show_provenance:
+                row.append(r.get("extraction", "") or "")
+            t.add_row(*row)
+        console.print(t)
+
+    if not entities and not all_props and not facts:
         console.print("[dim](no instances)[/dim]")
-        return
-    t = Table(show_header=True, header_style="bold")
-    t.add_column("Name", style="bold")
-    t.add_column("Value")
-    for row in rows:
-        t.add_row(str(row.get("name", "")), str(row.get("value", "")))
-    console.print(t)
 
 
 @data_group.command("query")
@@ -702,6 +769,13 @@ def schema_list(obj: dict, fmt: str) -> None:
     if not schema.entities and not schema.relations:
         console.print("[dim](no schema declared)[/dim]")
         return
+
+    class_names = set(schema.entities.keys())
+    subclass_rels = [r for r in schema.relations.values() if r["name"] == "IS_SUBCLASS_OF"]
+    real_relations = {k: v for k, v in schema.relations.items() if v["name"] != "IS_SUBCLASS_OF"}
+    class_hierarchy    = [(r["source"], r["target"]) for r in subclass_rels if r["source"] in class_names]
+    relation_hierarchy = [(r["source"], r["target"]) for r in subclass_rels if r["source"] not in class_names]
+
     if schema.entities:
         t = Table(title="Classes", show_header=True, header_style="bold")
         t.add_column("Name", style="bold", min_width=12)
@@ -709,7 +783,29 @@ def schema_list(obj: dict, fmt: str) -> None:
         for entity in sorted(schema.entities.values(), key=lambda e: e["name"]):
             t.add_row(entity["name"], entity.get("description", ""))
         console.print(t)
-    real_relations = {k: v for k, v in schema.relations.items() if v["name"] != "IS_SUBCLASS_OF"}
+
+    class_props = [
+        (entity["name"], attr_name, attr.get("description", ""))
+        for entity in schema.entities.values()
+        for attr_name, attr in entity.get("contents", {}).get("attributes", {}).items()
+    ]
+    if class_props:
+        t = Table(title="Class Properties", show_header=True, header_style="bold")
+        t.add_column("Class", style="bold", min_width=12)
+        t.add_column("Property", style="bold", min_width=12)
+        t.add_column("Description")
+        for row in sorted(class_props):
+            t.add_row(*row)
+        console.print(t)
+
+    if class_hierarchy:
+        t = Table(title="Class Hierarchy", show_header=True, header_style="bold")
+        t.add_column("Child", style="bold", min_width=12)
+        t.add_column("Parent", style="dim", min_width=12)
+        for child, parent in sorted(class_hierarchy):
+            t.add_row(child, parent)
+        console.print(t)
+
     if real_relations:
         t = Table(title="Relations", show_header=True, header_style="bold")
         t.add_column("Source", style="dim", min_width=10)
@@ -718,6 +814,28 @@ def schema_list(obj: dict, fmt: str) -> None:
         t.add_column("Description")
         for rel in sorted(real_relations.values(), key=lambda r: r["name"]):
             t.add_row(rel.get("source", ""), rel["name"], rel.get("target", ""), rel.get("description", ""))
+        console.print(t)
+
+    rel_props = [
+        (rel["name"], attr_name, attr.get("description", ""))
+        for rel in real_relations.values()
+        for attr_name, attr in rel.get("contents", {}).get("attributes", {}).items()
+    ]
+    if rel_props:
+        t = Table(title="Relation Properties", show_header=True, header_style="bold")
+        t.add_column("Relation", style="bold", min_width=12)
+        t.add_column("Property", style="bold", min_width=12)
+        t.add_column("Description")
+        for row in sorted(rel_props):
+            t.add_row(*row)
+        console.print(t)
+
+    if relation_hierarchy:
+        t = Table(title="Relation Hierarchy", show_header=True, header_style="bold")
+        t.add_column("Child", style="bold", min_width=12)
+        t.add_column("Parent", style="dim", min_width=12)
+        for child, parent in sorted(relation_hierarchy):
+            t.add_row(child, parent)
         console.print(t)
 
 
