@@ -14,6 +14,7 @@ from blue_data_user_source import FileSource, UDbError, UserSource
 
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
 _SELECTED_DB_FILE = ".selected.database"
+_INTERNAL_SOURCES = {"kb", "metadata", "contacts"}
 
 console = Console()
 err = Console(stderr=True)
@@ -697,14 +698,17 @@ def source_group() -> None:
 def source_list(obj: dict, fmt: str) -> None:
     """List data sources.
 
-    Shows all registry sources and KG SOURCE nodes.
+    Shows user-added sources only (excludes internal kb/metadata/contacts sources).
     Sources present in the KG but removed from the registry are marked (*).
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
         manager = source._get_manager(db)
-        reg_records = manager._registry.list_records(record_type="source", scope="/") or []
+        reg_records = [
+            r for r in (manager._registry.list_records(record_type="source", scope="/") or [])
+            if r.get("name") not in _INTERNAL_SOURCES
+        ]
         reg_names = {r.get("name") for r in reg_records}
         kg_sources = asyncio.run(manager.list_sources())
     except (UDbError, Exception) as exc:
