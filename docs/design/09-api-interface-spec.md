@@ -11,63 +11,140 @@ The canonical interface. All other interfaces delegate to it.
 ### `UserSource`
 
 ```python
-class UserSource:
-    async def execute_query(
+class UserSource(DataSource):
+
+    # ---- database (= user) management ----
+
+    def create_database(self, database: str, properties: dict | None = None) -> dict: ...
+    # Sync DataSource override; delegates to create_user via asyncio.run().
+    # properties must contain: registry, kb_source, metadata_source, contact_source keys.
+
+    async def create_user(
+        self,
+        name: str,
+        registry_props: dict,
+        kb_source_props: dict,
+        metadata_source_props: dict,
+        contact_source_props: dict,
+    ) -> None: ...
+
+    def add_user(self, name: str, registry_props: dict) -> None: ...
+
+    def list_users(self) -> list[str]: ...
+    def get_user(self, name: str) -> dict | None: ...
+    def remove_user(self, name: str) -> None: ...
+    async def reset_user(self, name: str) -> None: ...
+    async def delete_user(self, name: str) -> None: ...
+
+    # ---- DataSource query interface (sync) ----
+
+    def execute_query(
         self,
         query: str,
         database: str | None = None,
-        optional_properties: dict = {}
+        collection: str | None = None,
+        optional_properties: dict | None = None,
     ) -> list[QueryResult]: ...
 
-    async def import_source(
+    def execute_query_nl(
+        self,
+        query: str,
+        database: str | None = None,
+        collection: str | None = None,
+        optional_properties: dict | None = None,
+    ) -> list[QueryResult]: ...
+
+    def import_data(
         self,
         source: DataSource,
-        database: str | None = None,
-        optional_properties: dict = {}
+        collection: str,
+        database: str = "default",
+        entity: str | None = None,
+        mode: str = "append",
+        options: dict | None = None,
+    ) -> dict: ...
+
+    # ---- source management ----
+
+    async def add_source(
+        self,
+        source: DataSource,
+        database: str,
+        optional_properties: dict | None = None,
     ) -> None: ...
 
-    async def create_database(self, name: str) -> None: ...
+    def remove_source(self, database: str, source_name: str) -> None: ...
+
+    # ---- data access ----
+
+    async def list_data(self, database: str) -> list[dict]: ...
+    async def describe_data(self, database: str) -> str: ...
+    async def list_sources(self, database: str, source_id: str | None = None) -> list[dict]: ...
+    async def describe_sources(self, database: str, source_id: str | None = None) -> str: ...
+
+    def list_metadata(self, database: str) -> dict[str, Any]: ...
+    def get_metadata(self, database: str, key: str) -> Any: ...
+    def set_metadata(self, database: str, key: str, value: Any) -> None: ...
+    def delete_metadata(self, database: str, key: str) -> None: ...
 ```
-
-`database` defaults to the value set at construction time when `None` is passed. Raises `QueryError` if no default is configured and no value is provided.
-
-**`optional_properties` keys**
-
-| Key | Type | Method | Description |
-|-----|------|--------|-------------|
-| `"session"` | `str` | `execute_query` | Session ID; used as query context and primary contact channel for user interaction |
-| `"queries"` | `list[str]` | `import_source` | Queries to run over the source (Type 2 import); omit for Type 1 registration |
 
 ### Constructor
 
 ```python
-UserSource(properties: dict = {})
+UserSource(props: dict)
 ```
 
-`properties` may include `"database"` to set a default user database for all calls.
+| prop | Type | Description |
+|------|------|-------------|
+| `store` | `dict` | JSONSource config for the user-list store |
+| `schema` | `str` | Default path to `schema.json`; used when creating or resetting databases |
 
 ```python
-us = UserSource(properties={"database": "5WgRzdacRdOEvj8JBmCXFZSvWmH3"})
+us = UserSource({
+    "store": {"backend": "file", "path": "~/.udb/db.json"},
+    "schema": "data/schema.json",
+})
+
+# Create a database — all four source props required
+await us.create_user(
+    "alice",
+    registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
+    kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
+    metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
+    contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
+)
 
 # Type 1 — register file source for future queries
-await us.import_source(FileSource("~/resume.txt"))
+await us.add_source(FileSource("~/resume.txt"), database="alice")
 
 # Type 2 — extract and store structured data from file
-await us.import_source(
+await us.add_source(
     FileSource("~/resume.txt"),
+    database="alice",
     optional_properties={"queries": ["What skills does the user have?"]}
 )
 
-# Query
-results = await us.execute_query(
+# Query (sync — wraps asyncio internally)
+results = us.execute_query(
     "jobs suitable for me",
+    database="alice",
     optional_properties={"session": session.cid}
 )
 ```
 
+### `optional_properties` keys
+
+| Key | Type | Method | Description |
+|-----|------|--------|-------------|
+| `"session"` | `str` | `execute_query` | Session ID; used as query context and primary contact channel for user interaction |
+| `"output_form"` | `"json"` \| `"nl"` | `execute_query` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized string |
+| `"top_k"` | `int` | `execute_query` | Max KB results per sub-query (default: 10) |
+| `"queries"` | `list[str]` | `add_source` | Extraction queries — drives Type 2 ingestion (one `import_text` call each) |
+
 ### Result type
 
 ```python
+@dataclass
 class QueryResult:
     query: str          # the sub-question answered
     results: list[Any]  # retrieved data for that question
@@ -102,7 +179,7 @@ Execute a natural language query.
 ```json
 {
   "query": "jobs suitable for me",
-  "database": "5WgRzdacRdOEvj8JBmCXFZSvWmH3",
+  "database": "alice",
   "session": "optional-session-id"
 }
 ```
@@ -110,7 +187,7 @@ Execute a natural language query.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `query` | string | yes | Natural language query |
-| `database` | string | no | User database ID; uses server default if omitted |
+| `database` | string | no | Database ID; uses server default if omitted |
 | `session` | string | no | Session ID for query context and user interaction |
 
 **Response `200 OK`** (`application/json`)
@@ -132,24 +209,24 @@ Execute a natural language query.
 
 ---
 
-### `POST /import`
+### `POST /sources`
 
-Two request shapes depending on source type.
+Register a file source or extract data from it.
 
 #### File source (`multipart/form-data`)
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `file` | file | yes | File to import |
-| `database` | string | no | User database ID; uses server default if omitted |
-| `queries` | string (JSON array) | no | Queries to run over the file (Type 2); omit for Type 1 |
+| `file` | file | yes | File to add as source |
+| `database` | string | no | Database ID; uses server default if omitted |
+| `queries` | string (JSON array) | no | Extraction queries (Type 2); omit for Type 1 |
 
 ```
-POST /import
+POST /sources
 Content-Type: multipart/form-data
 
 file=<binary>
-database=5WgRzdacRdOEvj8JBmCXFZSvWmH3
+database=alice
 queries=["What skills does the user have?"]
 ```
 
@@ -159,7 +236,7 @@ queries=["What skills does the user have?"]
 {
   "source_type": "session",
   "source_id": "session-id",
-  "database": "5WgRzdacRdOEvj8JBmCXFZSvWmH3"
+  "database": "alice"
 }
 ```
 
@@ -167,26 +244,45 @@ queries=["What skills does the user have?"]
 |-------|------|----------|-------------|
 | `source_type` | `"session"` | yes | Identifies a session source |
 | `source_id` | string | yes | Session ID to register |
-| `database` | string | no | User database ID; uses server default if omitted |
+| `database` | string | no | Database ID; uses server default if omitted |
 
 **Response `204 No Content`** (both shapes)
 
 ---
 
+### `DELETE /sources/{source_name}`
+
+Remove a source from the DataRegistry. KG data is preserved.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `source_name` | string | Source name to remove |
+| `database` | string (query) | Database ID |
+
+**Response `204 No Content`**
+
+---
+
 ### `POST /databases`
 
-Create a new user database.
+Create a new database.
 
 **Request** (`application/json`)
 
 ```json
-{ "name": "5WgRzdacRdOEvj8JBmCXFZSvWmH3" }
+{
+  "name": "alice",
+  "registry": {"backend": "file", "path": "..."},
+  "kb_source": {"backend": "file", "directory": "..."},
+  "metadata_source": {"backend": "file", "path": "..."},
+  "contact_source": {"backend": "file", "path": "..."}
+}
 ```
 
 **Response `201 Created`**
 
 ```json
-{ "database": "5WgRzdacRdOEvj8JBmCXFZSvWmH3" }
+{ "database": "alice" }
 ```
 
 ---
@@ -230,7 +326,7 @@ FastAPI exception handlers catch `UDbError` subtypes and map them to these respo
 
 ## 3. MCP Server
 
-Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; all business logic remains in the library. A default database may be configured at server startup.
+Exposes three MCP tools. Tool handlers are thin wrappers over the Python library; all business logic remains in the library. A default database may be configured at server startup.
 
 ### Tool: `execute_query`
 
@@ -248,7 +344,7 @@ Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; 
       },
       "database": {
         "type": "string",
-        "description": "User database ID. Uses server default if omitted."
+        "description": "Database ID. Uses server default if omitted."
       },
       "session": {
         "type": "string",
@@ -265,28 +361,28 @@ Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; 
 
 ---
 
-### Tool: `import`
+### Tool: `add_source`
 
 ```json
 {
-  "name": "import",
-  "description": "Import a file into a user database. Omit queries to register the file as a source (Type 1). Provide queries to extract and store specific data from the file (Type 2).",
+  "name": "add_source",
+  "description": "Register a file as a data source for a user database. Omit queries to register only (Type 1). Provide queries to extract and store specific data from the file (Type 2).",
   "inputSchema": {
     "type": "object",
     "required": ["source_path"],
     "properties": {
       "source_path": {
         "type": "string",
-        "description": "Filesystem path to the file to import"
+        "description": "Filesystem path to the file to register"
       },
       "database": {
         "type": "string",
-        "description": "User database ID. Uses server default if omitted."
+        "description": "Database ID. Uses server default if omitted."
       },
       "queries": {
         "type": "array",
         "items": { "type": "string" },
-        "description": "Queries to run over the file (Type 2 import). Omit for source registration only."
+        "description": "Extraction queries for Type 2 ingestion. Omit for source registration only."
       }
     }
   }
@@ -297,96 +393,136 @@ Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; 
 
 ---
 
+### Tool: `remove_source`
+
+```json
+{
+  "name": "remove_source",
+  "description": "Remove a source from the user's DataRegistry. KG data extracted from the source is preserved.",
+  "inputSchema": {
+    "type": "object",
+    "required": ["source_name", "database"],
+    "properties": {
+      "source_name": {
+        "type": "string",
+        "description": "Name of the source to remove from the registry"
+      },
+      "database": {
+        "type": "string",
+        "description": "Database ID. Uses server default if omitted."
+      }
+    }
+  }
+}
+```
+
+**Returns:** empty content on success.
+
+---
+
 ## 4. CLI
 
-Built with Click (argument parsing) and Rich (output). All commands are thin wrappers over the Python library; Click handlers use `asyncio.run()` to call async library methods.
+Built with Click (argument parsing) and Rich (output). All commands are thin wrappers over the Python library.
 
-A default database may be configured via environment variable `UDB_DATABASE`.
+A default database may be configured via `--database` or the `UDB_DATABASE` env var, or persisted with `udb database select NAME`.
 
 ### Global options
 
 ```
-udb [--database DB] COMMAND
+udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 ```
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `--database NAME` | `UDB_DATABASE` | — | Active database ID |
+| `--data-dir DIR` | `UDB_DATA_DIR` | `~/.udb` | Directory for all database files |
+| `--schema-path PATH` | `UDB_SCHEMA_PATH` | — | Path to `schema.json` for KB seeding |
+
+---
+
+### `udb database`
+
+| Command | Description |
+|---------|-------------|
+| `udb database create NAME` | Create a new database |
+| `udb database delete NAME [--yes]` | Delete a database and all its data |
+| `udb database select NAME` | Set the active database (persists to `.selected.database`) |
+| `udb database list [--format]` | List all databases |
+| `udb database search KEYWORD [--format]` | Keyword search over database names |
+| `udb database reset [--yes]` | Clear KB data for the active database and reseed schema |
+| `udb database config show [--format]` | Show stored configuration for the active database |
+
+`database create` options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--kb-backend` | `file` | KB backend: `memory`, `file`, or `neo4j` |
+| `--neo4j-uri` | — | Neo4j bolt URI |
+| `--neo4j-user` | — | Neo4j username |
+| `--neo4j-password` | — | Neo4j password |
+
+---
+
+### `udb data`
+
+All `data` commands require an active database.
+
+| Command | Description |
+|---------|-------------|
+| `udb data query TEXT` | Execute a natural language query |
+| `udb data search QUERY` | Search entities and facts by keyword or semantic similarity |
+| `udb data list` | List all entities, property values, and facts |
+| `udb data import FILE` | Import instance data from `udb data export` output (KG only) |
+| `udb data export` | Export instance data (entities, facts, property values) as JSON |
+| `udb data extract TEXT` | Extract entities/facts from free text via LLM |
+| `udb data source list` | List sources; KG-only entries marked `(*)` |
+| `udb data source add FILE` | Register a file source and optionally extract |
+| `udb data source remove NAME` | Remove a source from the registry (KG data preserved) |
+
+`data query` options:
 
 | Option | Description |
 |--------|-------------|
-| `--database DB` | User database ID. Overrides `UDB_DATABASE` if set. |
-
----
-
-### `udb query`
-
-```
-udb query TEXT [--session SESSION_ID] [--format (table|json)]
-```
-
-Executes a natural language query and prints results.
-
-| Argument / Option | Description |
-|-------------------|-------------|
-| `TEXT` | Natural language query (required) |
-| `--session SESSION_ID` | Session ID for query context and user interaction |
-| `--format` | Output format: `table` (default, via Rich) or `json` |
+| `--session SESSION_ID` | Session ID for query context and interaction |
+| `--format table\|json\|nl` | Output format (default: `table`) |
+| `--top-k N` | Max results (default: 10) |
 
 **Example**
 
 ```
-$ udb query "jobs suitable for me" --format table
+$ udb --database alice data query "jobs suitable for me" --format table
 
-┌─────────────────────────────────────┬──────────────────────────────┐
-│ Query                               │ Results                      │
-├─────────────────────────────────────┼──────────────────────────────┤
-│ What skills does the user have?     │ Python, SQL, machine learning │
-│ Does the user prefer remote work?   │ Yes                          │
-└─────────────────────────────────────┴──────────────────────────────┘
+ Query                               Results
+ What skills does the user have?     Python, SQL, machine learning
+ Does the user prefer remote work?   Yes
+```
+
+`data source add` — two types:
+
+```bash
+# Type 1 — register source only
+udb data source add resume.txt
+# Registered source: resume.txt
+
+# Type 2 — register + extract
+udb data source add resume.txt \
+  --query "What skills does the user have?" \
+  --query "What is the user's most recent job title?"
+# Added source: resume.txt (2 queries)
 ```
 
 ---
 
-### `udb import`
+### `udb schema`
 
-```
-udb import FILE [--query QUERY]...
-```
+All `schema` commands require an active database.
 
-Imports a file. `--query` may be repeated.
-
-| Argument / Option | Description |
-|-------------------|-------------|
-| `FILE` | Path to file to import (required) |
-| `--query QUERY` | Query to run over the file (Type 2). Repeat for multiple queries. Omit for Type 1 (source registration only). |
-
-**Example — Type 1**
-
-```
-$ udb import ~/resume.txt
-Registered: ~/resume.txt
-```
-
-**Example — Type 2**
-
-```
-$ udb import ~/resume.txt --query "What skills does the user have?" --query "What is the user's most recent job title?"
-Imported: ~/resume.txt (2 queries)
-```
-
----
-
-### `udb database create`
-
-```
-udb database create NAME
-```
-
-Creates a new user database.
-
-**Example**
-
-```
-$ udb database create 5WgRzdacRdOEvj8JBmCXFZSvWmH3
-Created database: 5WgRzdacRdOEvj8JBmCXFZSvWmH3
-```
+| Command | Description |
+|---------|-------------|
+| `udb schema list [--format]` | List classes, relations, and their properties |
+| `udb schema import FILE` | Import a schema (idempotent) |
+| `udb schema export [-o FILE]` | Export schema as JSON |
+| `udb schema search QUERY` | Search schema elements by keyword or semantic similarity |
 
 ---
 

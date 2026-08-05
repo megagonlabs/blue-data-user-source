@@ -39,28 +39,30 @@ from blue_data_user_source import UserSource, FileSource
 
 # File-backed (survives process restarts)
 us = UserSource({
-    "store": {"backend": "file", "path": "~/.udb/users.json"},
-    "schema": "data/schema.json",   # optional — used when seeding/resetting users
+    "store": {"backend": "file", "path": "~/.udb/db.json"},
+    "schema": "data/schema.json",   # optional — used when creating/resetting databases
 })
 
 # In-memory (useful for testing)
 us = UserSource({"store": {"backend": "memory"}})
 ```
 
-### Manage users
+### Manage databases
 
-Each user has its own `DataRegistry` (backed by a separate JSONSource) that stores the KB source registration and any other sources added via imports:
+Each database (user) has its own `DataRegistry` backed by a separate JSONSource. The registry holds the KB source and any other sources added via `add_source`:
 
 ```python
 async def main() -> None:
-    # Create user — builds registry + KB from scratch, seeds schema
+    # Create database — builds registry + KB from scratch, seeds schema
     await us.create_user(
         "alice",
         registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
-        kb_props={"backend": "file", "directory": "~/.udb/kb"},
+        kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
+        metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
+        contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
     )
 
-    # Add user — connects to an existing registry that already has a KB registered
+    # Add database — connects to an existing registry that already has sources registered
     us.add_user(
         "bob",
         registry_props={"backend": "file", "path": "~/.udb/registries/bob.json"},
@@ -68,45 +70,50 @@ async def main() -> None:
 
     print(us.list_users())       # ["alice", "bob"]
 
-    # Reset — clear KB data + non-KB registry entries, reseed schema
+    # Reset — clear KB data + imported registry entries, reseed schema
     await us.reset_user("alice")
 
     # Remove from main store only (KB data kept)
     us.remove_user("alice")
 
-    # Remove from main store AND wipe KB data
+    # Remove from main store AND wipe all backing files
     await us.delete_user("bob")
 
 asyncio.run(main())
 ```
 
-### Import and query
+### Add sources and query
 
 ```python
 async def main() -> None:
     await us.create_user(
         "alice",
         registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
-        kb_props={"backend": "file", "directory": "~/.udb/kb"},
+        kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
+        metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
+        contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
     )
 
     # Type 1 — register a file as a queryable source (no extraction)
-    await us.import_source(FileSource("resume.txt"), database="alice")
+    await us.add_source(FileSource("resume.txt"), database="alice")
 
-    # Type 2 — extract and store specific knowledge using LLM extraction
-    await us.import_source(
+    # Type 2 — register source + extract specific knowledge via LLM
+    await us.add_source(
         FileSource("resume.txt"),
         database="alice",
         optional_properties={"queries": ["What skills does the user have?"]},
     )
 
+    # Remove a source from the registry (KG data is preserved)
+    us.remove_source("alice", "resume.txt")
+
     # Query — returns list[QueryResult]
-    results = await us.execute_query("jobs suitable for me", database="alice")
+    results = us.execute_query("jobs suitable for me", database="alice")
     for r in results:
         print(r.query, "→", r.results)
 
     # Query — returns a natural language string
-    answer = await us.execute_query(
+    answer = us.execute_query(
         "jobs suitable for me",
         database="alice",
         optional_properties={"output_form": "nl"},
@@ -131,53 +138,63 @@ Constructs a multi-user source from a props dict.
 | prop | Type | Description |
 |---|---|---|
 | `store` | `dict` | JSONSource config for the user-list store: `{"backend": "memory"}` or `{"backend": "file", "path": "..."}` |
-| `schema` | `str` | Default path to `schema.json` (optional); used as fallback when `schema_path` is not set in `kb_props` |
+| `schema` | `str` | Default path to `schema.json` (optional); used when creating or resetting databases |
 
-### User management
+### Database management
 
-| method | Description |
+| Method | Description |
 |---|---|
-| `add_user(name, registry_props)` | Connect to an existing registry that already has a KB registered |
-| `create_user(name, registry_props, kb_props)` *(async)* | Build registry + KB from scratch and seed schema |
-| `list_users()` | Return list of user names |
-| `get_user(name)` | Return main-store entry for one user, or None |
-| `remove_user(name)` | Remove user from main store; KB and registry data unchanged |
-| `reset_user(name)` *(async)* | Wipe KB data + non-KB registry entries, then reseed schema |
-| `delete_user(name)` *(async)* | `reset_user` + `remove_user` |
+| `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props)` *(async)* | Build registry + all three sources from scratch and seed schema |
+| `add_user(name, registry_props)` | Connect to an existing registry that already has sources registered |
+| `list_users()` | Return list of database names |
+| `get_user(name)` | Return main-store entry for one database, or `None` |
+| `remove_user(name)` | Remove database from main store; backing files unchanged |
+| `reset_user(name)` *(async)* | Wipe KB data + imported registry entries, then reseed schema |
+| `delete_user(name)` *(async)* | Destroy all backing files and remove from main store |
 
-`registry_props` — JSONSource config for the user's own DataRegistry:
+**`registry_props`** — JSONSource config for the per-database DataRegistry:
 
 ```python
 {"backend": "file", "path": "~/.udb/registries/alice.json"}
 {"backend": "memory"}
 ```
 
-`kb_props` — KB backend config passed to `UserDataManager.initialize`:
+**`kb_source_props`** — KB backend config:
 
 ```python
 {"backend": "memory"}
 {"backend": "file", "directory": "~/.udb/kb"}
 {"backend": "neo4j", "uri": "bolt://localhost:7687", "username": "neo4j", "password": "..."}
-# optional: include schema_path to override the UserSource-level default
-{"backend": "file", "directory": "...", "schema_path": "custom_schema.json"}
 ```
 
-### `import_source(source, database, optional_properties)`
+**`metadata_source_props`** / **`contact_source_props`** — JSONSource config for the per-database metadata and contacts stores:
 
-Imports a data source into a user knowledge base.
+```python
+{"backend": "file", "path": "~/.udb/sources/alice.metadata.json"}
+{"backend": "file", "path": "~/.udb/sources/alice.contacts.json"}
+```
 
-- **Type 1** (no `queries`): registers the source location as a provenance node.
-- **Type 2** (`queries` provided): fetches content from the source, passes it to the KB extraction engine, and writes extracted entities and facts.
+### Source management
+
+| Method | Description |
+|---|---|
+| `add_source(source, database, optional_properties)` *(async)* | Register a source in the KB and optionally extract content |
+| `remove_source(database, source_name)` | Remove a source from the DataRegistry (KG data preserved) |
+
+`add_source` accepts:
 
 | optional_property | Type | Description |
 |---|---|---|
 | `queries` | `list[str]` | Extraction queries — each drives one `import_text` call (Type 2) |
 
-### `execute_query(query, database, optional_properties)`
+### Query
 
-Executes a natural language query. Contextualises and expands it via LLM, retrieves data from the KB, assesses completeness and freshness, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB.
+| Method | Description |
+|---|---|
+| `execute_query(query, database, optional_properties)` | Execute a natural language query; returns `list[QueryResult]` or `str` |
+| `execute_query_nl(query, database, optional_properties)` | Alias — same behaviour |
 
-Returns `list[QueryResult]` (default) or `str` when `output_form="nl"`.
+`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness and freshness, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB.
 
 | optional_property | Type | Description |
 |---|---|---|
@@ -185,13 +202,18 @@ Returns `list[QueryResult]` (default) or `str` when `output_form="nl"`.
 | `output_form` | `"json"` \| `"nl"` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized natural language string |
 | `top_k` | `int` | Max KB results per sub-query (default: 10) |
 
-### `list_data(database)` / `describe_data(database)`
+### Data access
 
-Return raw data entries from the KB (`list[dict]`) or a natural language summary (`str`).
-
-### `list_metadata(database, source_id=None)` / `describe_metadata(database, source_id=None)`
-
-Return registered source nodes from the KB (`list[dict]`) or a natural language summary (`str`). Optionally filtered by `source_id`.
+| Method | Description |
+|---|---|
+| `list_data(database)` *(async)* | Raw data entries from the KB (`list[dict]`) |
+| `describe_data(database)` *(async)* | Natural language summary of KB data (`str`) |
+| `list_sources(database, source_id=None)` *(async)* | KB SOURCE nodes (`list[dict]`), optionally filtered by ID |
+| `describe_sources(database, source_id=None)` *(async)* | Natural language summary of sources (`str`) |
+| `list_metadata(database)` | User metadata dict from the metadata source |
+| `get_metadata(database, key)` | Single metadata value |
+| `set_metadata(database, key, value)` | Set a metadata value |
+| `delete_metadata(database, key)` | Delete a metadata value |
 
 ### `QueryResult`
 
@@ -214,7 +236,7 @@ Runs entirely in-process. Data is lost on exit — useful for testing and short-
 
 ### File (default for CLI)
 
-Persists data to JSON files in a directory — one file per user database.
+Persists data to JSON files in a directory — one file per database.
 
 ```python
 {"backend": "file", "directory": "~/.udb/kb"}
@@ -247,21 +269,39 @@ The JSON file is consumed by `KBSource.import_database_schema` (entity and relat
 
 ## CLI
 
-```
-udb [--user NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+The `udb` CLI exposes all library operations. See [platform/cli/README.md](../platform/cli/README.md) for full details.
 
-Commands:
-  query TEXT          Execute a query
-  import FILE         Import a file
-  user create NAME    Create a new user database
-  user delete NAME    Delete a user database and its KB data
-  user reset NAME     Clear KB data and reseed schema
-  user ls             List all users
-  user show data      Show data entries
-  user show metadata  Show source metadata
+```
+udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+
+database commands:
+  udb database create NAME    Create a new database
+  udb database delete NAME    Delete a database and all its data
+  udb database select NAME    Set the active database
+  udb database list           List all databases
+  udb database search KEYWORD Search databases by name
+  udb database reset          Clear KB data and reseed schema
+  udb database config show    Show stored configuration
+
+data commands:
+  udb data query TEXT         Execute a natural language query
+  udb data search QUERY       Search entities and facts
+  udb data list               List all entities and facts
+  udb data import FILE        Import instance data (from udb data export)
+  udb data export             Export instance data as JSON
+  udb data extract TEXT       Extract entities/facts from free text via LLM
+  udb data source list        List data sources
+  udb data source add FILE    Register a file source (optionally extract)
+  udb data source remove NAME Remove a source from the registry
+
+schema commands:
+  udb schema list             List classes and relations
+  udb schema import FILE      Import a schema
+  udb schema export           Export schema as JSON
+  udb schema search QUERY     Search schema elements
 ```
 
-User data is stored under `~/.udb/` by default: `users.json` holds user entries; `kb/` holds per-user graph data (file backend).
+Database files are stored under `~/.udb/` by default.
 
 ## Running tests
 
@@ -278,7 +318,7 @@ lib/
 ├── src/
 │   └── blue_data_user_source/
 │       ├── __init__.py            # public exports
-│       ├── source.py              # UserSource — main entry point (multi-user)
+│       ├── source.py              # UserSource — main entry point (multi-database)
 │       ├── types.py               # QueryResult, UDbError hierarchy
 │       ├── sources/
 │       │   └── file.py            # FileSource

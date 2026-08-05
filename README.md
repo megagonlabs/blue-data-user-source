@@ -41,19 +41,23 @@ cd lib && pip install -e . && cd ..
 # Install the CLI
 cd platform/cli && pip install -e . && cd ../..
 
-# Create a database
-udb user create alice
+# Create a database and select it as active
+udb database create alice
+udb database select alice
 
-# Import a file — extract specific attributes (Type 2)
-udb --user alice import resume.txt \
+# Register a file as a data source (Type 1 — source registration only)
+udb data source add resume.txt
+
+# Extract specific attributes via LLM (Type 2)
+udb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
-# Query — structured output (default)
-udb --user alice query "What jobs are suitable for me?"
+# Query — Rich table (default)
+udb data query "What jobs are suitable for me?"
 
 # Query — natural language answer
-udb --user alice query "What jobs are suitable for me?" --format nl
+udb data query "What jobs are suitable for me?" --format nl
 ```
 
 ## Packages
