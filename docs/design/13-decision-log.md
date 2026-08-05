@@ -1,4 +1,4 @@
-# UserDb — Decision Log
+# UDb — Decision Log
 
 Architectural decisions are recorded here as they are made, throughout the design process.
 
@@ -11,7 +11,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 
 **Decision:** Python, minimum version 3.10.
 
-**Rationale:** Python is the dominant language in the AI/ML ecosystem, providing the broadest access to LLM clients, vector store clients, and data tooling relevant to UserDb.
+**Rationale:** Python is the dominant language in the AI/ML ecosystem, providing the broadest access to LLM clients, vector store clients, and data tooling relevant to UDb.
 
 **Consequences:** All library classes, interfaces, and examples are written in Python. Type hints use features available from 3.10+ (e.g. `X | Y` union syntax, `match` statements).
 
@@ -39,7 +39,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 
 **Rationale:** LlamaIndex provides a well-maintained provider-agnostic LLM interface, allowing the initial OpenAI integration to be swapped for other providers (Anthropic, local models, etc.) without changing application code. Provider is configured globally via `llama_index.core.Settings.llm`.
 
-**Consequences:** All LLM calls in UserDb components (`UserQueryReasoner`, `UserDataMetric`) go through the LlamaIndex `LLM` abstraction. Adding a new provider requires only a configuration change at startup.
+**Consequences:** All LLM calls in UDb components (`UserQueryReasoner`, `UserDataMetric`) go through the LlamaIndex `LLM` abstraction. Adding a new provider requires only a configuration change at startup.
 
 ---
 
@@ -48,11 +48,11 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** `JSONSource` and `VectorSource` backends are provided by `blue-data-core`. UserDb interacts only with their abstract interfaces (`set`, `get`, `delete`, `query`, `keys`).
+**Decision:** `JSONSource` and `VectorSource` backends are provided by `blue-data-core`. UDb interacts only with their abstract interfaces (`set`, `get`, `delete`, `query`, `keys`).
 
-**Rationale:** Decouples UserDb from specific storage implementations (Redis, MongoDB, ChromaDB, etc.). Backend choices are delegated to `blue-data-core` and can change without affecting UserDb code.
+**Rationale:** Decouples UDb from specific storage implementations (Redis, MongoDB, ChromaDB, etc.). Backend choices are delegated to `blue-data-core` and can change without affecting UDb code.
 
-**Consequences:** Initial interfaces are provisional and will be revised once `blue-data-core` is installed. UserDb must not import or depend on any concrete storage backend directly.
+**Consequences:** Initial interfaces are provisional and will be revised once `blue-data-core` is installed. UDb must not import or depend on any concrete storage backend directly.
 
 ---
 
@@ -61,7 +61,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** Expose UserDb as an HTTP REST API using FastAPI, served by Uvicorn.
+**Decision:** Expose UDb as an HTTP REST API using FastAPI, served by Uvicorn.
 
 **Rationale:** FastAPI provides automatic OpenAPI schema generation, async support, and a clean decorator-based routing model with minimal boilerplate. Enables non-Python consumers and microservice deployments.
 
@@ -74,7 +74,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** Expose UserDb as an MCP server using the official `mcp` Python SDK.
+**Decision:** Expose UDb as an MCP server using the official `mcp` Python SDK.
 
 **Rationale:** Allows LLM agents (e.g. Claude) to call `execute_query` and `import` as native tools within an agentic context, without requiring HTTP plumbing.
 
@@ -165,9 +165,9 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** UserDb is distributed as both a PyPI package (`userdb`) and a Docker image (`userdb-server`). The PyPI package exposes the Python library with optional extras for the server and CLI. The Docker image bundles the REST API and MCP server.
+**Decision:** UDb is distributed as both a PyPI package (`udb`) and a Docker image (`udb-server`). The PyPI package exposes the Python library with optional extras for the server and CLI. The Docker image bundles the REST API and MCP server.
 
-**Rationale:** The two artifacts serve distinct consumers — the PyPI package for Python applications embedding UserDb directly, and the Docker image for operators running UserDb as a standalone service. Distributing both avoids forcing unnecessary dependencies on library-only consumers.
+**Rationale:** The two artifacts serve distinct consumers — the PyPI package for Python applications embedding UDb directly, and the Docker image for operators running UDb as a standalone service. Distributing both avoids forcing unnecessary dependencies on library-only consumers.
 
 **Consequences:** The release pipeline must build and publish both artifacts on every semver tag. Version numbers must be kept in sync between the two.
 
@@ -178,8 +178,8 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** UserDb emits structured JSON logs to stdout, Prometheus-compatible metrics at `/metrics`, and OpenTelemetry traces via OTLP export. Tracing is opt-in (enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set). Operators wire these into their own stacks.
+**Decision:** UDb emits structured JSON logs to stdout, Prometheus-compatible metrics at `/metrics`, and OpenTelemetry traces via OTLP export. Tracing is opt-in (enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set). Operators wire these into their own stacks.
 
-**Rationale:** Self-hosted deployments use heterogeneous observability infrastructure (Grafana, Datadog, Jaeger, etc.). Emitting to standard interfaces (structured stdout, Prometheus, OTLP) keeps UserDb decoupled from any specific platform. Raw user data is never included in span attributes.
+**Rationale:** Self-hosted deployments use heterogeneous observability infrastructure (Grafana, Datadog, Jaeger, etc.). Emitting to standard interfaces (structured stdout, Prometheus, OTLP) keeps UDb decoupled from any specific platform. Raw user data is never included in span attributes.
 
-**Consequences:** UserDb takes a dependency on the OpenTelemetry Python SDK (`opentelemetry-sdk`, `opentelemetry-exporter-otlp`). All significant I/O boundaries (LLM calls, storage ops, interface requests) must be instrumented with spans.
+**Consequences:** UDb takes a dependency on the OpenTelemetry Python SDK (`opentelemetry-sdk`, `opentelemetry-exporter-otlp`). All significant I/O boundaries (LLM calls, storage ops, interface requests) must be instrumented with spans.

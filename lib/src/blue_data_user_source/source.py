@@ -32,14 +32,14 @@ class UserSource(DataSource):
     Usage::
 
         us = UserSource({
-            "store": {"backend": "file", "path": "~/.userdb/db.json"},
+            "store": {"backend": "file", "path": "~/.udb/db.json"},
             "schema": "schema.json",
         })
         us.create_database("alice", properties={
-            "registry":        {"backend": "file", "path": "~/.userdb/registries/alice.json"},
-            "kb_source":       {"backend": "file", "directory": "~/.userdb/kb"},
-            "metadata_source": {"backend": "file", "path": "~/.userdb/sources/alice.metadata.json"},
-            "contact_source":  {"backend": "file", "path": "~/.userdb/sources/alice.contacts.json"},
+            "registry":        {"backend": "file", "path": "~/.udb/registries/alice.json"},
+            "kb_source":       {"backend": "file", "directory": "~/.udb/kb"},
+            "metadata_source": {"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
+            "contact_source":  {"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
         })
         results = us.execute_query("skills", database="alice")
     """

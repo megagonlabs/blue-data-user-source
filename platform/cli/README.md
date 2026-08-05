@@ -1,6 +1,6 @@
-# userdb CLI
+# udb CLI
 
-Command-line interface for UserDb — a per-user data store with natural language querying.
+Command-line interface for the user database — a per-user knowledge store with natural language querying.
 
 ## Installation
 
@@ -16,7 +16,7 @@ cd platform/cli && pip install -e .
 
 `click` and `rich` are pulled in automatically as CLI dependencies.
 
-Set your OpenAI API key:
+Set your OpenAI API key if you plan to use extraction or query commands:
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -26,24 +26,27 @@ export OPENAI_API_KEY=sk-...
 
 ```bash
 # Create a database
-userdb user create alice
+udb database create alice
 
-# Register a file as a queryable source (Type 1)
-userdb --user alice import resume.txt
+# Select the active database (saves to ~/.udb/.selected.database)
+udb database select alice
+
+# Register a file as a data source (Type 1)
+udb data source add resume.txt
 
 # Extract and store specific attributes (Type 2)
-userdb --user alice import resume.txt \
+udb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
 # Query — Rich table (default)
-userdb --user alice query "What jobs are suitable for me?"
+udb data query "What jobs are suitable for me?"
 
 # Query — natural language answer
-userdb --user alice query "What jobs are suitable for me?" --format nl
+udb data query "What jobs are suitable for me?" --format nl
 
 # Query — raw JSON
-userdb --user alice query "What jobs are suitable for me?" --format json
+udb data query "What jobs are suitable for me?" --format json
 ```
 
 ## Commands
@@ -51,113 +54,183 @@ userdb --user alice query "What jobs are suitable for me?" --format json
 ### Global options
 
 ```
-userdb [--user USER] [--data-dir DIR] COMMAND
+udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 ```
 
 | Option | Env var | Default | Description |
 |---|---|---|---|
-| `--user USER` | `USERDB_DATABASE` | — | User database ID |
-| `--data-dir DIR` | `USERDB_DATA_DIR` | `~/.userdb` | Directory where database files are stored |
+| `--database NAME` | `UDB_DATABASE` | — | Active database (user) name |
+| `--data-dir DIR` | `UDB_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `--schema-path PATH` | `UDB_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
+
+`--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.
 
 ```bash
-export USERDB_DATABASE=alice
-userdb query "jobs suitable for me"
+export UDB_DATABASE=alice
+udb data query "jobs suitable for me"
 ```
 
 ---
 
-### `userdb query`
+### `udb database`
 
-Execute a natural language query and print results.
+Manage user databases.
 
-```
-userdb query TEXT [--session SESSION_ID] [--format (table|json|nl)]
-```
-
-| Argument / Option | Description |
+| Command | Description |
 |---|---|
-| `TEXT` | Natural language query (required) |
+| `udb database list` | List all registered databases |
+| `udb database create NAME` | Create a new database |
+| `udb database delete NAME` | Delete a database and all its data |
+| `udb database select NAME` | Set the active database |
+| `udb database search KEYWORD` | Search databases by name keyword |
+| `udb database reset` | Clear KB data for the active database and reseed the schema |
+| `udb database config show` | Show stored configuration for the active database |
+
+```bash
+udb database create alice
+udb database select alice
+udb database list
+udb database search ali
+udb database reset --yes
+udb database config show
+udb database delete alice --yes
+```
+
+`database create` options:
+
+| Option | Default | Description |
+|---|---|---|
+| `--kb-backend` | `file` | KB backend: `memory`, `file`, or `neo4j` |
+| `--neo4j-uri` | — | Neo4j bolt URI (neo4j backend only) |
+| `--neo4j-user` | — | Neo4j username |
+| `--neo4j-password` | — | Neo4j password |
+
+---
+
+### `udb data`
+
+Instance data management. All `data` commands require an active database (via `--database` or `udb database select`).
+
+#### `udb data list`
+
+List all entities, property values, and facts in the database.
+
+```
+udb data list [--show-provenance] [--format (table|json)]
+```
+
+#### `udb data query`
+
+Execute a natural-language query against the database's knowledge graph.
+
+```
+udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N]
+```
+
+| Option | Description |
+|---|---|
 | `--session SESSION_ID` | Session ID for query context and user interaction |
 | `--format` | `table` (default) · `json` · `nl` |
-
-**`--format table`** — Rich-formatted table (default)
-
-```bash
-userdb --user alice query "What skills does this user have?"
-```
-
-**`--format json`** — structured JSON array
+| `--top-k N` | Maximum results (default: 10) |
 
 ```bash
-userdb --user alice query "What skills does this user have?" --format json
+udb --database alice data query "What skills does this user have?"
+udb --database alice data query "What jobs are suitable for me?" --format nl
 ```
 
-```json
-[
-  {
-    "query": "What technical skills does the user have?",
-    "results": ["Python", "SQL", "machine learning"]
-  }
-]
+#### `udb data search`
+
+Search entities and facts by keyword or semantic similarity.
+
+```
+udb data search QUERY [--type entity|fact] [--mode keyword|semantic] [--top-k N] [--format (table|json)]
 ```
 
-**`--format nl`** — synthesized natural language answer
+#### `udb data import`
+
+Import instance data previously produced by `udb data export` (KG only). Schema must already exist — run `udb schema import` first.
+
+```
+udb data import INPUT_FILE
+```
+
+#### `udb data export`
+
+Export the database's instance data (entities, facts, property values) as JSON. Does not include schema — use `udb schema export` for that.
+
+```
+udb data export [--show-provenance] [--output FILE]
+```
+
+#### `udb data extract`
+
+Extract entities, facts, and property values from free text using an LLM.
+
+Requires `pip install 'blue-data-kb-source[openai]'` and `OPENAI_API_KEY`.
+
+```
+udb data extract TEXT [--query QUESTION]... [--source NAME] [--model MODEL]
+```
 
 ```bash
-userdb --user alice query "What jobs are suitable for me?" --format nl
-```
-
-```
-Based on your background in project management and technical skills in SQL and Python,
-roles such as Technical Project Manager or Data Analyst would be a strong fit.
+udb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
+  --query "What role does Alice have?"
 ```
 
 ---
 
-### `userdb import`
+### `udb data source`
 
-Import a file into a user database.
+Manage data sources associated with the active database.
 
-```
-userdb import FILE [--query QUERY]...
-```
-
-| Argument / Option | Description |
+| Command | Description |
 |---|---|
-| `FILE` | Path to file (required, must exist) |
-| `--query QUERY` | Query to extract and store (Type 2). Repeat for multiple. Omit for source registration only (Type 1). |
+| `udb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
+| `udb data source add FILE` | Register a file as a source and optionally ingest its content |
+| `udb data source remove NAME` | Remove a source from the registry (KG data is preserved) |
 
 **Type 1 — register source only**
 
 ```bash
-userdb --user alice import resume.txt
-# Registered: resume.txt
+udb data source add resume.txt
+# Registered source: resume.txt
 ```
 
 **Type 2 — extract and store attributes**
 
-Each query is run through the LLM extractor. Results are stored under a schema-style attribute name derived from the query (e.g. `user_skills`, `recent_job_title`).
-
 ```bash
-userdb --user alice import resume.txt \
+udb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "Does the user prefer remote work?"
-# Imported: resume.txt (2 queries)
+# Added source: resume.txt (2 queries)
 ```
+
+**Listing sources**
+
+```bash
+udb data source list
+```
+
+Sources that were added to the knowledge graph but subsequently removed from the registry are shown with a `(*)` marker.
 
 ---
 
-### `userdb user create`
+### `udb schema`
 
-Create a new user database.
+Schema management. All `schema` commands require an active database.
 
-```
-userdb user create NAME
-```
+| Command | Description |
+|---|---|
+| `udb schema list` | List classes, relations, and their properties |
+| `udb schema import INPUT_FILE` | Import a schema (idempotent) |
+| `udb schema export` | Export the schema as JSON |
+| `udb schema search QUERY` | Search schema elements by keyword or semantic similarity |
 
 ```bash
-userdb user create alice
-# Created database: alice
+udb schema list
+udb schema export --output schema.json
+udb schema import schema.json
+udb schema search "employment" --type CLASS
 ```
 
 ---
@@ -167,26 +240,32 @@ userdb user create alice
 | Code | Meaning |
 |---|---|
 | 0 | Success |
-| 1 | `UserDbError` — message printed to stderr |
+| 1 | Error — message printed to stderr |
 | 2 | Bad arguments (Click) |
 
 ---
 
-## Storage
+## Storage layout
 
-Data is persisted under `~/.userdb/<user>/` by default:
+Data is persisted under `~/.udb/` by default:
 
 ```
-~/.userdb/
-└── alice/
-    ├── data.json      # structured attribute entries
-    └── vectors.json   # text entries for semantic search
+~/.udb/
+├── .selected.database     # active database name (written by 'udb database select')
+├── db.json                # user store (list of registered databases)
+├── registries/
+│   └── alice.json         # per-user DataRegistry (list of sources)
+├── kb/
+│   └── alice.json         # per-user knowledge graph (file backend)
+└── sources/
+    ├── alice.metadata.json
+    └── alice.contacts.json
 ```
 
 Use `--data-dir` to store databases elsewhere:
 
 ```bash
-userdb --data-dir /tmp/demo user create alice
-userdb --data-dir /tmp/demo --user alice import resume.txt --query "What skills?"
-userdb --data-dir /tmp/demo --user alice query "jobs suitable for me"
+udb --data-dir /tmp/demo database create alice
+udb --data-dir /tmp/demo --database alice data source add resume.txt --query "What skills?"
+udb --data-dir /tmp/demo --database alice data query "jobs suitable for me"
 ```

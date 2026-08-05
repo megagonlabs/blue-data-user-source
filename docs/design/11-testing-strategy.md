@@ -1,8 +1,8 @@
-# UserDb — Testing Strategy
+# UDb — Testing Strategy
 
 ## Overview
 
-UserDb uses a single test tier: **unit tests**. All I/O boundaries are doubled — storage backends via in-memory test doubles, LLM calls via recorded responses. Unit tests run on every push in CI.
+UDb uses a single test tier: **unit tests**. All I/O boundaries are doubled — storage backends via in-memory test doubles, LLM calls via recorded responses. Unit tests run on every push in CI.
 
 ---
 

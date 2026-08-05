@@ -1,6 +1,6 @@
 # blue-data-user-source
 
-Python library for UserDb — a multi-user knowledge base with natural language querying, LLM-based extraction, and interactive data quality assurance.
+Python library for UDb — a multi-user knowledge base with natural language querying, LLM-based extraction, and interactive data quality assurance.
 
 Backed by [blue-data](../blue-data) and [blue-data-kb-source](../blue-data-kb-source).
 
@@ -39,7 +39,7 @@ from blue_data_user_source import UserSource, FileSource
 
 # File-backed (survives process restarts)
 us = UserSource({
-    "store": {"backend": "file", "path": "~/.userdb/users.json"},
+    "store": {"backend": "file", "path": "~/.udb/users.json"},
     "schema": "data/schema.json",   # optional — used when seeding/resetting users
 })
 
@@ -56,14 +56,14 @@ async def main() -> None:
     # Create user — builds registry + KB from scratch, seeds schema
     await us.create_user(
         "alice",
-        registry_props={"backend": "file", "path": "~/.userdb/registries/alice.json"},
-        kb_props={"backend": "file", "directory": "~/.userdb/kb"},
+        registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
+        kb_props={"backend": "file", "directory": "~/.udb/kb"},
     )
 
     # Add user — connects to an existing registry that already has a KB registered
     us.add_user(
         "bob",
-        registry_props={"backend": "file", "path": "~/.userdb/registries/bob.json"},
+        registry_props={"backend": "file", "path": "~/.udb/registries/bob.json"},
     )
 
     print(us.list_users())       # ["alice", "bob"]
@@ -86,8 +86,8 @@ asyncio.run(main())
 async def main() -> None:
     await us.create_user(
         "alice",
-        registry_props={"backend": "file", "path": "~/.userdb/registries/alice.json"},
-        kb_props={"backend": "file", "directory": "~/.userdb/kb"},
+        registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
+        kb_props={"backend": "file", "directory": "~/.udb/kb"},
     )
 
     # Type 1 — register a file as a queryable source (no extraction)
@@ -148,7 +148,7 @@ Constructs a multi-user source from a props dict.
 `registry_props` — JSONSource config for the user's own DataRegistry:
 
 ```python
-{"backend": "file", "path": "~/.userdb/registries/alice.json"}
+{"backend": "file", "path": "~/.udb/registries/alice.json"}
 {"backend": "memory"}
 ```
 
@@ -156,7 +156,7 @@ Constructs a multi-user source from a props dict.
 
 ```python
 {"backend": "memory"}
-{"backend": "file", "directory": "~/.userdb/kb"}
+{"backend": "file", "directory": "~/.udb/kb"}
 {"backend": "neo4j", "uri": "bolt://localhost:7687", "username": "neo4j", "password": "..."}
 # optional: include schema_path to override the UserSource-level default
 {"backend": "file", "directory": "...", "schema_path": "custom_schema.json"}
@@ -217,7 +217,7 @@ Runs entirely in-process. Data is lost on exit — useful for testing and short-
 Persists data to JSON files in a directory — one file per user database.
 
 ```python
-{"backend": "file", "directory": "~/.userdb/kb"}
+{"backend": "file", "directory": "~/.udb/kb"}
 ```
 
 ### Neo4j
@@ -248,7 +248,7 @@ The JSON file is consumed by `KBSource.import_database_schema` (entity and relat
 ## CLI
 
 ```
-userdb [--user NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+udb [--user NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 Commands:
   query TEXT          Execute a query
@@ -261,7 +261,7 @@ Commands:
   user show metadata  Show source metadata
 ```
 
-User data is stored under `~/.userdb/` by default: `users.json` holds user entries; `kb/` holds per-user graph data (file backend).
+User data is stored under `~/.udb/` by default: `users.json` holds user entries; `kb/` holds per-user graph data (file backend).
 
 ## Running tests
 
@@ -279,7 +279,7 @@ lib/
 │   └── blue_data_user_source/
 │       ├── __init__.py            # public exports
 │       ├── source.py              # UserSource — main entry point (multi-user)
-│       ├── types.py               # QueryResult, UserDbError hierarchy
+│       ├── types.py               # QueryResult, UDbError hierarchy
 │       ├── sources/
 │       │   └── file.py            # FileSource
 │       ├── reasoning/

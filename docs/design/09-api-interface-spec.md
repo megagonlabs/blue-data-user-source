@@ -1,4 +1,4 @@
-# UserDb — API / Interface Spec
+# UDb — API / Interface Spec
 
 All four external interfaces are thin adapters over the Python library. No business logic belongs in any interface layer. Authentication and authorization are left to the deployment layer.
 
@@ -77,7 +77,7 @@ class QueryResult:
 
 ### Exceptions
 
-All exceptions inherit from `UserDbError` (defined in `types.py`).
+All exceptions inherit from `UDbError` (defined in `types.py`).
 
 | Exception | Raised when |
 |-----------|-------------|
@@ -224,7 +224,7 @@ All errors use a consistent envelope:
 | 422 | `import_error` | Import failed |
 | 500 | `internal_error` | Unexpected failure |
 
-FastAPI exception handlers catch `UserDbError` subtypes and map them to these responses. No error handling logic lives in route handlers.
+FastAPI exception handlers catch `UDbError` subtypes and map them to these responses. No error handling logic lives in route handlers.
 
 ---
 
@@ -261,7 +261,7 @@ Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; 
 
 **Returns:** JSON text content — array of `{"query": "...", "results": [...]}` objects, one per resolved sub-question.
 
-**On error:** structured MCP error content containing the `UserDbError` message.
+**On error:** structured MCP error content containing the `UDbError` message.
 
 ---
 
@@ -301,24 +301,24 @@ Exposes two MCP tools. Tool handlers are thin wrappers over the Python library; 
 
 Built with Click (argument parsing) and Rich (output). All commands are thin wrappers over the Python library; Click handlers use `asyncio.run()` to call async library methods.
 
-A default database may be configured via environment variable `USERDB_DATABASE`.
+A default database may be configured via environment variable `UDB_DATABASE`.
 
 ### Global options
 
 ```
-userdb [--database DB] COMMAND
+udb [--database DB] COMMAND
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--database DB` | User database ID. Overrides `USERDB_DATABASE` if set. |
+| `--database DB` | User database ID. Overrides `UDB_DATABASE` if set. |
 
 ---
 
-### `userdb query`
+### `udb query`
 
 ```
-userdb query TEXT [--session SESSION_ID] [--format (table|json)]
+udb query TEXT [--session SESSION_ID] [--format (table|json)]
 ```
 
 Executes a natural language query and prints results.
@@ -332,7 +332,7 @@ Executes a natural language query and prints results.
 **Example**
 
 ```
-$ userdb query "jobs suitable for me" --format table
+$ udb query "jobs suitable for me" --format table
 
 ┌─────────────────────────────────────┬──────────────────────────────┐
 │ Query                               │ Results                      │
@@ -344,10 +344,10 @@ $ userdb query "jobs suitable for me" --format table
 
 ---
 
-### `userdb import`
+### `udb import`
 
 ```
-userdb import FILE [--query QUERY]...
+udb import FILE [--query QUERY]...
 ```
 
 Imports a file. `--query` may be repeated.
@@ -360,23 +360,23 @@ Imports a file. `--query` may be repeated.
 **Example — Type 1**
 
 ```
-$ userdb import ~/resume.txt
+$ udb import ~/resume.txt
 Registered: ~/resume.txt
 ```
 
 **Example — Type 2**
 
 ```
-$ userdb import ~/resume.txt --query "What skills does the user have?" --query "What is the user's most recent job title?"
+$ udb import ~/resume.txt --query "What skills does the user have?" --query "What is the user's most recent job title?"
 Imported: ~/resume.txt (2 queries)
 ```
 
 ---
 
-### `userdb database create`
+### `udb database create`
 
 ```
-userdb database create NAME
+udb database create NAME
 ```
 
 Creates a new user database.
@@ -384,7 +384,7 @@ Creates a new user database.
 **Example**
 
 ```
-$ userdb database create 5WgRzdacRdOEvj8JBmCXFZSvWmH3
+$ udb database create 5WgRzdacRdOEvj8JBmCXFZSvWmH3
 Created database: 5WgRzdacRdOEvj8JBmCXFZSvWmH3
 ```
 
@@ -395,5 +395,5 @@ Created database: 5WgRzdacRdOEvj8JBmCXFZSvWmH3
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | `UserDbError` — message printed via Rich to stderr |
+| 1 | `UDbError` — message printed via Rich to stderr |
 | 2 | Bad arguments (Click default) |

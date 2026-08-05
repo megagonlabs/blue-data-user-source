@@ -1,8 +1,8 @@
-# UserDb — Data Model
+# UDb — Data Model
 
 ## Overview
 
-UserDb maintains two parallel per-user stores:
+UDb maintains two parallel per-user stores:
 
 - **JSONSource** — structured key-value store; holds both user metadata and user data entries; supports JSONPath queries
 - **VectorSource** — semantic key-value store; mirrors user data entries only; supports vector similarity search

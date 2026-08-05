@@ -269,6 +269,6 @@ async def test_factory_stores_are_isolated_per_database(tmp_path: Path) -> None:
 def test_factory_expands_tilde_in_base_dir(tmp_path: Path) -> None:
     import os
     os.environ["HOME"] = str(tmp_path)
-    factory = file_store_factory("~/userdb")
+    factory = file_store_factory("~/udb")
     factory("db")
-    assert (tmp_path / "userdb" / "db").is_dir()
+    assert (tmp_path / "udb" / "db").is_dir()

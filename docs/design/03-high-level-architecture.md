@@ -1,4 +1,4 @@
-# UserDb — High Level Architecture
+# UDb — High Level Architecture
 
 > Reference image: `03-high-level-architecture.png`
 
@@ -14,7 +14,7 @@
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                                   UserDb                                     │
+│                                   UDb                                     │
 │                                                                              │
 │  ┌──────────────────────────────┐   ┌──────────────────────────────────────┐ │
 │  │  Natural Language Query      │   │        Data Management Layer         │ │
@@ -56,18 +56,18 @@
 
 ### External Interfaces
 
-Four interface adapters sit in front of UserDb and delegate to the Natural Language Query Interface. They share no internal logic — each is a thin translation layer over the Python library.
+Four interface adapters sit in front of UDb and delegate to the Natural Language Query Interface. They share no internal logic — each is a thin translation layer over the Python library.
 
-**Python Library** — Native Python API (`UserSource` and related classes). Used to embed UserDb directly in Python applications.
+**Python Library** — Native Python API (`UserSource` and related classes). Used to embed UDb directly in Python applications.
 
-**MCP Server** — Exposes `execute_query` and `import` as MCP tools, enabling LLM agents to interact with UserDb within an agentic context.
+**MCP Server** — Exposes `execute_query` and `import` as MCP tools, enabling LLM agents to interact with UDb within an agentic context.
 
-**REST API** — HTTP/JSON interface (FastAPI). Enables non-Python services and remote clients to call UserDb over the network.
+**REST API** — HTTP/JSON interface (FastAPI). Enables non-Python services and remote clients to call UDb over the network.
 
 **CLI** — Command-line interface (Click + Rich). Used for interactive development, debugging, and scripting.
 
 ### Natural Language Query Interface
-The entry point for all retrieval from UserDb. Accepts natural language queries from agents.
+The entry point for all retrieval from UDb. Accepts natural language queries from agents.
 
 - All retrieval is expressed as natural language queries
 - Ingestion may optionally accompany a query; when it does, the ingested data is evaluated against the query and relevant data is extracted

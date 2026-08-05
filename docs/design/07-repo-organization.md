@@ -1,4 +1,4 @@
-# UserDb — Repo Organization
+# UDb — Repo Organization
 
 ## Directory Tree
 
@@ -8,7 +8,7 @@ blue-data-user-source/
 ├── docs/
 │   └── design/                          # design documents
 │
-├── lib/                                 # Python library (userdb PyPI package)
+├── lib/                                 # Python library (udb PyPI package)
 │   ├── pyproject.toml                   # package metadata, dependencies, tool config
 │   ├── scripts/
 │   │   ├── build.sh                     # build the distribution package

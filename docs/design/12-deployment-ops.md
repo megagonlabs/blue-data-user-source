@@ -1,19 +1,19 @@
-# UserDb — Deployment / Ops
+# UDb — Deployment / Ops
 
 ## Overview
 
-UserDb is distributed in two forms:
+UDb is distributed in two forms:
 
-- **PyPI package** (`userdb`) — the Python library, for embedding UserDb in other Python applications
-- **Docker image** (`userdb-server`) — packages the REST API and MCP server for standalone deployment
+- **PyPI package** (`udb`) — the Python library, for embedding UDb in other Python applications
+- **Docker image** (`udb-server`) — packages the REST API and MCP server for standalone deployment
 
-Production deployments are self-hosted. Operators provision and manage their own storage backends and observability infrastructure. UserDb emits to standard interfaces and does not assume any specific platform.
+Production deployments are self-hosted. Operators provision and manage their own storage backends and observability infrastructure. UDb emits to standard interfaces and does not assume any specific platform.
 
 ---
 
 ## 1. Versioning
 
-UserDb follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Version is declared once in `pyproject.toml` and read from there by all build tooling.
+UDb follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Version is declared once in `pyproject.toml` and read from there by all build tooling.
 
 - **PATCH** — bug fixes, no interface changes
 - **MINOR** — backwards-compatible new features
@@ -23,20 +23,20 @@ UserDb follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
 ## 2. PyPI Package
 
-The `userdb` package exposes the Python library (`UserSource` and related classes). It does not include the REST API, MCP server, or CLI by default. Those are available as optional extras:
+The `udb` package exposes the Python library (`UserSource` and related classes). It does not include the REST API, MCP server, or CLI by default. Those are available as optional extras:
 
 ```
-pip install userdb               # library only
-pip install userdb[server]       # library + REST API + MCP server
-pip install userdb[cli]          # library + CLI
-pip install userdb[all]          # everything
+pip install udb               # library only
+pip install udb[server]       # library + REST API + MCP server
+pip install udb[cli]          # library + CLI
+pip install udb[all]          # everything
 ```
 
 ---
 
 ## 3. Docker Image
 
-The `userdb-server` image runs both the REST API (Uvicorn/FastAPI) and the MCP server as a combined process. The image is published to a container registry alongside each release.
+The `udb-server` image runs both the REST API (Uvicorn/FastAPI) and the MCP server as a combined process. The image is published to a container registry alongside each release.
 
 | Port | Service |
 |------|---------|
@@ -53,21 +53,21 @@ The `userdb-server` image runs both the REST API (Uvicorn/FastAPI) and the MCP s
 
 ## 4. Storage Backends
 
-UserDb does not bundle or manage storage backends. The operator provisions:
+UDb does not bundle or manage storage backends. The operator provisions:
 
 - A **JSON backend** (e.g., Redis, MongoDB) and provides its connection details via environment variables
 - A **Vector backend** (e.g., ChromaDB) and provides its connection details via environment variables
 
-Both backends must be available before UserDb starts. UserDb will fail at startup if a backend is unreachable.
+Both backends must be available before UDb starts. UDb will fail at startup if a backend is unreachable.
 
 ### Reference docker-compose
 
-A `docker-compose.yml` is provided in the repository root for local development and operator reference. It starts UserDb alongside minimal backend instances.
+A `docker-compose.yml` is provided in the repository root for local development and operator reference. It starts UDb alongside minimal backend instances.
 
 ```yaml
 services:
-  userdb:
-    image: userdb-server:latest
+  udb:
+    image: udb-server:latest
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -97,44 +97,44 @@ All configuration is via environment variables. There are no configuration files
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `USERDB_DATABASE` | No | — | Default user database ID used when none is specified per request |
+| `UDB_DATABASE` | No | — | Default user database ID used when none is specified per request |
 
 ### Storage
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `USERDB_JSON_BACKEND_URL` | Yes | Connection URL for the JSON backend (e.g., `redis://localhost:6379`) |
-| `USERDB_VECTOR_BACKEND_URL` | Yes | Connection URL for the Vector backend (e.g., `http://localhost:8002`) |
+| `UDB_JSON_BACKEND_URL` | Yes | Connection URL for the JSON backend (e.g., `redis://localhost:6379`) |
+| `UDB_VECTOR_BACKEND_URL` | Yes | Connection URL for the Vector backend (e.g., `http://localhost:8002`) |
 
 ### LLM and Embeddings
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes (default provider) | API key for the LLM and embedding model provider |
-| `USERDB_LLM_MODEL` | No | LLM model name (default: `gpt-4o`) |
-| `USERDB_EMBED_MODEL` | No | Embedding model name (default: `text-embedding-3-small`) |
+| `UDB_LLM_MODEL` | No | LLM model name (default: `gpt-4o`) |
+| `UDB_EMBED_MODEL` | No | Embedding model name (default: `text-embedding-3-small`) |
 
 ### Server
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `USERDB_REST_PORT` | No | `8000` | Port for the REST API |
-| `USERDB_MCP_PORT` | No | `8001` | Port for the MCP server |
-| `USERDB_REST_ENABLED` | No | `true` | Set to `false` to disable the REST API |
-| `USERDB_MCP_ENABLED` | No | `true` | Set to `false` to disable the MCP server |
+| `UDB_REST_PORT` | No | `8000` | Port for the REST API |
+| `UDB_MCP_PORT` | No | `8001` | Port for the MCP server |
+| `UDB_REST_ENABLED` | No | `true` | Set to `false` to disable the REST API |
+| `UDB_MCP_ENABLED` | No | `true` | Set to `false` to disable the MCP server |
 
 ### Observability
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | OpenTelemetry collector endpoint; tracing disabled if unset |
-| `OTEL_SERVICE_NAME` | No | `userdb` | Service name reported in traces and metrics |
+| `OTEL_SERVICE_NAME` | No | `udb` | Service name reported in traces and metrics |
 
 ---
 
 ## 6. Observability
 
-UserDb emits structured logs, metrics, and traces. Operators wire these into their own observability stack.
+UDb emits structured logs, metrics, and traces. Operators wire these into their own observability stack.
 
 ### Structured Logging
 
@@ -148,11 +148,11 @@ Metrics are exposed via a Prometheus-compatible `/metrics` endpoint on the REST 
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `userdb_requests_total` | Counter | Total requests by operation (`query`, `import`) and status |
-| `userdb_request_duration_seconds` | Histogram | End-to-end request latency |
-| `userdb_llm_calls_total` | Counter | LLM API calls by component and status |
-| `userdb_llm_duration_seconds` | Histogram | LLM call latency |
-| `userdb_storage_ops_total` | Counter | Storage operations by store (`json`, `vector`), op type, and status |
+| `udb_requests_total` | Counter | Total requests by operation (`query`, `import`) and status |
+| `udb_request_duration_seconds` | Histogram | End-to-end request latency |
+| `udb_llm_calls_total` | Counter | LLM API calls by component and status |
+| `udb_llm_duration_seconds` | Histogram | LLM call latency |
+| `udb_storage_ops_total` | Counter | Storage operations by store (`json`, `vector`), op type, and status |
 
 ### Tracing
 

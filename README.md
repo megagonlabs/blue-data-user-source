@@ -17,7 +17,7 @@ blue-data-user-source/
 │   ├── src/blue_data_user_source/
 │   └── tests/
 ├── platform/
-│   └── cli/               # Command-line interface (userdb)
+│   └── cli/               # Command-line interface (udb)
 │       ├── src/blue_data_user_cli/
 │       └── tests/
 └── docs/design/           # Architecture and design documents
@@ -42,18 +42,18 @@ cd lib && pip install -e . && cd ..
 cd platform/cli && pip install -e . && cd ../..
 
 # Create a database
-userdb user create alice
+udb user create alice
 
 # Import a file — extract specific attributes (Type 2)
-userdb --user alice import resume.txt \
+udb --user alice import resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
 # Query — structured output (default)
-userdb --user alice query "What jobs are suitable for me?"
+udb --user alice query "What jobs are suitable for me?"
 
 # Query — natural language answer
-userdb --user alice query "What jobs are suitable for me?" --format nl
+udb --user alice query "What jobs are suitable for me?" --format nl
 ```
 
 ## Packages
@@ -61,4 +61,4 @@ userdb --user alice query "What jobs are suitable for me?" --format nl
 | Package | Description |
 |---|---|
 | [lib/](lib/README.md) | `blue-data-user-source` — core Python library |
-| [platform/cli/](platform/cli/README.md) | `blue-data-user-cli` — `userdb` CLI |
+| [platform/cli/](platform/cli/README.md) | `blue-data-user-cli` — `udb` CLI |

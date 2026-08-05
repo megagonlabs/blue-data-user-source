@@ -1,4 +1,4 @@
-# UserDb — Coding Style
+# UDb — Coding Style
 
 ## Tooling
 
@@ -148,18 +148,18 @@ expanded = await self.expand_query(query)
 
 ## Error Handling
 
-A `UserDbError` base exception is defined in `types.py`. All custom exceptions inherit from it.
+A `UDbError` base exception is defined in `types.py`. All custom exceptions inherit from it.
 
 ```python
-class UserDbError(Exception): ...
-class QueryError(UserDbError): ...
-class ImportError(UserDbError): ...  # noqa: A001
-class InteractionError(UserDbError): ...
+class UDbError(Exception): ...
+class QueryError(UDbError): ...
+class ImportError(UDbError): ...  # noqa: A001
+class InteractionError(UDbError): ...
 ```
 
 - Do not catch and swallow exceptions silently.
 - Let exceptions propagate to interface boundaries, where each interface handles them appropriately:
-  - **REST API** — FastAPI exception handlers convert `UserDbError` subtypes to HTTP responses.
-  - **MCP server** — tool handlers catch `UserDbError` and return structured error responses.
-  - **CLI** — top-level Click error handler renders `UserDbError` messages via Rich.
+  - **REST API** — FastAPI exception handlers convert `UDbError` subtypes to HTTP responses.
+  - **MCP server** — tool handlers catch `UDbError` and return structured error responses.
+  - **CLI** — top-level Click error handler renders `UDbError` messages via Rich.
 - Only catch specific exception types; never bare `except:` or `except Exception:`.

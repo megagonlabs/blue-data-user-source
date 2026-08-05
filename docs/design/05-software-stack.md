@@ -1,4 +1,4 @@
-# UserDb — Software Stack
+# UDb — Software Stack
 
 > Interfaces marked **provisional** are initial suggestions based on expected usage patterns. They will be revised once the respective library is installed and inspected.
 
@@ -22,7 +22,7 @@
 | Abstraction layer | LlamaIndex (`llama-index-core`) |
 | Initial provider | OpenAI (`llama-index-llms-openai`) |
 
-LlamaIndex is used to provide a provider-agnostic LLM interface. All LLM calls within UserDb go through the LlamaIndex `LLM` abstraction, making it straightforward to swap providers without changing application code.
+LlamaIndex is used to provide a provider-agnostic LLM interface. All LLM calls within UDb go through the LlamaIndex `LLM` abstraction, making it straightforward to swap providers without changing application code.
 
 **LlamaIndex classes used:**
 
@@ -47,7 +47,7 @@ Settings.llm = OpenAI(model="gpt-4o")
 
 ## Storage
 
-Both storage backends are provided by `blue-data-core`. UserDb interacts only with their abstract interfaces and does not depend on any specific backend implementation.
+Both storage backends are provided by `blue-data-core`. UDb interacts only with their abstract interfaces and does not depend on any specific backend implementation.
 
 ### JSONSource
 
@@ -95,7 +95,7 @@ FastAPI provides automatic OpenAPI schema generation and async request handling.
 |---------|--------|
 | Library | `mcp` (official MCP Python SDK) |
 
-Exposes UserDb operations as MCP tools for consumption by LLM agents. The `mcp` package provides the server scaffolding; tool handlers delegate directly to the Python library.
+Exposes UDb operations as MCP tools for consumption by LLM agents. The `mcp` package provides the server scaffolding; tool handlers delegate directly to the Python library.
 
 ### CLI
 
@@ -112,7 +112,7 @@ Click handles command routing and argument parsing. Rich provides formatted term
 
 ### blue-data-core
 
-Provides base classes and storage backends consumed by UserDb. Assumed to exist; interfaces below are provisional and will be revised once the library is installed.
+Provides base classes and storage backends consumed by UDb. Assumed to exist; interfaces below are provisional and will be revised once the library is installed.
 
 **Provisional classes:**
 

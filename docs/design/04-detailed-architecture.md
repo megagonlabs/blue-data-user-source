@@ -1,4 +1,4 @@
-# UserDb — Detailed Architecture
+# UDb — Detailed Architecture
 
 ## External Interfaces
 
@@ -6,7 +6,7 @@ All four interfaces are thin adapters over the Python library. They each ultimat
 
 | Interface | Technology | Primary Use |
 |-----------|-----------|-------------|
-| Python Library | Native Python API | Embedding UserDb in Python applications |
+| Python Library | Native Python API | Embedding UDb in Python applications |
 | MCP Server | MCP protocol | LLM agent tool use (e.g. Claude) |
 | REST API | FastAPI (HTTP/JSON) | Non-Python consumers and microservice deployments |
 | CLI | Click + Rich | Development, debugging, and scripting |
@@ -17,11 +17,11 @@ All four interfaces are thin adapters over the Python library. They each ultimat
 
 ### MCP Server
 
-Exposes `execute_query` and `import` as MCP tools, allowing LLM agents to query and populate UserDb directly within an agentic context.
+Exposes `execute_query` and `import` as MCP tools, allowing LLM agents to query and populate UDb directly within an agentic context.
 
 ### REST API
 
-HTTP interface built with FastAPI. Endpoints map 1:1 to `execute_query` and `import`. Enables non-Python services and remote clients to interact with UserDb.
+HTTP interface built with FastAPI. Endpoints map 1:1 to `execute_query` and `import`. Enables non-Python services and remote clients to interact with UDb.
 
 ### CLI
 
@@ -59,7 +59,7 @@ Entity extraction from an uploaded file (e.g., resume parsing) is an instance of
 
 ## 1. Natural Language Query Interface (NLQI)
 
-The NLQI layer is the entry point for all requests to UserDb. It receives and routes incoming requests without performing query interpretation itself.
+The NLQI layer is the entry point for all requests to UDb. It receives and routes incoming requests without performing query interpretation itself.
 
 ### Responsibilities
 
@@ -340,7 +340,7 @@ Executes plans produced by the Query Planner.
 
 ### Source Manager
 
-Maintains the registry of all data sources available for a user. Serves as the UserDb-specific data registry (referred to as "Registry" in the High Level Architecture).
+Maintains the registry of all data sources available for a user. Serves as the UDb-specific data registry (referred to as "Registry" in the High Level Architecture).
 
 **Responsibilities**
 

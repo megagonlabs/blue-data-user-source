@@ -1,4 +1,4 @@
-# UserDb — Library
+# UDb — Library
 
 > External dependencies: `blue-data-core` provides `DataSource`, `FileSource`, `SessionSource`, `Session`, `DataPlanner`, `DataRegistry`, and related base classes.
 
@@ -6,7 +6,7 @@
 
 ## UserSource(DataSource)
 
-Entry point for all UserDb operations. Holds a `UserQueryReasoner` for reasoning and a `UserDataManager` for data operations.
+Entry point for all UDb operations. Holds a `UserQueryReasoner` for reasoning and a `UserDataManager` for data operations.
 
 ### Constructor
 

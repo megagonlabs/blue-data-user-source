@@ -52,5 +52,5 @@ MANIFEST
 Thumbs.db
 
 # User database files
-*.userdb
-~/.userdb/
+*.udb
+~/.udb/

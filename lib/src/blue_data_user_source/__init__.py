@@ -5,7 +5,7 @@ from blue_data_user_source.types import (
     InteractionError,
     QueryError,
     QueryResult,
-    UserDbError,
+    UDbError,
 )
 
 __all__ = [
@@ -14,6 +14,6 @@ __all__ = [
     "InteractionError",
     "QueryError",
     "QueryResult",
-    "UserDbError",
+    "UDbError",
     "UserSource",
 ]
