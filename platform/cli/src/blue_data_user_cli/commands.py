@@ -716,7 +716,12 @@ def source_list(obj: dict, fmt: str) -> None:
         sys.exit(1)
 
     rows: list[dict] = [
-        {"name": r.get("name", ""), "location": "", "in_registry": True}
+        {
+            "name": r.get("name", ""),
+            "location": (r.get("properties") or {}).get("connection", {}).get("path", ""),
+            "description": r.get("description", ""),
+            "in_registry": True,
+        }
         for r in reg_records
     ]
     for ks in kg_sources:
@@ -725,6 +730,7 @@ def source_list(obj: dict, fmt: str) -> None:
             rows.append({
                 "name": name,
                 "location": ks.get("source", ks.get("location", "")),
+                "description": "",
                 "in_registry": False,
             })
 
@@ -737,10 +743,11 @@ def source_list(obj: dict, fmt: str) -> None:
     t = Table(show_header=True, header_style="bold")
     t.add_column("Name", style="bold")
     t.add_column("Location", style="dim")
+    t.add_column("Description")
     t.add_column("", max_width=5)
     for row in rows:
         marker = "[dim](*)[/dim]" if not row["in_registry"] else ""
-        t.add_row(row["name"], row["location"], marker)
+        t.add_row(row["name"], row["location"], row["description"], marker)
     console.print(t)
 
 

@@ -299,10 +299,20 @@ class UserDataManager:
         name: str | None = None,
         description: str | None = None,
     ) -> None:
-        """Register a source location in the KB and optionally ingest content via queries."""
+        """Register a source location in the KB and the registry, then optionally ingest content."""
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
         source_id = await kb.add_source(self._database, location, name=name, description=description)
+
+        registry_name = name or location
+        self._registry.register_record(
+            name=registry_name,
+            type="source",
+            scope="/",
+            description=description or "",
+            properties={"connection": {"backend": "file", "path": location}, "source_id": source_id},
+        )
+
         if queries:
             for query in queries:
                 raw = await source.query(query)
