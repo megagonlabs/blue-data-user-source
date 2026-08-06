@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,13 +55,11 @@ class CompletenessMetric(UserDataMetric):
             "On a scale of 0.0 to 1.0, how complete is this result set for answering "
             'the query? Reply with a JSON object: {"score": <float>, "reasoning": <string>}'
         )
-        response = await _llm_complete(prompt)
-        try:
-            parsed = json.loads(response)
-        except (json.JSONDecodeError, ValueError):
-            parsed = {}
-        score: float = float(parsed.get("score", 0.0))
-        reasoning: str = str(parsed.get("reasoning", ""))
+        print(f"CompletenessMetric.evaluate: prompt={prompt}")
+        parsed = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        print(f"CompletenessMetric.evaluate: parsed={parsed}")
+        score: float = float(parsed.get("score", 0.0)) if isinstance(parsed, dict) else 0.0
+        reasoning: str = str(parsed.get("reasoning", "")) if isinstance(parsed, dict) else ""
         return MetricEvaluation(
             name="completeness",
             score=score,

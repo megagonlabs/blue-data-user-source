@@ -16,17 +16,49 @@ if TYPE_CHECKING:
     from blue_data_user_source.types import QueryResult
 
 
-async def _llm_complete(prompt: str, model: str = "gpt-4o") -> str:
+def _strip_json_fences(text: str) -> str:
+    """Remove markdown ```json … ``` fences that models sometimes add."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[: text.rfind("```")]
+    return text.strip()
+
+
+async def _llm_complete(
+    prompt: str,
+    model: str = "gpt-4o",
+    properties: dict | None = None,
+) -> str | dict:
+    """Call the LLM and return a string or parsed dict.
+
+    Pass ``properties={"response_format": "json_object"}`` to request a JSON
+    object response.  The OpenAI ``response_format`` parameter is set
+    accordingly and the returned value is a parsed ``dict`` rather than a
+    string.  For plain-text calls the return value is ``str``.
+    """
+    props = properties or {}
+    want_json = props.get("response_format") == "json_object"
     try:
         from openai import AsyncOpenAI
         client = AsyncOpenAI()
-        resp = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.choices[0].message.content or ""
+        kwargs: dict = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if want_json:
+            kwargs["response_format"] = {"type": "json_object"}
+        resp = await client.chat.completions.create(**kwargs)
+        content = resp.choices[0].message.content or ""
+        if want_json:
+            try:
+                return json.loads(_strip_json_fences(content))
+            except (json.JSONDecodeError, ValueError):
+                return {}
+        return content
     except Exception:
-        return ""
+        return {} if want_json else ""
 
 
 class UserQueryReasoner:
@@ -61,14 +93,11 @@ class UserQueryReasoner:
             f"Given this query about a user's personal data: \"{query}\"\n"
             "List 3-5 specific supplemental questions that would help answer the original query. "
             "If the original query is already specific, return it as the only item. "
-            "Return a JSON array of question strings only."
+            'Return a JSON object: {"questions": ["<question>", ...]}'
         )
-        response = await _llm_complete(prompt)
-        try:
-            questions: list[str] = json.loads(response.strip())
-        except (json.JSONDecodeError, ValueError):
-            questions = [query]
-        return questions
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        questions = result.get("questions", []) if isinstance(result, dict) else []
+        return questions if questions else [query]
 
     async def assess_query_results(
         self,
@@ -89,6 +118,8 @@ class UserQueryReasoner:
         query_results_metadata: dict[str, Any],
         user_data_metric_evaluation: list[MetricEvaluation],
     ) -> bool:
+        for m in user_data_metric_evaluation:
+            print(f"Metric {m.name}: score={m.score}, passes={m.passes}, reasoning={m.reasoning}")
         return any(not m.passes for m in user_data_metric_evaluation)
 
     async def request_user_interaction(
