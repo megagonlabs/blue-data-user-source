@@ -1000,3 +1000,206 @@ def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_
     for r in results:
         t.add_row(r.type, r.name, r.description or "")
     console.print(t)
+
+
+# ------------------------------------------------------------------ #
+# udb metadata                                                        #
+# ------------------------------------------------------------------ #
+
+_METADATA_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent.parent.parent / \
+    "lib" / "src" / "blue_data_user_source" / "data" / "metadata_schema.json"
+
+def _load_metadata_schema() -> dict:
+    try:
+        import importlib.resources as _ir
+        with _ir.files("blue_data_user_source.data").joinpath("metadata_schema.json").open() as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+_METADATA_SCHEMA: dict = _load_metadata_schema()
+
+
+def _parse_metadata_value(raw: str) -> Any:
+    """Try JSON first so lists/booleans/numbers work; fall back to plain string."""
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return raw
+
+
+def _print_metadata_node(key: str, value: Any, indent: int = 0) -> None:
+    pad = "  " * indent
+    if isinstance(value, dict):
+        console.print(f"{pad}[bold]{key}[/bold]")
+        for k, v in value.items():
+            _print_metadata_node(k, v, indent + 1)
+    elif isinstance(value, list):
+        console.print(f"{pad}[bold]{key}[/bold]  [dim]{json.dumps(value)}[/dim]")
+    else:
+        console.print(f"{pad}[bold]{key}[/bold]  {value}")
+
+
+@cli.group("metadata")
+def metadata_group() -> None:
+    """User metadata for agents acting on your behalf."""
+
+
+@metadata_group.command("list")
+@click.argument("path", nargs=-1)
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
+@click.pass_obj
+def metadata_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
+    """List metadata at the given path, or top-level categories if no path given.
+
+    Examples:
+
+    \b
+      udb metadata list
+      udb metadata list identity
+      udb metadata list policy
+    """
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        all_meta: dict[str, Any] = source.list_metadata(db)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    node: Any = all_meta
+    dotted = ".".join(path)
+    for i, segment in enumerate(path):
+        if not isinstance(node, dict) or segment not in node:
+            # Known schema category with no data yet — show empty schema skeleton
+            if i == 0 and segment in _METADATA_SCHEMA:
+                node = {}
+                break
+            err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
+            sys.exit(1)
+        node = node[segment]
+
+    if fmt == "json":
+        console.print_json(json.dumps(node))
+        return
+
+    if not path:
+        # Top-level: merge stored keys with schema categories
+        categories = dict.fromkeys(list(_METADATA_SCHEMA.keys()) + list(all_meta.keys()))
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Category", style="bold")
+        t.add_column("Keys set", style="dim", justify="right")
+        t.add_column("Description", style="dim")
+        for cat in categories:
+            stored = all_meta.get(cat)
+            schema_cat = _METADATA_SCHEMA.get(cat, {})
+            desc = schema_cat.get("__description__", "")
+            count = sum(1 for k, v in (stored or {}).items() if v is not None) if isinstance(stored, dict) else (1 if stored is not None else 0)
+            t.add_row(cat, str(count) if count else "[dim]—[/dim]", desc)
+        console.print(t)
+        return
+
+    if isinstance(node, dict):
+        schema_cat = _METADATA_SCHEMA.get(path[0], {}) if len(path) == 1 else {}
+        schema_keys = {k: v for k, v in schema_cat.items() if not k.startswith("__")}
+        all_keys = dict.fromkeys(list(schema_keys.keys()) + list(node.keys()))
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Key", style="bold")
+        t.add_column("Value")
+        t.add_column("Description", style="dim")
+        for k in all_keys:
+            v = node.get(k)
+            val_str = json.dumps(v) if isinstance(v, (list, dict)) else (str(v) if v is not None else "[dim]—[/dim]")
+            hint = schema_keys.get(k, {}).get("description", "") if isinstance(schema_keys.get(k), dict) else ""
+            t.add_row(k, val_str, hint)
+        console.print(t)
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            console.print(f"[dim]{i}[/dim]  {item}")
+    else:
+        console.print(node)
+
+
+@metadata_group.command("get")
+@click.argument("path", nargs=-1, required=True)
+@click.pass_obj
+def metadata_get(obj: dict, path: tuple[str, ...]) -> None:
+    """Get a metadata value.
+
+    Examples:
+
+    \b
+      udb metadata get identity name
+      udb metadata get policy auto_approve
+    """
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    key = ".".join(path)
+    try:
+        value = source.get_metadata(db, key)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    if value is None:
+        err.print(f"[yellow]Not set:[/yellow] {key}")
+        sys.exit(1)
+    if isinstance(value, (dict, list)):
+        console.print_json(json.dumps(value))
+    else:
+        console.print(value)
+
+
+@metadata_group.command("set")
+@click.argument("args", nargs=-1, required=True)
+@click.pass_obj
+def metadata_set(obj: dict, args: tuple[str, ...]) -> None:
+    """Set a metadata value. Path segments precede the value.
+
+    Examples:
+
+    \b
+      udb metadata set identity name "Alice"
+      udb metadata set preferences verbosity brief
+      udb metadata set policy auto_approve '["read","draft"]'
+    """
+    if len(args) < 2:
+        err.print("[red]Error:[/red] Provide at least one key segment and a value.")
+        sys.exit(1)
+    *key_parts, raw_value = args
+    key = ".".join(key_parts)
+    value = _parse_metadata_value(raw_value)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        source.set_metadata(db, key, value)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    display = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+    console.print(f"[green]Set[/green] {key} = {display}")
+
+
+@metadata_group.command("delete")
+@click.argument("path", nargs=-1, required=True)
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+@click.pass_obj
+def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
+    """Delete a metadata key.
+
+    Examples:
+
+    \b
+      udb metadata delete identity pronouns
+      udb metadata delete credentials github
+    """
+    key = ".".join(path)
+    if not yes:
+        click.confirm(f"Delete metadata key {key!r}?", abort=True)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        source.delete_metadata(db, key)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    console.print(f"[green]Deleted[/green] {key}")

@@ -11,29 +11,48 @@ from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult
 
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
+_DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
 
 
 class UserSource(DataSource):
     """
-    A multi-user source to store user data and execute queries against it.
+    A multi-user data source for storing and querying personal user data on behalf of agents.
 
     Extends ``DataSource`` with the following mapping:
     - **database** → user name (e.g. ``"alice"``)
     - **collection** → registered source name in the per-user DataRegistry
-      (``"kb"``, ``"metadata"``, ``"contacts"``, or any imported source)
+      (``"kb"``, ``"metadata"``, ``"contacts"``, or any user-added source)
 
-    User entries are stored in a JSONSource backend, where each entry contains a
-    reference to a per-user DataRegistry. The DataRegistry holds:
-    - ``"kb"`` KBSource — knowledge base data extracted from various sources,
-    - ``"metadata"`` source — user metadata such as preferences and settings,
-    - ``"contacts"`` source — user contact methods,
-    - any additional sources added via imports.
+    Each user has an isolated ``DataRegistry`` that holds three built-in sources:
+
+    - ``"kb"`` (``KBSource``) — knowledge graph of entities, facts, and property values
+      extracted from text or imported files. Queried via natural language through
+      ``execute_query`` / ``execute_query_nl``.
+    - ``"metadata"`` (``JSONSource``) — structured metadata agents use when acting on
+      the user's behalf: identity, preferences, policy (auto-approve/require-confirmation),
+      credentials, skills, availability, and standing instructions. Seeded from
+      ``data/metadata_schema.json`` on user creation so all keys are present (null) by
+      default.
+    - ``"contacts"`` (``JSONSource``) — preferred contact methods (email, Slack, SMS, …)
+      used by agents to reach the user for clarification.
+
+    Additional file-based sources can be registered at runtime via ``add_source``;
+    they are stored in both the registry and the KB for provenance tracking.
+
+    Props accepted by ``__init__``:
+
+    - ``store`` — JSONSource config for the top-level user registry
+      (default: in-memory). File example: ``{"backend": "file", "path": "~/.udb/db.json"}``.
+    - ``schema`` — path to the KB graph schema JSON (default: ``data/schema.json``).
+    - ``metadata_schema`` — path to the metadata schema JSON
+      (default: ``data/metadata_schema.json``).
 
     Usage::
 
         us = UserSource({
-            "store": {"backend": "file", "path": "~/.udb/db.json"},
-            "schema": "schema.json",
+            "store":           {"backend": "file", "path": "~/.udb/db.json"},
+            "schema":          "/path/to/schema.json",          # optional
+            "metadata_schema": "/path/to/metadata_schema.json", # optional
         })
         us.create_database("alice", properties={
             "registry":        {"backend": "file", "path": "~/.udb/registries/alice.json"},
@@ -41,7 +60,8 @@ class UserSource(DataSource):
             "metadata_source": {"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
             "contact_source":  {"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
         })
-        results = us.execute_query("skills", database="alice")
+        results = us.execute_query("what are alice's skills?", database="alice")
+        us.set_metadata("alice", "preferences.verbosity", "brief")
     """
 
     def __init__(self, props: dict) -> None:
@@ -54,6 +74,10 @@ class UserSource(DataSource):
             self._store.set("schema", props["schema"])
         elif self._store.get("schema") is None:
             self._store.set("schema", _DEFAULT_SCHEMA_PATH)
+        if props.get("metadata_schema") is not None:
+            self._store.set("metadata_schema", props["metadata_schema"])
+        elif self._store.get("metadata_schema") is None:
+            self._store.set("metadata_schema", _DEFAULT_METADATA_SCHEMA_PATH)
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #
@@ -154,8 +178,9 @@ class UserSource(DataSource):
     ) -> None:
         """Build a fresh registry + all three sources, seed schema, and register the user."""
         schema_path = self._store.get("schema")
+        metadata_schema_path = self._store.get("metadata_schema")
         manager = UserDataManager(name, registry_props)
-        await manager.build(schema_path, kb_source_props, metadata_source_props, contact_source_props)
+        await manager.build(schema_path, kb_source_props, metadata_schema_path, metadata_source_props, contact_source_props)
         self._store.set(f"users.{name}", {"registry": registry_props})
         self._managers[name] = manager
 

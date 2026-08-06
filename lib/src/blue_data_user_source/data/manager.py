@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+
 from blue_data.registry.data_registry import DataRegistry
 from blue_data_kb_source.kb_source import KBSource
 
@@ -110,6 +111,7 @@ class UserDataManager:
         self,
         schema_path: str,
         kb_source_props: dict,
+        metadata_schema_path: str | None,
         metadata_source_props: dict,
         contact_source_props: dict,
     ) -> None:
@@ -123,6 +125,8 @@ class UserDataManager:
 
         self._metadata_source = _build_json_source("metadata", metadata_source_props)
         self._registry.register_source(self._metadata_source)
+        if metadata_schema_path:
+            self.seed_metadata_schema(metadata_schema_path)
 
         self._contact_source = _build_json_source("contacts", contact_source_props)
         self._registry.register_source(self._contact_source)
@@ -356,6 +360,27 @@ class UserDataManager:
     # ------------------------------------------------------------------ #
     # Metadata operations                                                  #
     # ------------------------------------------------------------------ #
+
+    def seed_metadata_schema(self, schema_path: str) -> None:
+        """Initialize the metadata store with null values for all schema-defined keys.
+
+        Skips keys that are already set, so calling this on an existing user is safe.
+        Categories marked ``__open__: true`` (like credentials) are registered as empty
+        dicts but have no fixed sub-keys to seed.
+        """
+        schema = json.loads(Path(schema_path).read_text())
+        meta = self._ensure_metadata_source()
+        for category, entries in schema.items():
+            if meta.get(f"metadata.{category}") is None:
+                meta.set(f"metadata.{category}", {})
+            if entries.get("__open__"):
+                continue
+            for key, spec in entries.items():
+                if key.startswith("__"):
+                    continue
+                dotted = f"metadata.{category}.{key}"
+                if meta.get(dotted) is None:
+                    meta.set(dotted, spec.get("default"))
 
     def clear_metadata(self) -> None:
         self._ensure_metadata_source().set("metadata", {})
