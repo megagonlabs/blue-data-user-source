@@ -12,6 +12,7 @@ from blue_data_user_source.types import QueryError, QueryResult
 
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
+_DEFAULT_CONTACT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "contact_schema.json")
 
 
 class UserSource(DataSource):
@@ -78,6 +79,10 @@ class UserSource(DataSource):
             self._store.set("metadata_schema", props["metadata_schema"])
         elif self._store.get("metadata_schema") is None:
             self._store.set("metadata_schema", _DEFAULT_METADATA_SCHEMA_PATH)
+        if props.get("contact_schema") is not None:
+            self._store.set("contact_schema", props["contact_schema"])
+        elif self._store.get("contact_schema") is None:
+            self._store.set("contact_schema", _DEFAULT_CONTACT_SCHEMA_PATH)
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #
@@ -179,8 +184,9 @@ class UserSource(DataSource):
         """Build a fresh registry + all three sources, seed schema, and register the user."""
         schema_path = self._store.get("schema")
         metadata_schema_path = self._store.get("metadata_schema")
+        contact_schema_path = self._store.get("contact_schema")
         manager = UserDataManager(name, registry_props)
-        await manager.build(schema_path, kb_source_props, metadata_schema_path, metadata_source_props, contact_source_props)
+        await manager.build(schema_path, kb_source_props, metadata_schema_path, metadata_source_props, contact_schema_path, contact_source_props)
         self._store.set(f"users.{name}", {"registry": registry_props})
         self._managers[name] = manager
 
@@ -272,21 +278,25 @@ class UserSource(DataSource):
     async def add_contact_method(
         self,
         database: str,
-        name: str,
         protocol: str,
+        name: str,
         details: dict[str, Any],
         preference: int = 0,
     ) -> None:
-        await self._contact_manager(database).create_contact_method(name, protocol, details, preference)
+        await self._contact_manager(database).create_contact_method(protocol, name, details, preference)
 
-    async def get_contact_method(self, database: str, name: str) -> ContactMethod | None:
-        return await self._contact_manager(database).get_contact_method(name)
+    async def get_contact_method(
+        self, database: str, protocol: str, name: str
+    ) -> ContactMethod | None:
+        return await self._contact_manager(database).get_contact_method(protocol, name)
 
-    async def update_contact_method(self, database: str, name: str, **updates: Any) -> None:
-        await self._contact_manager(database).update_contact_method(name, **updates)
+    async def update_contact_method(
+        self, database: str, protocol: str, name: str, **updates: Any
+    ) -> None:
+        await self._contact_manager(database).update_contact_method(protocol, name, **updates)
 
-    async def remove_contact_method(self, database: str, name: str) -> None:
-        await self._contact_manager(database).delete_contact_method(name)
+    async def remove_contact_method(self, database: str, protocol: str, name: str) -> None:
+        await self._contact_manager(database).delete_contact_method(protocol, name)
 
     async def list_contact_methods(
         self, database: str, protocol: str | None = None

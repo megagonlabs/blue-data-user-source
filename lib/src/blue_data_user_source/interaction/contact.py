@@ -14,11 +14,16 @@ class ContactMethod:
         {"session", "email", "sms", "stdio", "messaging", "enterprise", "notification"}
     )
 
-    def __init__(self, details: dict[str, Any], protocol: str) -> None:
+    def __init__(self, protocol: str, name: str, details: dict[str, Any]) -> None:
         if protocol not in self.SUPPORTED_PROTOCOLS:
             raise InteractionError(f"Unsupported contact protocol: {protocol}")
-        self.details = details
         self.protocol = protocol
+        self.name = name
+        self.details = details
+
+    @property
+    def preference(self) -> int:
+        return int(self.details.get("preference", 0))
 
     def interact(self) -> InteractionManager:
         if self.protocol == "stdio":
@@ -43,7 +48,7 @@ class ContactMethod:
 
 
 class ContactManager:
-    """Manages contact methods for a user stored in the contact JSONSource."""
+    """Manages contact methods stored as contacts.{protocol}.{name} in the contact JSONSource."""
 
     def __init__(self, database: str, data_manager: Any) -> None:
         self._database = database
@@ -52,57 +57,77 @@ class ContactManager:
     def _store(self) -> Any:
         return self._data_manager.get_contact_source()
 
+    # ------------------------------------------------------------------ #
+    # CRUD                                                                 #
+    # ------------------------------------------------------------------ #
+
     async def create_contact_method(
         self,
-        name: str,
         protocol: str,
+        name: str,
         details: dict[str, Any],
         preference: int = 0,
     ) -> None:
         if protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
             raise InteractionError(f"Unsupported contact protocol: {protocol!r}")
-        self._store().set(f"contacts.{name}", {
-            "protocol": protocol,
-            "details": details,
-            "preference": preference,
-        })
+        entry = {**details, "preference": preference}
+        self._store().set(f"contacts.{protocol}.{name}", entry)
 
-    async def get_contact_method(self, name: str) -> ContactMethod | None:
-        entry = self._store().get(f"contacts.{name}")
+    async def get_contact_method(self, protocol: str, name: str) -> ContactMethod | None:
+        entry = self._store().get(f"contacts.{protocol}.{name}")
         if entry is None:
             return None
-        return ContactMethod(details=entry.get("details", {}), protocol=entry["protocol"])
+        return ContactMethod(protocol=protocol, name=name, details=entry)
 
-    async def update_contact_method(self, name: str, **updates: Any) -> None:
+    async def update_contact_method(
+        self, protocol: str, name: str, **updates: Any
+    ) -> None:
         store = self._store()
-        entry = store.get(f"contacts.{name}")
+        entry = store.get(f"contacts.{protocol}.{name}")
         if entry is None:
-            raise InteractionError(f"Contact method {name!r} not found.")
-        if "protocol" in updates and updates["protocol"] not in ContactMethod.SUPPORTED_PROTOCOLS:
-            raise InteractionError(f"Unsupported contact protocol: {updates['protocol']!r}")
+            raise InteractionError(f"Contact method {protocol!r}/{name!r} not found.")
         entry.update(updates)
-        store.set(f"contacts.{name}", entry)
+        store.set(f"contacts.{protocol}.{name}", entry)
 
-    async def delete_contact_method(self, name: str) -> None:
-        self._store().delete(f"contacts.{name}")
+    async def delete_contact_method(self, protocol: str, name: str) -> None:
+        self._store().delete(f"contacts.{protocol}.{name}")
+
+    # ------------------------------------------------------------------ #
+    # Listing                                                              #
+    # ------------------------------------------------------------------ #
 
     async def list_contact_methods(
         self, protocol: str | None = None
     ) -> list[ContactMethod]:
         all_contacts: dict[str, Any] = self._store().get("contacts") or {}
+        protocols = {protocol: all_contacts[protocol]} if protocol else all_contacts
         methods: list[ContactMethod] = []
-        for entry in all_contacts.values():
-            proto = str(entry.get("protocol", "stdio"))
-            if protocol is not None and proto != protocol:
+        for proto, entries in protocols.items():
+            if not isinstance(entries, dict):
                 continue
-            try:
-                methods.append(ContactMethod(details=entry.get("details", {}), protocol=proto))
-            except InteractionError:
-                continue
+            for entry_name, details in entries.items():
+                if not isinstance(details, dict):
+                    continue
+                try:
+                    methods.append(ContactMethod(protocol=proto, name=entry_name, details=details))
+                except InteractionError:
+                    continue
         return methods
+
+    async def list_protocols(self) -> list[str]:
+        all_contacts: dict[str, Any] = self._store().get("contacts") or {}
+        return [p for p, v in all_contacts.items() if isinstance(v, dict)]
+
+    async def list_named_entries(self, protocol: str) -> dict[str, dict]:
+        entries = self._store().get(f"contacts.{protocol}") or {}
+        return {k: v for k, v in entries.items() if isinstance(v, dict)}
+
+    # ------------------------------------------------------------------ #
+    # Preferred channel                                                    #
+    # ------------------------------------------------------------------ #
 
     async def identify_contact_method(self) -> ContactMethod:
         methods = await self.list_contact_methods()
         if not methods:
-            return ContactMethod(details={}, protocol="stdio")
-        return min(methods, key=lambda m: m.details.get("preference", 999))
+            return ContactMethod(protocol="stdio", name="default", details={})
+        return min(methods, key=lambda m: m.preference)

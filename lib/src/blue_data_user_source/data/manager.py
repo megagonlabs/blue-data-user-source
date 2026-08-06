@@ -113,6 +113,7 @@ class UserDataManager:
         kb_source_props: dict,
         metadata_schema_path: str | None,
         metadata_source_props: dict,
+        contact_schema_path: str | None,
         contact_source_props: dict,
     ) -> None:
         """Build a fresh DataRegistry and all three sources."""
@@ -130,6 +131,8 @@ class UserDataManager:
 
         self._contact_source = _build_json_source("contacts", contact_source_props)
         self._registry.register_source(self._contact_source)
+        if contact_schema_path:
+            self.seed_contact_schema(contact_schema_path)
 
 
     def connect(self) -> None:
@@ -401,8 +404,35 @@ class UserDataManager:
     # Contact source                                                       #
     # ------------------------------------------------------------------ #
 
+    def seed_contact_schema(self, schema_path: str) -> None:
+        """Initialize the contacts store with empty protocol buckets for all schema-defined protocols.
+
+        Skips protocols already present. Named entries (work, personal, …) are user-defined
+        and are not seeded — only the top-level protocol dict is ensured.
+        """
+        schema = json.loads(Path(schema_path).read_text())
+        store = self._ensure_contact_source()
+        for protocol in schema:
+            if store.get(f"contacts.{protocol}") is None:
+                store.set(f"contacts.{protocol}", {})
+
     def clear_contacts(self) -> None:
         self._ensure_contact_source().set("contacts", {})
 
     def get_contact_source(self) -> Any:
         return self._ensure_contact_source()
+
+    def get_contacts(self) -> dict[str, Any]:
+        return self._ensure_contact_source().get("contacts") or {}
+
+    def get_contact(self, protocol: str, name: str) -> dict[str, Any] | None:
+        return self._ensure_contact_source().get(f"contacts.{protocol}.{name}")
+
+    def set_contact_field(self, protocol: str, name: str, field: str, value: Any) -> None:
+        store = self._ensure_contact_source()
+        if store.get(f"contacts.{protocol}.{name}") is None:
+            store.set(f"contacts.{protocol}.{name}", {})
+        store.set(f"contacts.{protocol}.{name}.{field}", value)
+
+    def delete_contact(self, protocol: str, name: str) -> None:
+        self._ensure_contact_source().delete(f"contacts.{protocol}.{name}")

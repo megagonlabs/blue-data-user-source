@@ -1203,3 +1203,251 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     console.print(f"[green]Deleted[/green] {key}")
+
+
+# ------------------------------------------------------------------ #
+# udb contact                                                         #
+# ------------------------------------------------------------------ #
+
+def _load_contact_schema() -> dict:
+    try:
+        import importlib.resources as _ir
+        with _ir.files("blue_data_user_source.data").joinpath("contact_schema.json").open() as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+_CONTACT_SCHEMA: dict = _load_contact_schema()
+
+
+@cli.group("contact")
+def contact_group() -> None:
+    """Contact methods for agents to reach you."""
+
+
+@contact_group.command("list")
+@click.argument("path", nargs=-1)
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
+@click.pass_obj
+def contact_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
+    """List contacts at the given path, or all protocols if no path given.
+
+    Examples:
+
+    \b
+      udb contact list
+      udb contact list email
+      udb contact list email work
+    """
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        all_contacts: dict = source._get_manager(db).get_contacts()
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    node: Any = all_contacts
+    for i, segment in enumerate(path):
+        if not isinstance(node, dict) or segment not in node:
+            # Known schema protocol with no entries yet
+            if i == 0 and segment in _CONTACT_SCHEMA:
+                node = {}
+                break
+            err.print(f"[red]Error:[/red] Key not found: {'.'.join(path)!r}")
+            sys.exit(1)
+        node = node[segment]
+
+    if fmt == "json":
+        console.print_json(json.dumps(node))
+        return
+
+    if not path:
+        # Top level: show all protocols with entry counts
+        protocols = dict.fromkeys(list(_CONTACT_SCHEMA.keys()) + list(all_contacts.keys()))
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Protocol", style="bold")
+        t.add_column("Entries", style="dim", justify="right")
+        t.add_column("Description", style="dim")
+        for proto in protocols:
+            entries = all_contacts.get(proto, {})
+            count = len(entries) if isinstance(entries, dict) else 0
+            desc = _CONTACT_SCHEMA.get(proto, {}).get("__description__", "")
+            t.add_row(proto, str(count) if count else "[dim]—[/dim]", desc)
+        console.print(t)
+
+    elif len(path) == 1:
+        # Protocol level: show named entries with their key fields
+        proto = path[0]
+        schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+        entries = node if isinstance(node, dict) else {}
+        if not entries:
+            console.print("[dim](no entries)[/dim]")
+            return
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Name", style="bold")
+        for field in schema_fields:
+            t.add_column(field.replace("_", " ").title())
+        for entry_name, details in entries.items():
+            if not isinstance(details, dict):
+                continue
+            row = [entry_name] + [
+                str(details.get(f, "[dim]—[/dim]")) for f in schema_fields
+            ]
+            t.add_row(*row)
+        console.print(t)
+
+    else:
+        # Named-entry level: show field-by-field with schema hints
+        proto = path[0]
+        schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+        entry = node if isinstance(node, dict) else {}
+        all_keys = dict.fromkeys(list(schema_fields.keys()) + list(entry.keys()))
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Field", style="bold")
+        t.add_column("Value")
+        t.add_column("Description", style="dim")
+        for field in all_keys:
+            v = entry.get(field)
+            val_str = json.dumps(v) if isinstance(v, (list, dict)) else (str(v) if v is not None else "[dim]—[/dim]")
+            hint = schema_fields.get(field, {}).get("description", "") if isinstance(schema_fields.get(field), dict) else ""
+            t.add_row(field, val_str, hint)
+        console.print(t)
+
+
+@contact_group.command("get")
+@click.argument("path", nargs=-1, required=True)
+@click.pass_obj
+def contact_get(obj: dict, path: tuple[str, ...]) -> None:
+    """Get a contact field value.
+
+    Examples:
+
+    \b
+      udb contact get email work address
+      udb contact get sms primary phone
+    """
+    if len(path) < 2:
+        err.print("[red]Error:[/red] Provide at least protocol and name (e.g. email work).")
+        sys.exit(1)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        manager = source._get_manager(db)
+        if len(path) == 2:
+            proto, name = path
+            value = manager.get_contact(proto, name)
+        else:
+            proto, name, *field_parts = path
+            entry = manager.get_contact(proto, name)
+            if entry is None:
+                err.print(f"[red]Error:[/red] Contact {proto!r}/{name!r} not found.")
+                sys.exit(1)
+            value = entry
+            for part in field_parts:
+                if not isinstance(value, dict) or part not in value:
+                    err.print(f"[red]Error:[/red] Field {part!r} not found.")
+                    sys.exit(1)
+                value = value[part]
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    if value is None:
+        err.print(f"[yellow]Not set:[/yellow] {'.'.join(path)}")
+        sys.exit(1)
+    if isinstance(value, (dict, list)):
+        console.print_json(json.dumps(value))
+    else:
+        console.print(value)
+
+
+@contact_group.command("set")
+@click.argument("args", nargs=-1, required=True)
+@click.pass_obj
+def contact_set(obj: dict, args: tuple[str, ...]) -> None:
+    """Set a contact field. Provide protocol, name, field, and value.
+
+    Examples:
+
+    \b
+      udb contact set email work address alice@example.com
+      udb contact set email work preference 0
+      udb contact set sms primary phone +15550123
+    """
+    if len(args) < 4:
+        err.print("[red]Error:[/red] Provide protocol, name, field, and value.")
+        sys.exit(1)
+    proto, name, *rest = args
+    *field_parts, raw_value = rest
+    field = ".".join(field_parts)
+    value = _parse_metadata_value(raw_value)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        source._get_manager(db).set_contact_field(proto, name, field, value)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    display = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+    console.print(f"[green]Set[/green] {proto}.{name}.{field} = {display}")
+
+
+@contact_group.command("add")
+@click.argument("protocol")
+@click.argument("name")
+@click.option("--preference", "preference", default=0, type=int, show_default=True,
+              help="Ordering priority (lower = preferred).")
+@click.pass_obj
+def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
+    """Create a named contact entry under a protocol.
+
+    Set individual fields with `udb contact set` afterwards.
+
+    Examples:
+
+    \b
+      udb contact add email work
+      udb contact add sms primary --preference 1
+    """
+    if protocol not in _CONTACT_SCHEMA:
+        err.print(f"[red]Error:[/red] Unknown protocol {protocol!r}. "
+                  f"Known: {', '.join(_CONTACT_SCHEMA)}")
+        sys.exit(1)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        manager = source._get_manager(db)
+        if manager.get_contact(protocol, name) is not None:
+            err.print(f"[red]Error:[/red] Contact {protocol!r}/{name!r} already exists. "
+                      "Use `udb contact set` to update fields.")
+            sys.exit(1)
+        manager.set_contact_field(protocol, name, "preference", preference)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    console.print(f"[green]Added[/green] contact: [bold]{protocol}/{name}[/bold]")
+
+
+@contact_group.command("remove")
+@click.argument("protocol")
+@click.argument("name")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+@click.pass_obj
+def contact_remove(obj: dict, protocol: str, name: str, yes: bool) -> None:
+    """Remove a named contact entry.
+
+    Examples:
+
+    \b
+      udb contact remove email personal
+    """
+    if not yes:
+        click.confirm(f"Remove contact {protocol!r}/{name!r}?", abort=True)
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    try:
+        source._get_manager(db).delete_contact(protocol, name)
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    console.print(f"[green]Removed[/green] contact: [bold]{protocol}/{name}[/bold]")
