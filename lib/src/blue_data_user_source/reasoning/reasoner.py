@@ -142,14 +142,36 @@ class UserQueryReasoner:
         interaction = channel.interact()
 
         failing_names = [m.name for m in metrics if not m.passes]
-        clarification_question = (
-            f"To answer \"{query}\", I need more information. "
+        raw_question = (
+            f'To answer "{query}", I need more information. '
             f"The following data quality checks did not pass: {', '.join(failing_names)}. "
             "Could you provide additional details?"
         )
 
+        user_name = self._manager.get_metadata("identity.name") or self._manager._database
+        communication_style = self._manager.get_metadata("preferences.communication_style") or "neutral"
+        verbosity = self._manager.get_metadata("preferences.verbosity") or "normal"
+        language = self._manager.get_metadata("preferences.language") or "English"
+
+        prompt = (
+            "Rewrite the following question to a user in a more natural way, "
+            "addressing them directly (without mentioning their name). "
+            "The user's name is provided so you can distinguish questions about them "
+            "from questions about other people — do not turn questions about others into 'you' questions. "
+            "Return only the rewritten question.\n\n"
+            f"Question: {raw_question}\n\n"
+            f"User's name: {user_name}\n"
+            f"Contact method: {channel.protocol} ({channel.name})\n"
+            f"Communication style: {communication_style}\n"
+            f"Verbosity: {verbosity}\n"
+            f"Language: {language}"
+        )
+        user_question = await _llm_complete(prompt)
+        if not user_question:
+            user_question = raw_question
+
         await interaction.start()
-        response = await interaction.send(clarification_question)
+        response = await interaction.send(user_question)
         await interaction.stop()
 
         context = f"Question: {query}\nUser Response: {response}"
