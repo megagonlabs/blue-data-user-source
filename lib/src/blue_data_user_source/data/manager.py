@@ -296,11 +296,13 @@ class UserDataManager:
         self,
         source: Any,
         queries: list[str] | None = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> None:
         """Register a source location in the KB and optionally ingest content via queries."""
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
-        source_id = await kb.add_source(self._database, location)
+        source_id = await kb.add_source(self._database, location, name=name, description=description)
         if queries:
             for query in queries:
                 raw = await source.query(query)

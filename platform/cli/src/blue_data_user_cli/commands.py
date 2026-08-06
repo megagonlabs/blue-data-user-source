@@ -751,22 +751,31 @@ def source_list(obj: dict, fmt: str) -> None:
     multiple=True,
     help="Query to run over the file (Type 2 import). May be repeated.",
 )
+@click.option("--name", default=None, help="Human-readable label (defaults to source value).")
+@click.option("--description", default=None, help="Optional description.")
 @click.pass_obj
-def source_add(obj: dict, file: Path, queries: tuple[str, ...]) -> None:
+def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None) -> None:
     """Register a file as a data source and optionally ingest its content."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
-    props: dict[str, Any] | None = {"queries": list(queries)} if queries else None
+    props: dict[str, Any] = {}
+    if queries:
+        props["queries"] = list(queries)
+    if name:
+        props["name"] = name
+    if description:
+        props["description"] = description
     try:
-        asyncio.run(source.add_source(FileSource(file), database=db, optional_properties=props))
+        asyncio.run(source.add_source(FileSource(file), database=db, optional_properties=props or None))
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
+    label = name or str(file)
     if queries:
         n = len(queries)
-        console.print(f"Added source: [bold]{file}[/bold] ({n} {'query' if n == 1 else 'queries'})")
+        console.print(f"Added source: [bold]{label}[/bold] ({n} {'query' if n == 1 else 'queries'})")
     else:
-        console.print(f"Registered source: [bold]{file}[/bold]")
+        console.print(f"Registered source: [bold]{label}[/bold]")
 
 
 @source_group.command("remove")
