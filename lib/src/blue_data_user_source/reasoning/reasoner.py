@@ -82,7 +82,7 @@ class UserQueryReasoner:
             for metric in applicable
         ]
 
-    async def assess_user_verification(
+    async def assess_user_interaction(
         self,
         query: str,
         query_results: list[Any],
@@ -91,7 +91,7 @@ class UserQueryReasoner:
     ) -> bool:
         return any(not m.passes for m in user_data_metric_evaluation)
 
-    async def request_user_clarification(
+    async def request_user_interaction(
         self,
         query: str,
         data: list[Any],

@@ -335,11 +335,11 @@ class UserSource(DataSource):
                 question, on_tool_call=on_tool_call, on_tool_result=on_tool_result
             )
             metrics = await reasoner.assess_query_results(question, data, metadata)
-            needs_interaction = await reasoner.assess_user_verification(
+            needs_interaction = await reasoner.assess_user_interaction(
                 question, data, metadata, metrics
             )
             if needs_interaction:
-                data, metadata = await reasoner.request_user_clarification(
+                data, metadata = await reasoner.request_user_interaction(
                     question, data, metadata, metrics
                 )
             results.append(QueryResult(query=question, results=data))
