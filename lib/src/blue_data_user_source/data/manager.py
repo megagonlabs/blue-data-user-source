@@ -305,11 +305,12 @@ class UserDataManager:
         queries: list[str] | None = None,
         name: str | None = None,
         description: str | None = None,
+        original: str | None = None,
     ) -> None:
         """Register a source location in the KB and the registry, then optionally ingest content."""
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
-        source_id = await kb.add_source(self._database, location, name=name, description=description)
+        source_id = await kb.add_source(self._database, location, name=name, description=description, original=original)
 
         registry_name = name or location
         self._registry.register_record(

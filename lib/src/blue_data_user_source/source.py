@@ -228,7 +228,8 @@ class UserSource(DataSource):
                 queries = [str(q) for q in raw]
         name = str(props["name"]) if "name" in props else None
         description = str(props["description"]) if "description" in props else None
-        await self._get_manager(database).add_source(source, queries, name=name, description=description)
+        original = str(props["original"]) if "original" in props else None
+        await self._get_manager(database).add_source(source, queries, name=name, description=description, original=original)
 
     def remove_source(self, database: str, source_name: str) -> None:
         """Remove a source from the user's DataRegistry without touching KB data."""

@@ -48,6 +48,16 @@ def _status_tool_callbacks(
     return on_tool_call, on_tool_result
 
 
+def _humanize_date(iso_str: str | None) -> str:
+    if not iso_str:
+        return ""
+    try:
+        import arrow
+        return arrow.get(iso_str).to("local").format("MMM D, YYYY h:mm A")
+    except Exception:
+        return iso_str
+
+
 def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
     data_dir.mkdir(parents=True, exist_ok=True)
     return UserSource({
@@ -353,6 +363,8 @@ def data_group() -> None:
 
 @data_group.command("list")
 @click.option("--show-provenance", "show_provenance", is_flag=True, help="Include provenance text.")
+@click.option("--show-detailed", "show_detailed", is_flag=True,
+              help="Include each row's node attributes: description, created, modified.")
 @click.option(
     "--format", "fmt",
     type=click.Choice(["table", "json"]),
@@ -360,7 +372,7 @@ def data_group() -> None:
     show_default=True,
 )
 @click.pass_obj
-def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
+def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -> None:
     """List all entities, property values, and facts in the database."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -368,7 +380,7 @@ def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
         manager = source._get_manager(db)
         kb = manager._ensure_kb_source()
         rows: list[dict] = asyncio.run(
-            kb.fetch_database_data(db, include_provenance=show_provenance, compact=True)
+            kb.fetch_database_data(db, include_provenance=show_provenance, compact=True, detailed=show_detailed)
         )
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
@@ -383,56 +395,105 @@ def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
     fact_props = [r for r in all_props if r.get("owner_label") == "FACT"]
     facts      = [r for r in rows if r.get("relation_type") == "REPRESENTS"]
 
+    def _detail_columns(t: Table) -> None:
+        t.add_column("Description", style="dim")
+        t.add_column("Created",     style="dim")
+        t.add_column("Modified",    style="dim")
+
+    def _detail_row(r: dict) -> list[str]:
+        return [r.get("description") or "", _humanize_date(r.get("created")), _humanize_date(r.get("modified"))]
+
+    def _provenance_columns(t: Table) -> None:
+        t.add_column("Provenance", style="dim")
+        t.add_column("Source",     style="dim")
+
+    def _provenance_row(r: dict) -> list[str]:
+        return [r.get("extraction", "") or "", r.get("source", "") or ""]
+
+    def _source_original_column(t: Table) -> None:
+        t.add_column("Source Original", style="dim")
+
+    def _source_original_row(r: dict) -> list[str]:
+        return [r.get("source_original") or ""]
+
     if entities:
         t = Table(title="Entities", show_header=True, header_style="bold")
-        t.add_column("Name", style="bold")
+        t.add_column("Name",  style="bold")
         t.add_column("Class", style="dim")
+        if show_detailed:
+            _detail_columns(t)
         if show_provenance:
-            t.add_column("Provenance", style="dim")
+            _provenance_columns(t)
+        if show_detailed and show_provenance:
+            _source_original_column(t)
         for r in sorted(entities, key=lambda x: (x.get("class_name") or "", x.get("entity_name") or "")):
             row = [r.get("entity_name") or "", r.get("class_name") or ""]
+            if show_detailed:
+                row += _detail_row(r)
             if show_provenance:
-                row.append(r.get("extraction", "") or "")
+                row += _provenance_row(r)
+            if show_detailed and show_provenance:
+                row += _source_original_row(r)
             t.add_row(*row)
         console.print(t)
 
     if ent_props:
         t = Table(title="Entity Property Values", show_header=True, header_style="bold")
-        t.add_column("Entity", style="bold")
+        t.add_column("Entity",   style="bold")
         t.add_column("Property", style="dim")
         t.add_column("Value")
+        if show_detailed:
+            _detail_columns(t)
         if show_provenance:
-            t.add_column("Provenance", style="dim")
+            _provenance_columns(t)
+        if show_detailed and show_provenance:
+            _source_original_column(t)
         for r in sorted(ent_props, key=lambda x: (x.get("entity_name") or "", x.get("property_name") or "")):
             row = [r.get("entity_name") or "", r.get("property_name") or "", str(r.get("property_value", ""))]
+            if show_detailed:
+                row += _detail_row(r)
             if show_provenance:
-                row.append(r.get("extraction", "") or "")
+                row += _provenance_row(r)
+            if show_detailed and show_provenance:
+                row += _source_original_row(r)
             t.add_row(*row)
         console.print(t)
 
     if facts:
         t = Table(title="Facts", show_header=True, header_style="bold")
-        t.add_column("Head", style="bold")
+        t.add_column("Head",     style="bold")
         t.add_column("Relation", style="dim")
-        t.add_column("Tail", style="bold")
+        t.add_column("Tail",     style="bold")
+        if show_detailed:
+            _detail_columns(t)
         if show_provenance:
-            t.add_column("Provenance", style="dim")
+            _provenance_columns(t)
+        if show_detailed and show_provenance:
+            _source_original_column(t)
         for r in sorted(facts, key=lambda x: (x.get("relation_name") or "", x.get("source_name") or "")):
             row = [r.get("source_name") or "", r.get("relation_name") or "", r.get("target_name") or ""]
+            if show_detailed:
+                row += _detail_row(r)
             if show_provenance:
-                row.append(r.get("extraction", "") or "")
+                row += _provenance_row(r)
+            if show_detailed and show_provenance:
+                row += _source_original_row(r)
             t.add_row(*row)
         console.print(t)
 
     if fact_props:
         t = Table(title="Fact Property Values", show_header=True, header_style="bold")
-        t.add_column("Head", style="bold")
+        t.add_column("Head",     style="bold")
         t.add_column("Relation", style="dim")
-        t.add_column("Tail", style="bold")
+        t.add_column("Tail",     style="bold")
         t.add_column("Property", style="dim")
         t.add_column("Value")
+        if show_detailed:
+            _detail_columns(t)
         if show_provenance:
-            t.add_column("Provenance", style="dim")
+            _provenance_columns(t)
+        if show_detailed and show_provenance:
+            _source_original_column(t)
         for r in sorted(fact_props, key=lambda x: (x.get("relation_name") or "", x.get("head_name") or "", x.get("property_name") or "")):
             row = [
                 r.get("head_name") or "",
@@ -441,8 +502,12 @@ def data_list(obj: dict, show_provenance: bool, fmt: str) -> None:
                 r.get("property_name") or "",
                 str(r.get("property_value", "")),
             ]
+            if show_detailed:
+                row += _detail_row(r)
             if show_provenance:
-                row.append(r.get("extraction", "") or "")
+                row += _provenance_row(r)
+            if show_detailed and show_provenance:
+                row += _source_original_row(r)
             t.add_row(*row)
         console.print(t)
 
@@ -688,6 +753,8 @@ def source_group() -> None:
 
 
 @source_group.command("list")
+@click.option("--show-detailed", "show_detailed", is_flag=True,
+              help="Include created/modified timestamps in the table output.")
 @click.option(
     "--format", "fmt",
     type=click.Choice(["table", "json"]),
@@ -695,7 +762,7 @@ def source_group() -> None:
     show_default=True,
 )
 @click.pass_obj
-def source_list(obj: dict, fmt: str) -> None:
+def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
     """List data sources.
 
     Shows user-added sources only (excludes internal kb/metadata/contacts sources).
@@ -709,28 +776,40 @@ def source_list(obj: dict, fmt: str) -> None:
             r for r in (manager._registry.list_records(record_type="source", scope="/") or [])
             if r.get("name") not in _INTERNAL_SOURCES
         ]
-        reg_names = {r.get("name") for r in reg_records}
         kg_sources = asyncio.run(manager.list_sources())
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
-    rows: list[dict] = [
-        {
-            "name": r.get("name", ""),
-            "location": (r.get("properties") or {}).get("connection", {}).get("path", ""),
+    # Build lookup maps from KG source nodes
+    ks_by_id:   dict[str, dict] = {ks.get("id", ""): ks for ks in kg_sources}
+    ks_by_name: dict[str, dict] = {ks.get("name", ks.get("id", "")): ks for ks in kg_sources}
+    reg_names:  set[str]        = {r.get("name") for r in reg_records}
+
+    rows: list[dict] = []
+    for r in reg_records:
+        props    = r.get("properties") or {}
+        sid      = props.get("source_id", "")
+        ks       = ks_by_id.get(sid) or ks_by_name.get(r.get("name", "")) or {}
+        rows.append({
+            "name":        r.get("name", ""),
+            "location":    props.get("connection", {}).get("path", ""),
             "description": r.get("description", ""),
+            "original":    ks.get("original", ""),
+            "created":     ks.get("created", ""),
+            "modified":    ks.get("modified", ""),
             "in_registry": True,
-        }
-        for r in reg_records
-    ]
+        })
     for ks in kg_sources:
         name = ks.get("name", ks.get("id", ""))
         if name not in reg_names:
             rows.append({
-                "name": name,
-                "location": ks.get("source", ks.get("location", "")),
-                "description": "",
+                "name":        name,
+                "location":    ks.get("source", ks.get("location", "")),
+                "description": ks.get("description", ""),
+                "original":    ks.get("original", ""),
+                "created":     ks.get("created", ""),
+                "modified":    ks.get("modified", ""),
                 "in_registry": False,
             })
 
@@ -741,13 +820,21 @@ def source_list(obj: dict, fmt: str) -> None:
         console.print("[dim](no sources)[/dim]")
         return
     t = Table(show_header=True, header_style="bold")
-    t.add_column("Name", style="bold")
-    t.add_column("Location", style="dim")
-    t.add_column("Description")
+    t.add_column("Name",        style="bold")
+    t.add_column("Location",    style="dim")
+    t.add_column("Description", style="dim")
+    t.add_column("Original",    style="dim")
+    if show_detailed:
+        t.add_column("Created",  style="dim")
+        t.add_column("Modified", style="dim")
     t.add_column("", max_width=5)
     for row in rows:
         marker = "[dim](*)[/dim]" if not row["in_registry"] else ""
-        t.add_row(row["name"], row["location"], row["description"], marker)
+        cells  = [row["name"], row["location"], row["description"], row["original"]]
+        if show_detailed:
+            cells += [_humanize_date(row["created"]), _humanize_date(row["modified"])]
+        cells.append(marker)
+        t.add_row(*cells)
     console.print(t)
 
 
@@ -760,8 +847,9 @@ def source_list(obj: dict, fmt: str) -> None:
 )
 @click.option("--name", default=None, help="Human-readable label (defaults to source value).")
 @click.option("--description", default=None, help="Optional description.")
+@click.option("--original", default=None, help="Original date of the source (e.g. when it was published).")
 @click.pass_obj
-def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None) -> None:
+def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None) -> None:
     """Register a file as a data source and optionally ingest its content."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -772,6 +860,8 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
         props["name"] = name
     if description:
         props["description"] = description
+    if original:
+        props["original"] = original
     try:
         asyncio.run(source.add_source(FileSource(file), database=db, optional_properties=props or None))
     except (UDbError, Exception) as exc:
