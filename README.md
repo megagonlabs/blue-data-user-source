@@ -13,14 +13,19 @@ A per-user personal data store with natural language querying, LLM-based data ex
 
 ```
 blue-data-user-source/
-├── lib/                   # Python library (blue-data-user-source)
+├── lib/                        # Python library (blue-data-user-source)
 │   ├── src/blue_data_user_source/
 │   └── tests/
+│       ├── unit/               # fast offline tests, no API key
+│       └── benchmarks/         # report-only LLM benchmarks (VCR-replayed)
+│           ├── extraction/
+│           ├── querying/
+│           └── reasoning/
 ├── platform/
-│   └── cli/               # Command-line interface (udb)
+│   └── cli/                    # Command-line interface (udb)
 │       ├── src/blue_data_user_cli/
 │       └── tests/
-└── docs/design/           # Architecture and design documents
+└── docs/design/                # Architecture and design documents
 ```
 
 ## Requirements
@@ -59,6 +64,22 @@ udb data query "What jobs are suitable for me?"
 # Query — natural language answer
 udb data query "What jobs are suitable for me?" --format nl
 ```
+
+## Testing
+
+```bash
+# Unit tests — fast, no API key
+cd lib && pytest tests/unit/
+
+# Benchmarks — LLM cases skip without cassettes + API key;
+# freshness metric cases are deterministic and always run
+cd lib && pytest tests/benchmarks/
+
+# Record VCR cassettes for later replay
+cd lib && OPENAI_API_KEY=sk-... pytest tests/benchmarks/
+```
+
+See [lib/README.md](lib/README.md#running-tests) for full benchmark details.
 
 ## Packages
 

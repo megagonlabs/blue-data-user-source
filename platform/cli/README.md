@@ -269,3 +269,14 @@ udb --data-dir /tmp/demo database create alice
 udb --data-dir /tmp/demo --database alice data source add resume.txt --query "What skills?"
 udb --data-dir /tmp/demo --database alice data query "jobs suitable for me"
 ```
+
+---
+
+## Running tests
+
+```bash
+cd platform/cli
+pytest
+```
+
+The CLI test suite covers command parsing and output formatting with an all-memory backend — no API key or network access required.

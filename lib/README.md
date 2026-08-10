@@ -305,10 +305,58 @@ Database files are stored under `~/.udb/` by default.
 
 ## Running tests
 
+### Unit tests
+
+Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `FreshnessMetric`, `CompletenessMetric`, and `UserDataPlanner`.
+
 ```bash
 cd lib
-pytest
+pytest tests/unit/
 ```
+
+85 tests, ~1 s.
+
+### Benchmarks
+
+Report-only: benchmarks never fail on a metric regression — they print and write scores so drift is visible over time. They are split into three modules:
+
+| Module | Cases | What it measures |
+|---|---|---|
+| `extraction` | 4 | User-profile text stored via `store_data`, then queried; scores answer coverage |
+| `querying` | 5 | Same KB data queried using second-person, "the user", and by-name phrasing; scores result alignment |
+| `reasoning` | 16 | Query contextualization precision, expansion coverage, completeness metric, freshness metric, and interaction question appropriateness per contact channel |
+
+LLM-backed benchmarks (extraction, querying, and all reasoning cases except freshness) use [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) for replay. They skip automatically when no cassette exists and `OPENAI_API_KEY` is unset:
+
+```bash
+# Run all benchmarks — LLM cases skip, freshness cases run
+cd lib
+pytest tests/benchmarks/
+
+# Run a specific module
+pytest tests/benchmarks/extraction/
+pytest tests/benchmarks/querying/
+pytest tests/benchmarks/reasoning/
+```
+
+**Freshness metric** cases (`reasoning/cases/freshness_*.yaml`) are deterministic — they run without a cassette or API key and report the numeric score for data aged 1 day, 90 days, 400 days, two mixed nodes, and zero nodes.
+
+#### Recording cassettes
+
+To record cassettes for the first time (or re-record after a schema change):
+
+```bash
+export OPENAI_API_KEY=sk-...
+pytest tests/benchmarks/extraction/
+pytest tests/benchmarks/querying/
+pytest tests/benchmarks/reasoning/
+```
+
+Cassettes are saved to `tests/benchmarks/<module>/cassettes/`. Commit them alongside the case files so CI can replay without network access.
+
+#### Benchmark reports
+
+After each run a JSON report and a JSONL detail log are written to `tests/benchmarks/<module>/.reports/` (git-ignored). A Rich table is also printed to the terminal.
 
 ## Project structure
 
@@ -317,8 +365,8 @@ lib/
 ├── pyproject.toml
 ├── src/
 │   └── blue_data_user_source/
-│       ├── __init__.py            # public exports
-│       ├── source.py              # UserSource — main entry point (multi-database)
+│       ├── __init__.py
+│       ├── source.py              # UserSource — multi-database entry point
 │       ├── types.py               # QueryResult, UDbError hierarchy
 │       ├── sources/
 │       │   └── file.py            # FileSource
@@ -332,6 +380,24 @@ lib/
 │           ├── contact.py         # ContactManager, ContactMethod
 │           └── manager.py         # InteractionManager
 └── tests/
-    ├── conftest.py
-    └── unit/
+    ├── conftest.py                # shared manager fixture (all-memory backends)
+    ├── unit/
+    │   ├── doubles/
+    │   │   └── sources.py         # make_mock_kb helper
+    │   ├── data/                  # test_query_executor, test_query_planner, test_source_manager
+    │   ├── interaction/           # test_contact_manager, test_interaction_manager
+    │   ├── reasoning/             # test_data_assessor, test_query_rewriter
+    │   └── sources/               # test_file_source
+    └── benchmarks/
+        ├── common/                # cases, runner, reasoning_runner, scoring, reporting, capture
+        ├── extraction/
+        │   ├── cases/*.yaml       # user-profile extraction cases
+        │   └── cassettes/         # VCR recordings (committed)
+        ├── querying/
+        │   ├── cases/*.yaml       # NL query cases (second-person, "the user", by-name)
+        │   └── cassettes/
+        └── reasoning/
+            ├── cases/*.yaml       # contextualization, expansion, completeness,
+            │                      # freshness (deterministic), appropriateness
+            └── cassettes/
 ```
