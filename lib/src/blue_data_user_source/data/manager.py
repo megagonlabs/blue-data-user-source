@@ -277,14 +277,15 @@ class UserDataManager:
         on_tool_call=None,
         on_tool_result=None,
     ) -> tuple[list[Any], dict[str, Any]]:
-        result = await self._ensure_kb_source().answer(
+        result, metadata = await self._ensure_kb_source().answer(
             self._database, query,
+            include_metadata=True,
             on_tool_call=on_tool_call,
             on_tool_result=on_tool_result,
         )
-        if isinstance(result, list):
-            return result, {}
-        return [{"answer": result}] if result else [], {}
+        data = result if isinstance(result, list) else ([{"answer": result}] if result else [])
+        print(f"Query executed: {query}\nResults: {data}\nMetadata: {metadata}")
+        return data, metadata
 
     async def import_data(
         self,

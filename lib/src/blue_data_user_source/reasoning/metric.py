@@ -47,17 +47,24 @@ class CompletenessMetric(UserDataMetric):
         query_results: list[Any],
         query_results_metadata: dict[str, Any],
     ) -> MetricEvaluation:
-        """Return completeness score based on result volume."""
         from blue_data_user_source.reasoning.reasoner import _llm_complete
+
+        provenance_lines = [
+            f"- {m['extraction']} (source: {m.get('source') or 'unknown'})"
+            for m in query_results_metadata.values()
+            if isinstance(m, dict) and m.get("extraction")
+        ]
+        provenance_section = (
+            f"Provenance:\n{chr(10).join(provenance_lines)}\n" if provenance_lines else ""
+        )
         prompt = (
             f"Query: {query}\n"
             f"Results: {query_results}\n"
+            f"{provenance_section}"
             "On a scale of 0.0 to 1.0, how complete is this result set for answering "
             'the query? Reply with a JSON object: {"score": <float>, "reasoning": <string>}'
         )
-        print(f"CompletenessMetric.evaluate: prompt={prompt}")
         parsed = await _llm_complete(prompt, properties={"response_format": "json_object"})
-        print(f"CompletenessMetric.evaluate: parsed={parsed}")
         score: float = float(parsed.get("score", 0.0)) if isinstance(parsed, dict) else 0.0
         reasoning: str = str(parsed.get("reasoning", "")) if isinstance(parsed, dict) else ""
         return MetricEvaluation(
@@ -77,23 +84,30 @@ class FreshnessMetric(UserDataMetric):
         query_results: list[Any],
         query_results_metadata: dict[str, Any],
     ) -> MetricEvaluation:
-        """Return freshness score based on provenance timestamps."""
         from datetime import datetime, timezone
 
-        provenance: list[dict[str, Any]] = query_results_metadata.get("provenance", [])
-        if not provenance:
+        # metadata_acc values: {id, type, name, created, modified, extraction, source, ...}
+        timestamps: list[str] = []
+        for m in query_results_metadata.values():
+            if not isinstance(m, dict):
+                continue
+            ts = m.get("modified") or m.get("created")
+            if ts:
+                timestamps.append(ts)
+
+        if not timestamps:
             return MetricEvaluation(
-                name="freshness", score=0.0, reasoning="No provenance available.", passes=False
+                name="freshness", score=0.0, reasoning="No provenance timestamps available.", passes=False
             )
 
         now = datetime.now(timezone.utc)
         scores: list[float] = []
-        for entry in provenance:
-            ts_str = entry.get("timestamp", "")
+        for ts_str in timestamps:
             try:
                 ts = datetime.fromisoformat(ts_str)
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
                 age_days = (now - ts).days
-                # Linear decay: score = 1.0 at 0 days, 0.0 at 365 days
                 scores.append(max(0.0, 1.0 - age_days / 365.0))
             except ValueError:
                 scores.append(0.0)
@@ -102,6 +116,6 @@ class FreshnessMetric(UserDataMetric):
         return MetricEvaluation(
             name="freshness",
             score=score,
-            reasoning=f"Average age-based freshness over {len(scores)} sources.",
+            reasoning=f"Average age-based freshness over {len(scores)} cited nodes.",
             passes=score >= self.THRESHOLD,
         )
