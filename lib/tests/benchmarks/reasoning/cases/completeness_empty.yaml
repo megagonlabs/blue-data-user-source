@@ -1,0 +1,8 @@
+id: completeness_empty
+benchmark_type: completeness
+description: >
+  No results and no provenance. CompletenessMetric should score at or near
+  zero — there is nothing to assess completeness against.
+query: "What are the user's interests and hobbies?"
+results: []
+provenance: []

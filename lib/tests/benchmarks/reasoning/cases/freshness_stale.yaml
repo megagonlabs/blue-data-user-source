@@ -1,0 +1,7 @@
+id: freshness_stale
+benchmark_type: freshness
+description: >
+  Single node modified 400 days ago (beyond the 365-day decay window).
+  FreshnessMetric should score 0.0 and fail the threshold.
+query: "What is the user's current job title?"
+node_ages_days: [400]

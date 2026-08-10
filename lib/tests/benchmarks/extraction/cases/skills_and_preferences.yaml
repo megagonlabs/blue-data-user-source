@@ -1,0 +1,26 @@
+id: skills_and_preferences
+description: >
+  User profile containing a skills list and work preferences. Tests whether
+  the KB can retrieve individual skills and preference values after extraction.
+input_texts:
+  - >
+    Bob Martinez is a data scientist who is proficient in Python, R, SQL, and
+    Apache Spark. He has 4 years of experience in machine learning and data
+    pipelines. Bob prefers remote work and has a strong preference for
+    asynchronous communication over meetings. He typically works in the Pacific
+    Time zone and values a four-day work week.
+queries:
+  - question: "What programming languages does the user know?"
+    expected_contains:
+      - "Python"
+      - "SQL"
+  - question: "What is the user's area of expertise?"
+    expected_contains:
+      - "data science"
+      - "machine learning"
+  - question: "Does the user prefer remote work?"
+    expected_contains:
+      - "remote"
+  - question: "How does the user prefer to communicate?"
+    expected_contains:
+      - "asynchronous"

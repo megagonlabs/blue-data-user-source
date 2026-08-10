@@ -1,0 +1,16 @@
+id: appropriateness_email
+benchmark_type: appropriateness
+description: >
+  email channel. Generated question may be slightly longer and more formal than
+  stdio. Should still be clear and actionable; a short paragraph is fine.
+  Should not contain raw JSON or technical jargon.
+query: "Does the user have up-to-date information about their recent projects?"
+contact_protocol: email
+contact_name: work
+failing_metrics:
+  - freshness
+  - completeness
+user_preferences:
+  communication_style: professional
+  verbosity: normal
+  language: English

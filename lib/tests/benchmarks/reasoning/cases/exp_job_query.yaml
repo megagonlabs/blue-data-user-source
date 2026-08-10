@@ -1,0 +1,7 @@
+id: exp_job_query
+benchmark_type: expansion
+description: >
+  Broad career-fit query. Sub-questions should decompose it into retrievable
+  personal-data dimensions: skills, experience level, work preferences,
+  location, desired role type.
+query: "What kind of job would suit me?"

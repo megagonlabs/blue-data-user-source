@@ -1,0 +1,7 @@
+id: freshness_empty
+benchmark_type: freshness
+description: >
+  No metadata nodes at all. FreshnessMetric should score 0.0 and include
+  a "No provenance" message in the reasoning field.
+query: "What hobbies does the user have?"
+node_ages_days: []

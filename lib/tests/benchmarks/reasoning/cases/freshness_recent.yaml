@@ -1,0 +1,7 @@
+id: freshness_recent
+benchmark_type: freshness
+description: >
+  Single node modified 1 day ago. FreshnessMetric should score near 1.0
+  and pass the threshold.
+query: "What are the user's skills?"
+node_ages_days: [1]

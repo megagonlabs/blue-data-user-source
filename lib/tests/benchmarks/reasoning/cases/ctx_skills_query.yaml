@@ -1,0 +1,7 @@
+id: ctx_skills_query
+benchmark_type: contextualization
+description: >
+  Ambiguous skills query phrased without a subject. Rewrite should anchor it
+  to the user's stored profile (e.g., "What technical skills does the user
+  have?") rather than staying generic.
+query: "skills"

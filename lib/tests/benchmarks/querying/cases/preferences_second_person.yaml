@@ -1,0 +1,15 @@
+id: preferences_second_person
+description: >
+  Work-preference query using second-person phrasing. Tests retrieval of
+  preference-type facts (non-skill, subjective attributes).
+addressing_style: second_person
+seed_texts:
+  - >
+    Alice strongly prefers remote work and dislikes open-plan offices. She
+    values asynchronous communication and typically responds to messages within
+    four hours. Her preferred meeting slot is 10 AM–12 PM Pacific Time.
+    She uses a standing desk and requires a quiet environment to focus.
+query: "What are your work preferences?"
+expected_contains:
+  - "remote"
+  - "asynchronous"

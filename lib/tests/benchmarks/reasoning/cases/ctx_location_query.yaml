@@ -1,0 +1,7 @@
+id: ctx_location_query
+benchmark_type: contextualization
+description: >
+  Single-word location query. A good rewrite should clarify that this is
+  asking about the user's current location or where they are based, not a
+  generic geography question.
+query: "location"

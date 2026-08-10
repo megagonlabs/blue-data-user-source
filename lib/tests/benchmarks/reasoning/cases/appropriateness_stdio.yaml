@@ -1,0 +1,15 @@
+id: appropriateness_stdio
+benchmark_type: appropriateness
+description: >
+  stdio channel — direct terminal interaction. Generated question should be
+  concise, conversational, and not contain email-style greetings or
+  sign-offs. Should read naturally as a terminal prompt.
+query: "What kind of job opportunities would suit me?"
+contact_protocol: stdio
+contact_name: default
+failing_metrics:
+  - completeness
+user_preferences:
+  communication_style: direct
+  verbosity: concise
+  language: English

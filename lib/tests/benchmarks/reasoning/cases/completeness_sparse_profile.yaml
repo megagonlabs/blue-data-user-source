@@ -1,0 +1,12 @@
+id: completeness_sparse_profile
+benchmark_type: completeness
+description: >
+  Sparse provenance — only one short extraction snippet, and results are
+  minimal. CompletenessMetric should score low (< 0.5) because the available
+  information is insufficient to fully answer the query.
+query: "What is the user's full career history, skills, and education?"
+results:
+  - "Alice works in tech"
+provenance:
+  - extraction: "Alice is a software engineer."
+    source: "brief_bio.txt"

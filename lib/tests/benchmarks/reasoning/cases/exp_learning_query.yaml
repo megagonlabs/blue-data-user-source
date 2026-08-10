@@ -1,0 +1,7 @@
+id: exp_learning_query
+benchmark_type: expansion
+description: >
+  Learning-goals query. Sub-questions should cover: current skill gaps, topics
+  the user has expressed interest in, past learning patterns, preferred
+  learning format (video, books, courses), and available time for learning.
+query: "What should I learn next?"

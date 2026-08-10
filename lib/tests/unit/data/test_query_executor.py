@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from blue_data_user_source.data.manager import UserDataManager
-from tests.doubles.sources import make_mock_kb
+from tests.unit.doubles.sources import make_mock_kb
 
 
 @pytest.fixture

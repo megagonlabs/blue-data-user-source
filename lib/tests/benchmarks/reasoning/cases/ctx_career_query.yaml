@@ -1,0 +1,6 @@
+id: ctx_career_query
+benchmark_type: contextualization
+description: >
+  Vague career query should be rewritten to mention user's profile, skills,
+  or experience to make it more precise for a personal data store search.
+query: "jobs for me"

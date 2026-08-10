@@ -1,0 +1,26 @@
+id: contact_info
+description: >
+  User profile with explicit contact information. Tests whether email address,
+  phone number, and LinkedIn handle survive extraction and are retrievable.
+input_texts:
+  - >
+    Carol Kim's professional contact details are as follows. She can be reached
+    by email at carol.kim@example.com. Her mobile phone number is
+    +1-415-555-0182. She maintains a LinkedIn profile at
+    linkedin.com/in/carolkim and prefers to be contacted via email for
+    professional inquiries.
+queries:
+  - question: "What is the user's email address?"
+    expected_contains:
+      - "carol.kim@example.com"
+  - question: "What is the user's phone number?"
+    expected_contains:
+      - "+1-415-555-0182"
+      - "415-555-0182"
+  - question: "What is the user's LinkedIn profile?"
+    expected_contains:
+      - "carolkim"
+      - "linkedin.com/in/carolkim"
+  - question: "How does the user prefer to be contacted for professional matters?"
+    expected_contains:
+      - "email"

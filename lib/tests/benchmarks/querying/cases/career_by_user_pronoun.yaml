@@ -1,0 +1,16 @@
+id: career_by_user_pronoun
+description: >
+  Career history query using mixed "the user" and "their" phrasing. Covers
+  multi-hop facts (employer, role, time span) with explicit name in seed text.
+addressing_style: third_person_user
+seed_texts:
+  - >
+    Alice worked as a software engineer at Google from 2016 to 2020, focusing
+    on search infrastructure. She then joined Stripe in 2020 as a senior
+    engineer on the payments platform team. In 2023 she was promoted to
+    staff engineer.
+query: "What is the user's career history?"
+expected_contains:
+  - "Google"
+  - "Stripe"
+  - "staff engineer"

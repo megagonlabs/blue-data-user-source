@@ -1,0 +1,42 @@
+id: multi_domain
+description: >
+  Multi-paragraph user profile spanning career history, skills, hobbies, and
+  location. Tests cross-domain extraction from a longer document with several
+  entities and attributes.
+input_texts:
+  - >
+    David Chen is a full-stack software engineer based in Austin, Texas. He
+    spent five years at Google working on distributed storage systems before
+    joining his current startup, NovaBridge, as a founding engineer.
+  - >
+    David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He
+    is particularly experienced with event-driven architectures and has
+    published two open-source libraries on GitHub. He holds AWS Solutions
+    Architect and CKA certifications.
+  - >
+    Outside of work, David enjoys rock climbing, cooking Vietnamese food, and
+    playing chess online. He is an active member of the Austin Chess Club and
+    competes locally.
+queries:
+  - question: "Where does the user live?"
+    expected_contains:
+      - "Austin"
+      - "Texas"
+  - question: "Where did the user work before their current job?"
+    expected_contains:
+      - "Google"
+  - question: "What is the user's current employer?"
+    expected_contains:
+      - "NovaBridge"
+  - question: "What programming languages does the user know?"
+    expected_contains:
+      - "Go"
+      - "Rust"
+  - question: "What certifications does the user hold?"
+    expected_contains:
+      - "AWS"
+      - "CKA"
+  - question: "What are the user's hobbies?"
+    expected_contains:
+      - "rock climbing"
+      - "chess"

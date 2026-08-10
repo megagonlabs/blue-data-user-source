@@ -1,0 +1,7 @@
+id: exp_relocation_query
+benchmark_type: expansion
+description: >
+  Relocation-readiness query. Sub-questions should cover: current location,
+  remote work preference, family/personal constraints, visa or work-permit
+  status, and preferred cities or regions.
+query: "Would I be open to relocating for work?"

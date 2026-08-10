@@ -1,0 +1,7 @@
+id: freshness_moderate
+benchmark_type: freshness
+description: >
+  Single node modified 90 days ago. FreshnessMetric should score around 0.75
+  (linear decay over 365 days), still above typical pass threshold.
+query: "What are the user's work preferences?"
+node_ages_days: [90]

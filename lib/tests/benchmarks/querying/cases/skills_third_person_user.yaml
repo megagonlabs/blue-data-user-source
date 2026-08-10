@@ -1,0 +1,15 @@
+id: skills_third_person_user
+description: >
+  Same seed data and expected facts as skills_second_person, but using
+  third-person "the user" phrasing. Tests addressing-style equivalence.
+addressing_style: third_person_user
+seed_texts:
+  - >
+    Alice Johnson is proficient in Python, TypeScript, and SQL. She has five
+    years of experience building microservices with Kubernetes and is familiar
+    with AWS and GCP cloud platforms.
+query: "What skills does the user have?"
+expected_contains:
+  - "Python"
+  - "TypeScript"
+  - "SQL"

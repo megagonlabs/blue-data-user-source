@@ -1,0 +1,25 @@
+id: basic_profile
+description: >
+  Single-paragraph user profile. Tests whether the KB correctly stores and
+  retrieves name, job title, and education background.
+input_texts:
+  - >
+    Alice Johnson is a senior software engineer with 8 years of professional
+    experience. She holds a Bachelor of Science in Computer Science from MIT.
+    Alice currently works at Acme Corp as part of the platform team.
+queries:
+  - question: "What is the user's name?"
+    expected_contains:
+      - "Alice Johnson"
+      - "Alice"
+  - question: "What is the user's job title?"
+    expected_contains:
+      - "software engineer"
+      - "senior software engineer"
+  - question: "Where did the user study?"
+    expected_contains:
+      - "MIT"
+      - "Massachusetts Institute of Technology"
+  - question: "Where does the user work?"
+    expected_contains:
+      - "Acme Corp"

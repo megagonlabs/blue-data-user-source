@@ -1,0 +1,15 @@
+id: skills_second_person
+description: >
+  Query using second-person phrasing ("your skills"). Tests that the KB
+  returns the correct skills regardless of how the user is addressed.
+addressing_style: second_person
+seed_texts:
+  - >
+    Alice Johnson is proficient in Python, TypeScript, and SQL. She has five
+    years of experience building microservices with Kubernetes and is familiar
+    with AWS and GCP cloud platforms.
+query: "What are your programming skills?"
+expected_contains:
+  - "Python"
+  - "TypeScript"
+  - "SQL"

@@ -1,0 +1,16 @@
+id: skills_by_name
+description: >
+  Same seed data and expected facts, but query addresses the user by name
+  ("Alice's skills"). Tests that proper-noun addressing retrieves the same
+  facts as pronoun-based queries.
+addressing_style: by_name
+seed_texts:
+  - >
+    Alice Johnson is proficient in Python, TypeScript, and SQL. She has five
+    years of experience building microservices with Kubernetes and is familiar
+    with AWS and GCP cloud platforms.
+query: "What are Alice's programming skills?"
+expected_contains:
+  - "Python"
+  - "TypeScript"
+  - "SQL"

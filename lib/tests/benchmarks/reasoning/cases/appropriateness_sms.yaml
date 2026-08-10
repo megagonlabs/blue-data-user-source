@@ -1,0 +1,15 @@
+id: appropriateness_sms
+benchmark_type: appropriateness
+description: >
+  sms channel. Generated question should be very brief (ideally one or two
+  sentences), use plain language, and avoid any markdown formatting or lists.
+  SMS recipients should be able to respond with a short text reply.
+query: "What remote work setup does the user prefer?"
+contact_protocol: sms
+contact_name: mobile
+failing_metrics:
+  - completeness
+user_preferences:
+  communication_style: casual
+  verbosity: brief
+  language: English
