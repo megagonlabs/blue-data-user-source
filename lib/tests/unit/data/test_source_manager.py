@@ -1,78 +1,72 @@
-from typing import Any
+"""Tests for UserDataManager metadata and contact storage operations."""
+from __future__ import annotations
 
 import pytest
 
-from blue_data_user_source.interfaces import DataSource
-from blue_data_user_source.data.registry import UserDataRegistry
-from blue_data_user_source.types import QueryError
-from tests.doubles.sources import InMemoryGraphSource, InMemoryVectorSource
+from blue_data_user_source.data.manager import UserDataManager
 
 
-class _NoOpSource(DataSource):
-    async def query(self, query: str) -> list[Any]:
-        return []
+# ── metadata ──────────────────────────────────────────────────────────────────
+
+async def test_set_and_get_metadata(manager: UserDataManager) -> None:
+    manager.set_metadata("identity.name", "Alice")
+    assert manager.get_metadata("identity.name") == "Alice"
 
 
-@pytest.fixture
-def reg(graph_store: InMemoryGraphSource, vector_store: InMemoryVectorSource) -> UserDataRegistry:
-    return UserDataRegistry(graph_store, vector_store)
+async def test_get_metadata_unknown_key_returns_none(manager: UserDataManager) -> None:
+    assert manager.get_metadata("identity.nonexistent") is None
 
 
-async def test_register_source_can_be_retrieved(reg: UserDataRegistry) -> None:
-    source = _NoOpSource()
-    await reg.register_source("src-1", source)
-    result = await reg.get_source("src-1")
-    assert result is source
+async def test_delete_metadata(manager: UserDataManager) -> None:
+    manager.set_metadata("identity.name", "Alice")
+    manager.delete_metadata("identity.name")
+    assert manager.get_metadata("identity.name") is None
 
 
-async def test_get_nonexistent_source_returns_none(reg: UserDataRegistry) -> None:
-    result = await reg.get_source("does-not-exist")
-    assert result is None
+async def test_list_metadata_contains_all_schema_categories(manager: UserDataManager) -> None:
+    meta = manager.list_metadata()
+    for category in ("identity", "preferences", "policy", "credentials", "skills", "availability", "instructions"):
+        assert category in meta
 
 
-async def test_execute_unknown_source_raises_query_error(reg: UserDataRegistry) -> None:
-    with pytest.raises(QueryError, match="Source not found"):
-        await reg.execute("what skills?", "missing-source")
+async def test_seed_metadata_schema_initializes_keys_to_none(manager: UserDataManager) -> None:
+    # schema seeds identity.name as null by default
+    assert manager.get_metadata("identity.name") is None
 
 
-async def test_add_node_stores_value_retrievable_via_query_nodes(
-    reg: UserDataRegistry, graph_store: InMemoryGraphSource
-) -> None:
-    await reg.add_node("u1:entity:alice", ["ENTITY"], {"key": "alice", "database": "u1"})
-    nodes = await reg.query_nodes(labels=["ENTITY"], properties={"database": "u1"})
-    assert any(n["properties"].get("key") == "alice" for n in nodes)
+async def test_set_metadata_overwrites_existing_value(manager: UserDataManager) -> None:
+    manager.set_metadata("preferences.language", "English")
+    manager.set_metadata("preferences.language", "Turkish")
+    assert manager.get_metadata("preferences.language") == "Turkish"
 
 
-async def test_add_edge_connects_nodes_traversable_via_query_neighbors(
-    reg: UserDataRegistry,
-) -> None:
-    await reg.add_node("n1", ["ENTITY"], {"key": "alice"})
-    await reg.add_node("n2", ["LITERAL"], {"value": "28"})
-    await reg.add_edge("n1", "n2", "HAS_PROPERTY")
-    neighbors = await reg.query_neighbors("n1", edge_type="HAS_PROPERTY")
-    assert len(neighbors) == 1
-    assert neighbors[0]["id"] == "n2"
+async def test_list_metadata_reflects_set_values(manager: UserDataManager) -> None:
+    manager.set_metadata("identity.name", "Bob")
+    meta = manager.list_metadata()
+    assert meta["identity"]["name"] == "Bob"
 
 
-async def test_set_vector_stores_value_retrievable_via_execute_vector(
-    reg: UserDataRegistry, vector_store: InMemoryVectorSource
-) -> None:
-    await reg.set_vector("u1:vec:entry-1", "skills: Python", {"source_id": "src-1"})
-    results = await reg.execute_vector("Python skills")
-    assert len(results) == 1
-    assert results[0]["text"] == "skills: Python"
+# ── contact storage (via manager helpers) ─────────────────────────────────────
+
+async def test_get_contact_returns_none_for_missing(manager: UserDataManager) -> None:
+    assert manager.get_contact("email", "work") is None
 
 
-async def test_dual_write_graph_and_vector_are_both_populated(
-    reg: UserDataRegistry,
-    graph_store: InMemoryGraphSource,
-    vector_store: InMemoryVectorSource,
-) -> None:
-    await reg.add_node("u1:entity:alice", ["ENTITY"], {"key": "alice", "database": "u1"})
-    await reg.set_vector("u1:vec:entry-1", "location: Remote", {})
+async def test_set_and_get_contact_field(manager: UserDataManager) -> None:
+    manager.set_contact_field("email", "work", "address", "alice@example.com")
+    entry = manager.get_contact("email", "work")
+    assert entry is not None
+    assert entry["address"] == "alice@example.com"
 
-    graph_nodes = await graph_store.query_nodes(labels=["ENTITY"])
-    vector_results = await vector_store.query("remote work")
 
-    assert any(n["properties"].get("key") == "alice" for n in graph_nodes)
-    assert any(r.get("text") == "location: Remote" for r in vector_results)
+async def test_delete_contact_removes_entry(manager: UserDataManager) -> None:
+    manager.set_contact_field("email", "work", "address", "alice@example.com")
+    manager.delete_contact("email", "work")
+    assert manager.get_contact("email", "work") is None
+
+
+async def test_get_contacts_returns_all_protocols(manager: UserDataManager) -> None:
+    contacts = manager.get_contacts()
+    # contact schema seeds top-level protocol buckets
+    assert isinstance(contacts, dict)
+    assert "email" in contacts

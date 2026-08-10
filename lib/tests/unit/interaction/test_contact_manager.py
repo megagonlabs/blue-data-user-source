@@ -1,6 +1,8 @@
+"""Tests for ContactMethod and ContactManager."""
+from __future__ import annotations
+
 import io
 import sys
-from typing import Any
 
 import pytest
 
@@ -11,68 +13,138 @@ from blue_data_user_source.types import InteractionError
 
 
 @pytest.fixture
-async def contact_manager(
-    data_manager: UserDataManager, user_id: str
-) -> ContactManager:
-    return ContactManager(database=user_id, data_manager=data_manager)
+def contact_manager(manager: UserDataManager, user_id: str) -> ContactManager:
+    return ContactManager(database=user_id, data_manager=manager)
 
 
-async def test_identify_contact_method_returns_stdio_when_no_methods_registered(
-    contact_manager: ContactManager,
-) -> None:
-    method = await contact_manager.identify_contact_method("any query")
-    assert method.protocol == "stdio"
+# ── ContactMethod ─────────────────────────────────────────────────────────────
 
-
-async def test_get_contact_methods_returns_empty_list_for_new_user(
-    contact_manager: ContactManager,
-) -> None:
-    methods = await contact_manager.get_contact_methods()
-    assert methods == []
-
-
-async def test_contact_method_stdio_interact_returns_interaction_manager() -> None:
-    method = ContactMethod(details={}, protocol="stdio")
-    mgr = method.interact()
-    assert isinstance(mgr, InteractionManager)
-
-
-async def test_contact_method_unsupported_protocol_raises_interaction_error() -> None:
+def test_contact_method_unsupported_protocol_raises() -> None:
     with pytest.raises(InteractionError, match="Unsupported contact protocol"):
-        ContactMethod(details={}, protocol="carrier-pigeon")
+        ContactMethod(protocol="carrier-pigeon", name="x", details={})
 
 
-async def test_contact_method_interact_non_stdio_raises_interaction_error() -> None:
-    method = ContactMethod(details={"value": "user@example.com"}, protocol="email")
+def test_contact_method_stdio_interact_returns_interaction_manager() -> None:
+    method = ContactMethod(protocol="stdio", name="default", details={})
+    assert isinstance(method.interact(), InteractionManager)
+
+
+def test_contact_method_non_stdio_interact_raises() -> None:
+    method = ContactMethod(protocol="email", name="work", details={"address": "a@b.com"})
     with pytest.raises(InteractionError, match="requires a registered handler"):
         method.interact()
 
 
-async def test_get_contact_methods_filtered_by_protocol(
-    contact_manager: ContactManager,
-) -> None:
-    result = await contact_manager.get_contact_methods(protocol="email")
-    assert result == []
+def test_contact_method_preference_defaults_to_zero() -> None:
+    method = ContactMethod(protocol="stdio", name="default", details={})
+    assert method.preference == 0
 
 
-# ── stdio interaction callbacks ───────────────────────────────────────────────
-
-async def test_stdio_manager_start_and_stop_are_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    method = ContactMethod(details={}, protocol="stdio")
-    mgr = method.interact()
-    await mgr.start()
-    await mgr.stop()
+def test_contact_method_preference_from_details() -> None:
+    method = ContactMethod(protocol="email", name="work", details={"preference": 3})
+    assert method.preference == 3
 
 
-async def test_stdio_manager_send_writes_prompt_and_reads_response(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+# ── ContactManager CRUD ───────────────────────────────────────────────────────
+
+async def test_list_contact_methods_empty_for_new_user(contact_manager: ContactManager) -> None:
+    methods = await contact_manager.list_contact_methods()
+    assert methods == []
+
+
+async def test_create_and_get_contact_method(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "alice@example.com"})
+    method = await contact_manager.get_contact_method("email", "work")
+    assert method is not None
+    assert method.protocol == "email"
+    assert method.name == "work"
+    assert method.details["address"] == "alice@example.com"
+
+
+async def test_get_missing_contact_method_returns_none(contact_manager: ContactManager) -> None:
+    result = await contact_manager.get_contact_method("email", "nonexistent")
+    assert result is None
+
+
+async def test_delete_contact_method(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "alice@example.com"})
+    await contact_manager.delete_contact_method("email", "work")
+    assert await contact_manager.get_contact_method("email", "work") is None
+
+
+async def test_update_contact_method(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "old@example.com"})
+    await contact_manager.update_contact_method("email", "work", address="new@example.com")
+    method = await contact_manager.get_contact_method("email", "work")
+    assert method is not None
+    assert method.details["address"] == "new@example.com"
+
+
+async def test_update_missing_contact_method_raises(contact_manager: ContactManager) -> None:
+    with pytest.raises(InteractionError, match="not found"):
+        await contact_manager.update_contact_method("email", "ghost", address="x@y.com")
+
+
+async def test_create_unsupported_protocol_raises(contact_manager: ContactManager) -> None:
+    with pytest.raises(InteractionError, match="Unsupported contact protocol"):
+        await contact_manager.create_contact_method("carrier-pigeon", "x", {})
+
+
+# ── list / filter ─────────────────────────────────────────────────────────────
+
+async def test_list_contact_methods_returns_created_entry(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "a@b.com"})
+    methods = await contact_manager.list_contact_methods()
+    assert any(m.protocol == "email" and m.name == "work" for m in methods)
+
+
+async def test_list_contact_methods_filtered_by_protocol(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {})
+    await contact_manager.create_contact_method("sms", "mobile", {"number": "+1555"})
+    methods = await contact_manager.list_contact_methods(protocol="email")
+    assert len(methods) == 1
+    assert methods[0].protocol == "email"
+
+
+async def test_list_protocols(contact_manager: ContactManager) -> None:
+    protocols = await contact_manager.list_protocols()
+    # contact schema seeds all protocol buckets
+    assert "email" in protocols
+    assert "sms" in protocols
+
+
+async def test_list_named_entries(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "a@b.com"})
+    await contact_manager.create_contact_method("email", "home", {"address": "h@b.com"})
+    entries = await contact_manager.list_named_entries("email")
+    assert "work" in entries
+    assert "home" in entries
+
+
+# ── identify_contact_method ───────────────────────────────────────────────────
+
+async def test_identify_returns_stdio_when_no_methods(contact_manager: ContactManager) -> None:
+    method = await contact_manager.identify_contact_method()
+    assert method.protocol == "stdio"
+
+
+async def test_identify_picks_lowest_preference(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {}, preference=5)
+    await contact_manager.create_contact_method("sms", "mobile", {}, preference=1)
+    method = await contact_manager.identify_contact_method()
+    assert method.protocol == "sms"
+    assert method.preference == 1
+
+
+# ── stdio interaction ─────────────────────────────────────────────────────────
+
+async def test_stdio_send_writes_prompt_and_reads_response(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_out = io.StringIO()
     fake_in = io.StringIO("yes, remote\n")
     monkeypatch.setattr(sys, "stdout", fake_out)
     monkeypatch.setattr(sys, "stdin", fake_in)
 
-    method = ContactMethod(details={}, protocol="stdio")
+    method = ContactMethod(protocol="stdio", name="default", details={})
     mgr = method.interact()
     response = await mgr.send("Do you prefer remote work?")
 
@@ -80,111 +152,9 @@ async def test_stdio_manager_send_writes_prompt_and_reads_response(
     assert "Do you prefer remote work?" in fake_out.getvalue()
 
 
-async def test_stdio_manager_send_strips_trailing_newline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_stdio_send_strips_trailing_newline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     monkeypatch.setattr(sys, "stdin", io.StringIO("answer\n"))
 
-    mgr = ContactMethod(details={}, protocol="stdio").interact()
-    response = await mgr.send("question?")
-    assert not response.endswith("\n")
-
-
-# ── non-empty methods list ────────────────────────────────────────────────────
-
-async def test_get_contact_methods_returns_entries_stored_in_graph(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:contact:email",
-        ["CONTACT"],
-        {"type": "email", "value": "user@example.com", "preference": 1, "database": user_id},
-    )
-    cm = ContactManager(database=user_id, data_manager=data_manager)
-    methods = await cm.get_contact_methods()
-    assert len(methods) >= 1
-    assert any(m.protocol == "email" for m in methods)
-
-
-async def test_identify_contact_method_picks_lowest_preference(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:contact:a",
-        ["CONTACT"],
-        {"type": "email", "value": "a@example.com", "preference": 5, "database": user_id},
-    )
-    await reg.add_node(
-        f"{user_id}:contact:b",
-        ["CONTACT"],
-        {"type": "sms", "value": "+1555", "preference": 1, "database": user_id},
-    )
-    cm = ContactManager(database=user_id, data_manager=data_manager)
-    method = await cm.identify_contact_method("any query")
-    assert method.details.get("preference") == 1
-
-
-async def test_get_contact_methods_filters_unsupported_protocols(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:contact:bad",
-        ["CONTACT"],
-        {"type": "carrier-pigeon", "value": "coo", "database": user_id},
-    )
-    cm = ContactManager(database=user_id, data_manager=data_manager)
-    methods = await cm.get_contact_methods()
-    assert all(m.protocol != "carrier-pigeon" for m in methods)
-
-
-async def test_get_contact_methods_returns_empty_when_database_not_registered(
-    store_factory: Any,
-) -> None:
-    mgr = UserDataManager(store_factory=store_factory)
-    cm = ContactManager(database="never-created", data_manager=mgr)
-    methods = await cm.get_contact_methods()
-    assert methods == []
-
-
-async def test_get_contact_methods_protocol_filter_excludes_non_matching(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:contact:1",
-        ["CONTACT"],
-        {"type": "email", "value": "a@b.com", "database": user_id},
-    )
-    await reg.add_node(
-        f"{user_id}:contact:2",
-        ["CONTACT"],
-        {"type": "sms", "value": "+1555", "database": user_id},
-    )
-    cm = ContactManager(database=user_id, data_manager=data_manager)
-    methods = await cm.get_contact_methods(protocol="email")
-    assert len(methods) == 1
-    assert methods[0].protocol == "email"
-
-
-async def test_get_contact_methods_name_filter_excludes_non_matching(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:contact:work",
-        ["CONTACT"],
-        {"type": "email", "value": "w@b.com", "name": "work", "database": user_id},
-    )
-    await reg.add_node(
-        f"{user_id}:contact:home",
-        ["CONTACT"],
-        {"type": "email", "value": "h@b.com", "name": "home", "database": user_id},
-    )
-    cm = ContactManager(database=user_id, data_manager=data_manager)
-    methods = await cm.get_contact_methods(name="work")
-    assert len(methods) == 1
-    assert methods[0].details["name"] == "work"
+    mgr = ContactMethod(protocol="stdio", name="default", details={}).interact()
+    assert not (await mgr.send("q?")).endswith("\n")

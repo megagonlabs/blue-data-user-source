@@ -1,34 +1,15 @@
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-# llama_index is not installed in this environment; load the stub.
-sys.path.insert(0, str(Path(__file__).parent / "stubs"))
+from pathlib import Path
 
 import pytest
 
-from blue_data_user_source.data.manager import StoreFactory, UserDataManager
-from blue_data_user_source.data.registry import UserDataRegistry
-from blue_data_user_source.interfaces import GraphSource, VectorSource
-from tests.doubles.sources import InMemoryGraphSource, InMemoryVectorSource
+from blue_data_user_source.data.manager import UserDataManager
 
-
-def _in_memory_store_factory(name: str) -> tuple[GraphSource, VectorSource]:
-    return InMemoryGraphSource(), InMemoryVectorSource()
-
-
-@pytest.fixture
-def store_factory() -> StoreFactory:
-    return _in_memory_store_factory
-
-
-@pytest.fixture
-def graph_store() -> InMemoryGraphSource:
-    return InMemoryGraphSource()
-
-
-@pytest.fixture
-def vector_store() -> InMemoryVectorSource:
-    return InMemoryVectorSource()
+_SRC = Path(__file__).parent.parent / "src" / "blue_data_user_source" / "data"
+_SCHEMA         = str(_SRC / "schema.json")
+_METADATA_SCHEMA = str(_SRC / "metadata_schema.json")
+_CONTACT_SCHEMA  = str(_SRC / "contact_schema.json")
 
 
 @pytest.fixture
@@ -37,17 +18,15 @@ def user_id() -> str:
 
 
 @pytest.fixture
-async def registry(
-    graph_store: InMemoryGraphSource, vector_store: InMemoryVectorSource
-) -> UserDataRegistry:
-    reg = UserDataRegistry(graph_store, vector_store)
-    await reg.register_source("test-user-001:graph", graph_store)
-    await reg.register_source("test-user-001:vector", vector_store)
-    return reg
-
-
-@pytest.fixture
-async def data_manager(user_id: str, store_factory: StoreFactory) -> UserDataManager:
-    mgr = UserDataManager(store_factory=store_factory)
-    await mgr.create_user(user_id)
+async def manager(user_id: str) -> UserDataManager:
+    """Fully built UserDataManager with all-memory backends."""
+    mgr = UserDataManager(user_id, {"backend": "memory"})
+    await mgr.build(
+        schema_path=_SCHEMA,
+        kb_source_props={"backend": "memory"},
+        metadata_schema_path=_METADATA_SCHEMA,
+        metadata_source_props={"backend": "memory"},
+        contact_schema_path=_CONTACT_SCHEMA,
+        contact_source_props={"backend": "memory"},
+    )
     return mgr

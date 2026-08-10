@@ -1,78 +1,73 @@
-from typing import Any
+"""Tests for UserDataManager.execute_query()."""
+from __future__ import annotations
+
+from unittest.mock import AsyncMock
 
 import pytest
 
-from blue_data_user_source.interfaces import DataSource
 from blue_data_user_source.data.manager import UserDataManager
-from blue_data_user_source.types import ImportError
+from tests.doubles.sources import make_mock_kb
 
 
-class _FixedResultSource(DataSource):
-    """DataSource stub that returns a fixed list for any query."""
-
-    def __init__(self, results: list[Any]) -> None:
-        self._results = results
-
-    async def query(self, query: str) -> list[Any]:
-        return self._results
+@pytest.fixture
+async def manager_with_mock_kb(manager: UserDataManager) -> UserDataManager:
+    manager._kb_source = make_mock_kb(result=["result"], metadata={"n1": {"created": "2024-01-01T00:00:00+00:00", "modified": "2024-01-01T00:00:00+00:00"}})
+    return manager
 
 
-async def test_create_user_registers_graph_and_vector_stores(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    graph_src = await reg.get_source(f"{user_id}:graph")
-    vector_src = await reg.get_source(f"{user_id}:vector")
-    assert graph_src is not None
-    assert vector_src is not None
+async def test_execute_query_returns_list_and_dict(manager_with_mock_kb: UserDataManager) -> None:
+    data, metadata = await manager_with_mock_kb.execute_query("what are my skills?")
+    assert isinstance(data, list)
+    assert isinstance(metadata, dict)
 
 
-async def test_execute_query_returns_aggregated_results(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    reg = data_manager._registries[user_id]
-    await reg.add_node(
-        f"{user_id}:entity:alice",
-        ["ENTITY"],
-        {"key": "alice", "database": user_id, "schema_path": "alice"},
-    )
-
-    results, metadata = await data_manager.execute_query("what skills?", user_id)
-    assert isinstance(results, list)
-    assert "provenance" in metadata
+async def test_execute_query_returns_kb_result(manager_with_mock_kb: UserDataManager) -> None:
+    data, _ = await manager_with_mock_kb.execute_query("q")
+    assert data == ["result"]
 
 
-async def test_execute_query_metadata_contains_provenance_entries(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    _, metadata = await data_manager.execute_query("any query", user_id)
-    assert len(metadata["provenance"]) >= 1
-    for entry in metadata["provenance"]:
-        assert "source" in entry
-        assert "timestamp" in entry
-        assert "confidence" in entry
+async def test_execute_query_returns_kb_metadata(manager_with_mock_kb: UserDataManager) -> None:
+    _, metadata = await manager_with_mock_kb.execute_query("q")
+    assert "n1" in metadata
+    assert "created" in metadata["n1"]
 
 
-async def test_import_source_type1_registers_source_in_registry(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    source = _FixedResultSource(["resume text"])
-    await data_manager.import_source(source, user_id, queries=None)
-
-    reg = data_manager._registries[user_id]
-    source_nodes = await reg.query_nodes(labels=["SOURCE"])
-    assert len(source_nodes) == 1
-    assert "source_id" in source_nodes[0]["properties"]
+async def test_execute_query_passes_include_metadata_true(manager: UserDataManager) -> None:
+    mock_kb = make_mock_kb()
+    manager._kb_source = mock_kb
+    await manager.execute_query("q")
+    mock_kb.answer.assert_awaited_once()
+    call_kwargs = mock_kb.answer.call_args.kwargs
+    assert call_kwargs.get("include_metadata") is True
 
 
-async def test_import_source_type2_raises_import_error_when_source_query_fails(
-    data_manager: UserDataManager, user_id: str
-) -> None:
-    class _ErrorSource(_FixedResultSource):
-        async def query(self, q: str) -> list[Any]:
-            raise RuntimeError("disk read failed")
+async def test_execute_query_passes_callbacks(manager: UserDataManager) -> None:
+    mock_kb = make_mock_kb()
+    manager._kb_source = mock_kb
+    on_call = AsyncMock()
+    on_result = AsyncMock()
+    await manager.execute_query("q", on_tool_call=on_call, on_tool_result=on_result)
+    call_kwargs = mock_kb.answer.call_args.kwargs
+    assert call_kwargs.get("on_tool_call") is on_call
+    assert call_kwargs.get("on_tool_result") is on_result
 
-    from blue_data_user_source.types import ImportError as UserImportError
 
-    with pytest.raises(UserImportError, match="Query over source failed"):
-        await data_manager.import_source(_ErrorSource([]), user_id, queries=["q"])
+async def test_execute_query_str_result_wrapped_in_dict(manager: UserDataManager) -> None:
+    mock_kb = make_mock_kb(result="plain text answer")
+    manager._kb_source = mock_kb
+    data, _ = await manager.execute_query("q")
+    assert data == [{"answer": "plain text answer"}]
+
+
+async def test_execute_query_none_result_returns_empty_list(manager: UserDataManager) -> None:
+    mock_kb = make_mock_kb(result=None)
+    manager._kb_source = mock_kb
+    data, _ = await manager.execute_query("q")
+    assert data == []
+
+
+async def test_execute_query_empty_metadata_when_kb_returns_none(manager: UserDataManager) -> None:
+    mock_kb = make_mock_kb(result=[], metadata={})
+    manager._kb_source = mock_kb
+    _, metadata = await manager.execute_query("q")
+    assert metadata == {}
