@@ -341,16 +341,45 @@ pytest tests/benchmarks/reasoning/
 
 **Freshness metric** cases (`reasoning/cases/freshness_*.yaml`) are deterministic — they run without a cassette or API key and report the numeric score for data aged 1 day, 90 days, 400 days, two mixed nodes, and zero nodes.
 
-#### Recording cassettes
+#### Live runs and cassette recording
 
-To record cassettes for the first time (or re-record after a schema change):
+Each benchmark module ships a `run.py` that runs live against the real OpenAI API, prints a progress line per case, and optionally writes VCR cassettes for later pytest replay:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-pytest tests/benchmarks/extraction/
-pytest tests/benchmarks/querying/
-pytest tests/benchmarks/reasoning/
+
+# Run all extraction cases with the default model (gpt-4o)
+python -m tests.benchmarks.extraction.run
+
+# Run a specific case or model
+python -m tests.benchmarks.extraction.run --case basic_profile --model gpt-4o-mini
+
+# Run and record cassettes for pytest replay
+python -m tests.benchmarks.extraction.run --record
+
+# Querying benchmark — shows addressing style in progress line
+python -m tests.benchmarks.querying.run
+python -m tests.benchmarks.querying.run --record
+
+# Reasoning benchmark — freshness cases are deterministic (no API key needed)
+python -m tests.benchmarks.reasoning.run --type freshness   # no API key required
+python -m tests.benchmarks.reasoning.run                    # all types
+python -m tests.benchmarks.reasoning.run --type contextualization --type expansion
+python -m tests.benchmarks.reasoning.run --record
 ```
+
+Common options (all three runners):
+
+| Option | Description |
+|---|---|
+| `--model MODEL` | Model to use (repeatable; default: `gpt-4o`) |
+| `--case CASE_ID` | Run only this case (repeatable; default: all) |
+| `--judge-model MODEL` | Model for LLM-judge scoring (default: `gpt-4o-mini`) |
+| `--out PATH` | JSON score report path (default: `.reports/live-<timestamp>.json`) |
+| `--detail-out PATH` | JSONL detail log path |
+| `--record` | Write cassettes to `cassettes/` for pytest replay |
+
+The reasoning runner also accepts `--type` to filter by benchmark type (`contextualization`, `expansion`, `completeness`, `freshness`, `appropriateness`).
 
 Cassettes are saved to `tests/benchmarks/<module>/cassettes/`. Commit them alongside the case files so CI can replay without network access.
 

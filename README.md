@@ -71,12 +71,17 @@ udb data query "What jobs are suitable for me?" --format nl
 # Unit tests — fast, no API key
 cd lib && pytest tests/unit/
 
-# Benchmarks — LLM cases skip without cassettes + API key;
+# Benchmark pytest suite — LLM cases skip without cassettes + API key;
 # freshness metric cases are deterministic and always run
 cd lib && pytest tests/benchmarks/
 
-# Record VCR cassettes for later replay
-cd lib && OPENAI_API_KEY=sk-... pytest tests/benchmarks/
+# Live benchmark runs (record cassettes for replay)
+cd lib && python -m tests.benchmarks.extraction.run --record
+cd lib && python -m tests.benchmarks.querying.run --record
+cd lib && python -m tests.benchmarks.reasoning.run --record
+
+# Freshness benchmark runs without an API key
+cd lib && python -m tests.benchmarks.reasoning.run --type freshness
 ```
 
 See [lib/README.md](lib/README.md#running-tests) for full benchmark details.
