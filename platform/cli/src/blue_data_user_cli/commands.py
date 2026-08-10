@@ -1137,9 +1137,10 @@ def metadata_group() -> None:
 
 @metadata_group.command("list")
 @click.argument("path", nargs=-1)
+@click.option("-r", "--recursive", is_flag=True, help="List all keys recursively as a flat key=value table.")
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
 @click.pass_obj
-def metadata_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
+def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -> None:
     """List metadata at the given path, or top-level categories if no path given.
 
     Examples:
@@ -1147,7 +1148,8 @@ def metadata_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
     \b
       udb metadata list
       udb metadata list identity
-      udb metadata list policy
+      udb metadata list identity --recursive
+      udb metadata list --recursive
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1161,7 +1163,6 @@ def metadata_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
     dotted = ".".join(path)
     for i, segment in enumerate(path):
         if not isinstance(node, dict) or segment not in node:
-            # Known schema category with no data yet — show empty schema skeleton
             if i == 0 and segment in _METADATA_SCHEMA:
                 node = {}
                 break
@@ -1173,8 +1174,52 @@ def metadata_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
         console.print_json(json.dumps(node))
         return
 
+    if recursive:
+        def _merge_category(stored_cat: Any, schema_cat: dict) -> dict[str, Any]:
+            """Merge stored values with schema field specs; schema keys always present."""
+            stored_cat = stored_cat if isinstance(stored_cat, dict) else {}
+            merged: dict[str, Any] = {}
+            for field, spec in schema_cat.items():
+                merged[field] = stored_cat.get(field)
+            for k, v in stored_cat.items():
+                if k not in merged:
+                    merged[k] = v
+            return merged
+
+        def _flatten(subtree: Any, prefix: str = "") -> list[tuple[str, Any]]:
+            if isinstance(subtree, dict):
+                rows: list[tuple[str, Any]] = []
+                for k, v in subtree.items():
+                    full = f"{prefix}.{k}" if prefix else k
+                    rows.extend(_flatten(v, full))
+                return rows
+            return [(prefix, subtree)]
+
+        if not path:
+            all_cats = dict.fromkeys(list(_METADATA_SCHEMA.keys()) + list(all_meta.keys()))
+            merged_root: dict[str, Any] = {}
+            for cat in all_cats:
+                schema_cat = {k: v for k, v in _METADATA_SCHEMA.get(cat, {}).items() if not k.startswith("__")}
+                merged_root[cat] = _merge_category(all_meta.get(cat), schema_cat)
+            flat = _flatten(merged_root)
+        else:
+            schema_cat = {k: v for k, v in _METADATA_SCHEMA.get(path[0], {}).items() if not k.startswith("__")} if len(path) == 1 else {}
+            merged_cat = _merge_category(node, schema_cat)
+            flat = _flatten(merged_cat, dotted)
+
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Key", style="bold")
+        t.add_column("Value")
+        for key, val in flat:
+            val_str = json.dumps(val) if isinstance(val, (list, dict)) else (str(val) if val is not None else "[dim]—[/dim]")
+            t.add_row(key, val_str)
+        if not flat:
+            console.print("[dim](no metadata)[/dim]")
+        else:
+            console.print(t)
+        return
+
     if not path:
-        # Top-level: merge stored keys with schema categories
         categories = dict.fromkeys(list(_METADATA_SCHEMA.keys()) + list(all_meta.keys()))
         t = Table(show_header=True, header_style="bold")
         t.add_column("Category", style="bold")
