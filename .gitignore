@@ -23,6 +23,9 @@ coverage.xml
 htmlcov/
 *,cover
 
+# Benchmark reports (generated at run time, not committed)
+lib/tests/benchmarks/**/.reports/
+
 # Type checking
 .pyright/
 .mypy_cache/
