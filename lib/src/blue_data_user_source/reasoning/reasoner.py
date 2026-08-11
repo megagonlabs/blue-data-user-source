@@ -8,6 +8,7 @@ from blue_data_user_source.reasoning.metric import (
     CompletenessMetric,
     FreshnessMetric,
     MetricEvaluation,
+    PrivacyMetric,
     UserDataMetric,
 )
 
@@ -80,6 +81,8 @@ class UserQueryReasoner:
         self._manager = manager
         self._session_id = session_id
         self._metrics: list[UserDataMetric] = list(self._DEFAULT_METRICS)
+        if manager is not None:
+            self._metrics.append(PrivacyMetric(manager=manager))
 
     async def contextualize_query(self, query: str) -> str:
         prompt = (

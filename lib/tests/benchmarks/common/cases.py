@@ -4,7 +4,8 @@ Three benchmark families share this module:
   - ExtractionCase   — store user text, then query and score answer alignment
   - QueryCase        — seed KB, run NL query in different addressing styles
   - ReasoningCase    — LLM-backed reasoning assessment (contextualization,
-                       expansion, completeness metric, appropriateness)
+                       expansion, completeness, freshness, privacy,
+                       appropriateness)
 """
 
 from __future__ import annotations
@@ -104,9 +105,13 @@ class ReasoningCase:
       - ``"expansion"``         — uses ``query``
       - ``"completeness"``      — uses ``query``, ``results``, ``provenance``
       - ``"freshness"``         — uses ``query``, ``node_ages_days``
+      - ``"privacy"``           — uses ``query``, ``results``, ``provenance``,
+                                  ``user_preferences`` (keys set as
+                                  ``privacy.*`` metadata)
       - ``"appropriateness"``   — uses ``query``, ``contact_protocol``,
                                   ``contact_name``, ``failing_metrics``,
-                                  ``user_preferences``
+                                  ``user_preferences`` (keys set as
+                                  ``preferences.*`` metadata)
     """
     id: str
     description: str

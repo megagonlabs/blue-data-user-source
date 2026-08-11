@@ -1,0 +1,17 @@
+id: privacy_sensitive_exposure
+benchmark_type: privacy
+description: >
+  User has set data_sharing_preference to private and listed health and
+  financial data as sensitive categories. The query results expose financial
+  information (salary, bank details). PrivacyMetric should score low —
+  sensitive data is being surfaced against the user's privacy settings.
+query: "What are the user's financial details?"
+results:
+  - "Annual salary: $180,000"
+  - "Bank: Chase, account ending 4421"
+  - "Investments: Vanguard index fund portfolio"
+provenance: []
+user_preferences:
+  data_sharing_preference: "private"
+  sensitive_categories: "['health', 'financial']"
+  consent_level: "minimal"

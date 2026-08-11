@@ -1,8 +1,8 @@
 id: freshness_mixed_nodes
 benchmark_type: freshness
 description: >
-  Two nodes: one fresh (2 days) and one stale (300 days). FreshnessMetric
-  averages across nodes, so the score should be between the two individual
-  scores — roughly 0.5.
+  Two nodes with contrasting ages: one very fresh (2 days) and one stale
+  (300 days). FreshnessMetric presents both ages to the LLM, which should
+  assess the overall freshness considering the mixed ages.
 query: "What are the user's career goals?"
 node_ages_days: [2, 300]

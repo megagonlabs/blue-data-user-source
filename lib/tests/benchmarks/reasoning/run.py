@@ -1,14 +1,14 @@
 """Live reasoning benchmark runner.
 
-Covers four LLM-backed benchmark types and one deterministic type:
+Covers five LLM-backed benchmark types:
   - ``contextualization`` — scores query rewrite precision
   - ``expansion``         — scores sub-question relevance and coverage
   - ``completeness``      — reports LLM-assigned completeness score
+  - ``freshness``         — reports LLM-assigned freshness score
   - ``appropriateness``   — scores whether the generated question suits the channel
-  - ``freshness``         — deterministic; runs without an API key or cassette
 
-Runs against the real OpenAI API for LLM-backed cases and optionally
-(re)records the VCR cassettes that ``test_reasoning_benchmark.py`` replays.
+All types call the OpenAI API and require OPENAI_API_KEY to be set.
+Optionally (re)records the VCR cassettes that ``test_reasoning_benchmark.py`` replays.
 
 Usage (from ``lib/``, with OPENAI_API_KEY set):
     python -m tests.benchmarks.reasoning.run
@@ -52,7 +52,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--case", action="append", dest="case_ids",
                         help="Case id to run (repeatable, default: all)")
     parser.add_argument("--type", action="append", dest="types",
-                        choices=["contextualization", "expansion", "completeness", "freshness", "appropriateness"],
+                        choices=["contextualization", "expansion", "completeness", "freshness", "appropriateness", "privacy"],
                         help="Benchmark type to run (repeatable, default: all)")
     parser.add_argument("--judge-model", default="gpt-4o-mini",
                         help="Model used for LLM-judge scoring (default: gpt-4o-mini)")

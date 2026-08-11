@@ -39,5 +39,12 @@
     "__description__": "Standing instructions agents always follow.",
     "always": { "description": "List of rules that always apply.",  "type": "list", "default": null },
     "never":  { "description": "List of actions agents must never take.", "type": "list", "default": null }
+  },
+  "privacy": {
+    "__description__": "Data privacy preferences and consent settings.",
+    "data_sharing_preference": { "description": "How broadly data may be shared: private | team | public.", "type": "str",  "default": null },
+    "sensitive_categories":    { "description": "Categories of sensitive data (e.g. [\"health\", \"financial\"]).", "type": "list", "default": null },
+    "retention_days":          { "description": "How long agents may retain collected data (days).",         "type": "int",  "default": null },
+    "consent_level":           { "description": "Level of data usage consent: minimal | standard | full.",  "type": "str",  "default": null }
   }
 }

@@ -307,7 +307,7 @@ Database files are stored under `~/.udb/` by default.
 
 ### Unit tests
 
-Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `FreshnessMetric`, `CompletenessMetric`, and `UserDataPlanner`.
+Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `FreshnessMetric`, `CompletenessMetric`, `PrivacyMetric`, and `UserDataPlanner`.
 
 ```bash
 cd lib
@@ -324,12 +324,12 @@ Report-only: benchmarks never fail on a metric regression — they print and wri
 |---|---|---|
 | `extraction` | 4 | User-profile text stored via `store_data`, then queried; scores answer coverage |
 | `querying` | 5 | Same KB data queried using second-person, "the user", and by-name phrasing; scores result alignment |
-| `reasoning` | 16 | Query contextualization precision, expansion coverage, completeness metric, freshness metric, and interaction question appropriateness per contact channel |
+| `reasoning` | 22 | Query contextualization precision, expansion coverage, completeness metric, freshness metric, privacy compliance, and interaction question appropriateness per contact channel |
 
-LLM-backed benchmarks (extraction, querying, and all reasoning cases except freshness) use [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) for replay. They skip automatically when no cassette exists and `OPENAI_API_KEY` is unset:
+All benchmarks use [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) for replay. They skip automatically when no cassette exists and `OPENAI_API_KEY` is unset:
 
 ```bash
-# Run all benchmarks — LLM cases skip, freshness cases run
+# Run all benchmarks — cases without cassettes skip when OPENAI_API_KEY is unset
 cd lib
 pytest tests/benchmarks/
 
@@ -338,8 +338,6 @@ pytest tests/benchmarks/extraction/
 pytest tests/benchmarks/querying/
 pytest tests/benchmarks/reasoning/
 ```
-
-**Freshness metric** cases (`reasoning/cases/freshness_*.yaml`) are deterministic — they run without a cassette or API key and report the numeric score for data aged 1 day, 90 days, 400 days, two mixed nodes, and zero nodes.
 
 #### Live runs and cassette recording
 
@@ -361,9 +359,9 @@ python -m tests.benchmarks.extraction.run --record
 python -m tests.benchmarks.querying.run
 python -m tests.benchmarks.querying.run --record
 
-# Reasoning benchmark — freshness cases are deterministic (no API key needed)
-python -m tests.benchmarks.reasoning.run --type freshness   # no API key required
+# Reasoning benchmark — all types require OPENAI_API_KEY
 python -m tests.benchmarks.reasoning.run                    # all types
+python -m tests.benchmarks.reasoning.run --type freshness
 python -m tests.benchmarks.reasoning.run --type contextualization --type expansion
 python -m tests.benchmarks.reasoning.run --record
 ```
@@ -379,7 +377,7 @@ Common options (all three runners):
 | `--detail-out PATH` | JSONL detail log path |
 | `--record` | Write cassettes to `cassettes/` for pytest replay |
 
-The reasoning runner also accepts `--type` to filter by benchmark type (`contextualization`, `expansion`, `completeness`, `freshness`, `appropriateness`).
+The reasoning runner also accepts `--type` to filter by benchmark type (`contextualization`, `expansion`, `completeness`, `freshness`, `appropriateness`, `privacy`).
 
 Cassettes are saved to `tests/benchmarks/<module>/cassettes/`. Commit them alongside the case files so CI can replay without network access.
 
@@ -427,6 +425,6 @@ lib/
         │   └── cassettes/
         └── reasoning/
             ├── cases/*.yaml       # contextualization, expansion, completeness,
-            │                      # freshness (deterministic), appropriateness
+            │                      # freshness, privacy, appropriateness
             └── cassettes/
 ```

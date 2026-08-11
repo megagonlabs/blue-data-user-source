@@ -1,13 +1,15 @@
 """Runner for LLM-backed reasoning benchmarks.
 
-Covers four benchmark types that call ``_llm_complete`` internally:
+Covers six benchmark types that call ``_llm_complete`` internally:
   - ``contextualization`` — ``UserQueryReasoner.contextualize_query``
   - ``expansion``         — ``UserQueryReasoner.expand_query``
   - ``completeness``      — ``CompletenessMetric.evaluate``
+  - ``freshness``         — ``FreshnessMetric.evaluate``
+  - ``privacy``           — ``PrivacyMetric.evaluate``
   - ``appropriateness``   — the question-rewrite step in
                             ``UserQueryReasoner.request_user_interaction``
 
-All four patch ``openai.AsyncOpenAI`` with ``InstrumentedOpenAI`` so VCR
+All types patch ``openai.AsyncOpenAI`` with ``InstrumentedOpenAI`` so VCR
 cassettes are replayed transparently.
 """
 
@@ -52,7 +54,7 @@ def _make_reasoner(manager: Any) -> Any:
 def _make_metric_evals(failing_metric_names: list[str]) -> list[Any]:
     from blue_data_user_source.reasoning.metric import MetricEvaluation
     evals = []
-    for name in ["completeness", "freshness"]:
+    for name in ["completeness", "freshness", "privacy"]:
         passes = name not in failing_metric_names
         score = 0.9 if passes else 0.2
         evals.append(MetricEvaluation(name=name, score=score, reasoning="benchmark", passes=passes))
@@ -94,7 +96,7 @@ class ReasoningRunResult:
         return sum(c.latency_seconds for c in self.llm_calls)
 
 
-_DETERMINISTIC_TYPES = {"freshness"}
+_DETERMINISTIC_TYPES: set[str] = set()
 
 
 async def run_reasoning_case(case: ReasoningCase, model: str = "gpt-4o-mini") -> ReasoningRunResult:
@@ -147,6 +149,13 @@ async def _dispatch(case: ReasoningCase) -> Any:
         from blue_data_user_source.reasoning.metric import CompletenessMetric
         metadata = _build_provenance_metadata(case.provenance)
         return await CompletenessMetric().evaluate(case.query, case.results, metadata)
+
+    if case.benchmark_type == "privacy":
+        from blue_data_user_source.reasoning.metric import PrivacyMetric
+        for key, val in case.user_preferences.items():
+            manager.set_metadata(f"privacy.{key}", val)
+        metadata = _build_provenance_metadata(case.provenance)
+        return await PrivacyMetric(manager=manager).evaluate(case.query, case.results, metadata)
 
     if case.benchmark_type == "appropriateness":
         from blue_data_user_source.interaction.contact import ContactManager, ContactMethod

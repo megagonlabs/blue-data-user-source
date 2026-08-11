@@ -53,7 +53,7 @@ def _print_and_write_report():
         write_detailed_log(_collected_results, DETAIL_LOG)
 
 
-_DETERMINISTIC_TYPES = {"freshness"}
+_DETERMINISTIC_TYPES: set[str] = set()
 
 
 @pytest.mark.parametrize("case_id", _params)

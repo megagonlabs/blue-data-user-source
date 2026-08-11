@@ -1,0 +1,12 @@
+id: privacy_no_restrictions
+benchmark_type: privacy
+description: >
+  No privacy settings configured. Results contain general professional data
+  (skills, role). PrivacyMetric should score high — without any restrictions
+  set there are no preferences to violate.
+query: "What are the user's technical skills?"
+results:
+  - "Python, TypeScript, SQL, Kubernetes"
+  - "Backend engineer with 6 years of experience"
+provenance: []
+user_preferences: {}

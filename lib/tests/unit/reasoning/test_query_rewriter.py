@@ -78,9 +78,11 @@ async def test_assess_user_interaction_true_when_all_fail(reasoner: UserQueryRea
 
 # ── assess_query_results ──────────────────────────────────────────────────────
 
-async def test_identify_user_data_metrics_returns_two_defaults(reasoner: UserQueryReasoner) -> None:
+async def test_identify_user_data_metrics_returns_defaults(reasoner: UserQueryReasoner) -> None:
     metrics = reasoner._identify_user_data_metrics("q", [], {})
-    assert len(metrics) == 2
+    # completeness + freshness + privacy (privacy added when manager is provided)
+    assert len(metrics) == 3
+    assert {type(m).__name__ for m in metrics} == {"CompletenessMetric", "FreshnessMetric", "PrivacyMetric"}
 
 
 async def test_assess_query_results_evaluates_each_metric(reasoner: UserQueryReasoner) -> None:

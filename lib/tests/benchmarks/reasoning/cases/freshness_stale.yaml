@@ -1,7 +1,8 @@
 id: freshness_stale
 benchmark_type: freshness
 description: >
-  Single node modified 400 days ago (beyond the 365-day decay window).
-  FreshnessMetric should score 0.0 and fail the threshold.
+  Single node modified 400 days ago (beyond one year). FreshnessMetric
+  presents the age to the LLM, which should flag this data as stale and
+  fail the threshold.
 query: "What is the user's current job title?"
 node_ages_days: [400]

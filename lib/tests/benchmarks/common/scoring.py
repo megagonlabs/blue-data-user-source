@@ -280,7 +280,7 @@ async def score_reasoning_case(
         score.secondary_score = float(args.get("coverage_score", 0.0))
         score.reasoning = str(args.get("reasoning", ""))
 
-    elif case.benchmark_type in ("freshness", "completeness"):
+    elif case.benchmark_type in ("freshness", "completeness", "privacy"):
         from blue_data_user_source.reasoning.metric import MetricEvaluation
         ev: MetricEvaluation = run_result.output
         score.score = ev.score

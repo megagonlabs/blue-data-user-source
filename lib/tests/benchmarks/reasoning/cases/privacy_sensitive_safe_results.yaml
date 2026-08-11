@@ -1,0 +1,15 @@
+id: privacy_sensitive_safe_results
+benchmark_type: privacy
+description: >
+  User has marked health as a sensitive category. The query is about
+  professional skills and results contain only skill and work-related data
+  — no health information. PrivacyMetric should score high because sensitive
+  categories are not present in the results.
+query: "What programming languages does the user know?"
+results:
+  - "Python (expert), TypeScript (proficient), Rust (learning)"
+  - "Familiar with SQL, GraphQL, and REST API design"
+provenance: []
+user_preferences:
+  sensitive_categories: "['health']"
+  data_sharing_preference: "team"

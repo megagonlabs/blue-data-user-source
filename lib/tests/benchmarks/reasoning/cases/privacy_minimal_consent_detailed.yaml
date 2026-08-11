@@ -1,0 +1,18 @@
+id: privacy_minimal_consent_detailed
+benchmark_type: privacy
+description: >
+  User has set consent_level to minimal, indicating they want only essential
+  data usage. The results contain a rich personal profile with location,
+  family, and health details far exceeding minimal usage. PrivacyMetric
+  should score low.
+query: "Tell me everything about the user."
+results:
+  - "Alice Chen, 34, lives at 123 Main St, San Francisco"
+  - "Married with two children"
+  - "Diagnosed with Type 2 diabetes in 2021"
+  - "Blood type: O positive"
+  - "Emergency contact: Bob Chen, (415) 555-0192"
+provenance: []
+user_preferences:
+  consent_level: "minimal"
+  sensitive_categories: "['health', 'location', 'family']"
