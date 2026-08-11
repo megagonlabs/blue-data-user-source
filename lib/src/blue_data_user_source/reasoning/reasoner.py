@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -106,10 +107,10 @@ class UserQueryReasoner:
         query_results_metadata: dict[str, Any],
     ) -> list[MetricEvaluation]:
         applicable = self._identify_user_data_metrics(query, query_results, query_results_metadata)
-        return [
-            await metric.evaluate(query, query_results, query_results_metadata)
+        return list(await asyncio.gather(*[
+            metric.evaluate(query, query_results, query_results_metadata)
             for metric in applicable
-        ]
+        ]))
 
     async def assess_user_interaction(
         self,
