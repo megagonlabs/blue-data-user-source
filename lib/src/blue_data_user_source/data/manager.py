@@ -18,7 +18,7 @@ def _build_json_source(name: str, props: dict) -> Any:
     if props.get("backend") == "file":
         from blue_data.source.json.file_json_source import FileJSONSource
         Path(props["path"]).parent.mkdir(parents=True, exist_ok=True)
-        source = FileJSONSource(props["path"])
+        source = FileJSONSource(name, properties={"connection": {"path": props["path"]}})
     else:
         from blue_data.source.json.memory_json_source import MemoryJSONSource
         source = MemoryJSONSource()
