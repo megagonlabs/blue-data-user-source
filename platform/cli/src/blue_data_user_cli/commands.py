@@ -70,20 +70,20 @@ def _user_registry_props(data_dir: Path, name: str) -> dict:
     return {"backend": "file", "path": str(data_dir / "registries" / f"{name}.json")}
 
 
-def _user_kb_props(data_dir: Path, kb_backend: str, **kb_extras: Any) -> dict:
+def _user_kb_props(data_dir: Path, name: str, kb_backend: str, **kb_extras: Any) -> dict:
     props: dict[str, Any] = {"backend": kb_backend}
     if kb_backend == "file":
-        props["directory"] = str(data_dir / "kb")
+        props["directory"] = str(data_dir / "sources" / name)
     props.update(kb_extras)
     return props
 
 
 def _user_metadata_props(data_dir: Path, name: str) -> dict:
-    return {"backend": "file", "path": str(data_dir / "sources" / f"{name}.metadata.json")}
+    return {"backend": "file", "path": str(data_dir / "sources" / name / "metadata.json")}
 
 
 def _user_contact_props(data_dir: Path, name: str) -> dict:
-    return {"backend": "file", "path": str(data_dir / "sources" / f"{name}.contacts.json")}
+    return {"backend": "file", "path": str(data_dir / "sources" / name / "contacts.json")}
 
 
 def _selected_db_path(data_dir: Path) -> Path:
@@ -224,7 +224,7 @@ def database_create(
         asyncio.run(source.create_user(
             name,
             _user_registry_props(data_dir, name),
-            _user_kb_props(data_dir, kb_backend, **kb_extras),
+            _user_kb_props(data_dir, name, kb_backend, **kb_extras),
             _user_metadata_props(data_dir, name),
             _user_contact_props(data_dir, name),
         ))

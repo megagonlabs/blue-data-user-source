@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
@@ -54,10 +55,12 @@ def _build_kb_source(name: str, props: dict) -> Any:
         )
 
     if backend == "file":
+        import os
         from blue_data.source.graph.file_graph_source import FileGraphSource
 
         class _FileKBSource(KBSource, FileGraphSource):  # type: ignore[misc]
-            pass
+            def _db_path(self, database: str) -> str:
+                return os.path.join(self._directory, "data.json")
 
         return _FileKBSource(
             name,
@@ -187,13 +190,16 @@ class UserDataManager:
         """
   
         if self._registry is not None:
-            # KB — stored with a directory-based path
+            # KB — file backend uses a per-user directory containing data.json
             props = self._registry.get_source_properties("kb") or {}
             connection = props.get("connection", {})
             if connection.get("backend") == "file":
-                (Path(connection.get("directory", ".")) / f"{self._database}.json").unlink(missing_ok=True)
+                user_dir = Path(connection.get("directory", "."))
+                (user_dir / "data.json").unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    user_dir.rmdir()  # remove directory only if now empty
 
-            # Metadata and contact — stored with an explicit path
+            # Metadata and contacts — explicit path within the same user directory
             for source_name in ("metadata", "contacts"):
                 props = self._registry.get_source_properties(source_name) or {}
                 connection = props.get("connection", {})
