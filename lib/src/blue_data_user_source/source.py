@@ -202,7 +202,11 @@ class UserSource(DataSource):
         self._managers.pop(name, None)
 
     async def reset_user(self, name: str) -> None:
-        await self._get_manager(name).reset(self._store.get("schema"))
+        await self._get_manager(name).reset(
+            schema_path=self._store.get("schema"),
+            metadata_schema_path=self._store.get("metadata_schema"),
+            contact_schema_path=self._store.get("contact_schema"),
+        )
 
     async def delete_user(self, name: str) -> None:
         manager = self._get_manager(name)

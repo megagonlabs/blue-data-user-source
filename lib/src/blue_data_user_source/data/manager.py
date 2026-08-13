@@ -147,9 +147,11 @@ class UserDataManager:
     async def reset(
         self,
         schema_path: str | None = None,
+        metadata_schema_path: str | None = None,
+        contact_schema_path: str | None = None,
         sources: set[str] | None = None,
     ) -> None:
-        """Clear and optionally reseed selected sources.
+        """Clear and reseed selected sources back to schema defaults.
 
         ``sources`` defaults to ``{"kb", "metadata", "contacts"}``.
         """
@@ -163,9 +165,13 @@ class UserDataManager:
 
         if "metadata" in sources:
             self.clear_metadata()
+            if metadata_schema_path:
+                self.seed_metadata_schema(metadata_schema_path)
 
         if "contacts" in sources:
             self.clear_contacts()
+            if contact_schema_path:
+                self.seed_contact_schema(contact_schema_path)
 
         # Deregister any additional imported sources from the registry
         source_records = self._registry.list_records(record_type="source", scope="/")
