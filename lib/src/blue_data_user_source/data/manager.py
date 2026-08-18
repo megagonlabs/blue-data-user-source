@@ -5,75 +5,59 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 from blue_data.registry.data_registry import DataRegistry
+from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
 
 
 # ------------------------------------------------------------------ #
-# Private builders                                                     #
+# Class paths for DataSource.instantiate                               #
 # ------------------------------------------------------------------ #
 
-def _build_json_source(name: str, props: dict) -> Any:
-    """Build a named JSONSource with registry-compatible properties."""
-    if props.get("backend") == "file":
-        from blue_data.source.json.file_json_source import FileJSONSource
-        Path(props["path"]).parent.mkdir(parents=True, exist_ok=True)
-        source = FileJSONSource(name, properties={"connection": {"path": props["path"]}})
-    else:
-        from blue_data.source.json.memory_json_source import MemoryJSONSource
-        source = MemoryJSONSource()
-    source.name = name
-    source.properties = {"connection": props}
-    return source
+# Canonical class paths — import these in CLI / tests instead of hard-coding strings.
+CLS_JSON_MEMORY = "blue_data.source.json.memory_json_source.MemoryJSONSource"
+CLS_JSON_FILE   = "blue_data.source.json.file_json_source.FileJSONSource"
+CLS_KB_MEMORY   = "blue_data_kb_source.memory_kb_source.MemoryKBSource"
+CLS_KB_FILE     = "blue_data_kb_source.file_kb_source.FileKBSource"
+CLS_KB_NEO4J    = "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource"
+
+# Legacy mapping — kept for backward compatibility when reading stored configs
+# that pre-date the _class / connection property format.
+_KB_BACKENDS: dict[str, str] = {
+    "memory": CLS_KB_MEMORY,
+    "file":   CLS_KB_FILE,
+    "neo4j":  CLS_KB_NEO4J,
+}
+_JSON_BACKENDS: dict[str, str] = {
+    "memory": CLS_JSON_MEMORY,
+    "file":   CLS_JSON_FILE,
+}
 
 
-def _build_kb_source(name: str, props: dict) -> Any:
-    """Instantiate a named KBSource from flat backend config props.
+def _enrich_props(props: dict, kind: str) -> dict:
+    """Normalise *props* to ``{"_class": "...", "connection": {...}}``.
 
-    Expected keys: ``backend`` (``"memory"`` | ``"file"`` | ``"neo4j"``),
-    plus backend-specific keys (``directory`` for file, ``uri`` / ``username``
-    / ``password`` for neo4j).
-
-    ``.properties`` stores ``connection`` so it survives a
-    ``DataRegistry.register_source`` round-trip.
+    Pass-through when *props* already has ``_class``.  Falls back to the
+    legacy ``{"backend": "..."}`` shape for backward compatibility when
+    reading old stored configs.
     """
+    if "_class" in props:
+        return props
     backend = props.get("backend", "memory")
-    extras = {k: v for k, v in props.items() if k not in ("backend", "schema_path")}
-    connection = {"backend": backend, **extras}
-    stored_props: dict[str, Any] = {"connection": connection}
+    backends = _KB_BACKENDS if kind == "kb" else _JSON_BACKENDS
+    cls = backends.get(backend)
+    if cls is None:
+        raise ValueError(f"Unknown {kind} backend: {backend!r}")
+    return {"_class": cls, "connection": props}
 
-    if backend == "neo4j":
-        from blue_data.source.graph.neo4j.neo4j_graph_source import NEO4JSource
 
-        class _Neo4jKBSource(KBSource, NEO4JSource):  # type: ignore[misc]
-            pass
-
-        return _Neo4jKBSource(
-            name,
-            properties={"connection": {"protocol": "neo4j", **connection}},
-        )
-
-    if backend == "file":
-        import os
-        from blue_data.source.graph.file_graph_source import FileGraphSource
-
-        class _FileKBSource(KBSource, FileGraphSource):  # type: ignore[misc]
-            def _db_path(self, database: str) -> str:
-                return os.path.join(self._directory, "data.json")
-
-        return _FileKBSource(
-            name,
-            directory=connection.get("directory", "."),
-            properties=stored_props,
-        )
-
-    from blue_data.source.graph.memory_graph_source import MemoryGraphSource
-
-    class _MemoryKBSource(KBSource, MemoryGraphSource):  # type: ignore[misc]
-        pass
-
-    return _MemoryKBSource(name, properties=stored_props)
+def _build_json_source(name: str, props: dict) -> Any:
+    """Bootstrap a JSONSource using DataSource.instantiate."""
+    enriched = _enrich_props(props, "json")
+    conn = enriched.get("connection", {})
+    if "path" in conn:
+        Path(conn["path"]).parent.mkdir(parents=True, exist_ok=True)
+    return DataSource.instantiate(enriched["_class"], name, properties={"connection": conn})
 
 
 # ------------------------------------------------------------------ #
@@ -81,19 +65,25 @@ def _build_kb_source(name: str, props: dict) -> Any:
 # ------------------------------------------------------------------ #
 
 class UserDataManager:
-    """Manages the DataRegistry and all user-specific sources for a user, including:
-    - kb source (``"kb"``) — knowledge base data extracted from various sources,
-    - metadata source — user metadata such as preferences and settings,
-    - contact source — user contact information across multiple contact methods,
-    - any additional sources added via imports.
+    """Manages the per-user DataRegistry and all user-specific sources.
+
+    Sources in the per-user registry:
+    - ``"kb"``       (KBSource) — knowledge graph.
+    - ``"metadata"`` (JSONSource) — user metadata / preferences.
+    - ``"contacts"`` (JSONSource) — contact methods.
+    - Additional sources added at runtime via :meth:`add_source`.
+
+    All source instantiation goes through ``DataSource.instantiate`` using
+    the ``_class`` stored in each source's registry record.  :meth:`connect`
+    reconstructs sources lazily via ``DataRegistry.connect_source``.
 
     Lifecycle::
 
-        # new user — build registry + all three sources + seed schema
+        # new user
         mgr = UserDataManager("alice", registry_props)
-        await mgr.initialize(kb_source_props)
+        await mgr.build(schema_path, kb_source_props, ...)
 
-        # existing user (persistent backend) — registry loaded eagerly, sources lazy
+        # existing user (persistent backend)
         mgr = UserDataManager("alice", registry_props)
         mgr.connect()
     """
@@ -102,6 +92,7 @@ class UserDataManager:
         self._database = database
         self._registry_props = registry_props
         self._registry: DataRegistry | None = None
+        # Optional overrides — set directly by callers (e.g. test mocks)
         self._kb_source: Any = None
         self._metadata_source: Any = None
         self._contact_source: Any = None
@@ -119,33 +110,47 @@ class UserDataManager:
         contact_schema_path: str | None,
         contact_source_props: dict,
     ) -> None:
-        """Build a fresh DataRegistry and all three sources."""
+        """Create the per-user DataRegistry, instantiate + register all sources, seed schemas."""
         registry_store = _build_json_source("registry", self._registry_props)
         self._registry = DataRegistry(store=registry_store)
 
-        self._kb_source = _build_kb_source("kb", kb_source_props)
-        self._registry.register_source(self._kb_source)
+        # KB source
+        kb_enriched = _enrich_props(kb_source_props, "kb")
+        kb_source = DataSource.instantiate(
+            kb_enriched["_class"], "kb",
+            properties={"connection": kb_enriched.get("connection", {})},
+        )
+        self._registry.register_source(kb_source)
         await self.seed_kb_source_schema(schema_path)
 
-        self._metadata_source = _build_json_source("metadata", metadata_source_props)
-        self._registry.register_source(self._metadata_source)
+        # Metadata source
+        meta_enriched = _enrich_props(metadata_source_props, "json")
+        meta_conn = meta_enriched.get("connection", {})
+        if "path" in meta_conn:
+            Path(meta_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
+        meta_source = DataSource.instantiate(
+            meta_enriched["_class"], "metadata", properties={"connection": meta_conn},
+        )
+        self._registry.register_source(meta_source)
         if metadata_schema_path:
             self.seed_metadata_schema(metadata_schema_path)
 
-        self._contact_source = _build_json_source("contacts", contact_source_props)
-        self._registry.register_source(self._contact_source)
+        # Contacts source
+        cont_enriched = _enrich_props(contact_source_props, "json")
+        cont_conn = cont_enriched.get("connection", {})
+        if "path" in cont_conn:
+            Path(cont_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
+        cont_source = DataSource.instantiate(
+            cont_enriched["_class"], "contacts", properties={"connection": cont_conn},
+        )
+        self._registry.register_source(cont_source)
         if contact_schema_path:
             self.seed_contact_schema(contact_schema_path)
 
-
     def connect(self) -> None:
-        """Create a DataRegistry instance; 
-        Sources within the registry will be connected lazily, 
-        through data registry's source related methods.
-        """
+        """Load the per-user DataRegistry from its existing store; sources are lazy via connect_source."""
         registry_store = _build_json_source("registry", self._registry_props)
         self._registry = DataRegistry(store=registry_store)
-
 
     async def reset(
         self,
@@ -154,10 +159,7 @@ class UserDataManager:
         contact_schema_path: str | None = None,
         sources: set[str] | None = None,
     ) -> None:
-        """Clear and reseed selected sources back to schema defaults.
-
-        ``sources`` defaults to ``{"kb", "metadata", "contacts"}``.
-        """
+        """Clear and reseed selected sources back to schema defaults."""
         if sources is None:
             sources = {"kb", "metadata", "contacts"}
 
@@ -183,78 +185,68 @@ class UserDataManager:
                 self._registry.deregister(record)
 
     def destroy(self) -> None:
-        """Delete all backing files for this user, if file backends.
-
-        For non-file KB backends the caller is responsible for clearing
-        the database namespace first (e.g. via ``reset()``).
-        """
-  
+        """Delete all backing files for this user's sources, if file backends."""
         if self._registry is not None:
-            # KB — file backend uses a per-user directory containing data.json
-            props = self._registry.get_source_properties("kb") or {}
-            connection = props.get("connection", {})
-            if connection.get("backend") == "file":
-                user_dir = Path(connection.get("directory", "."))
-                (user_dir / "data.json").unlink(missing_ok=True)
+            # KB — file backend stores {database}.json inside the directory
+            kb_props = self._registry.get_source_properties("kb") or {}
+            kb_conn = kb_props.get("connection", {})
+            if "directory" in kb_conn:
+                user_dir = Path(kb_conn["directory"])
+                (user_dir / f"{self._database}.json").unlink(missing_ok=True)
                 with contextlib.suppress(OSError):
-                    user_dir.rmdir()  # remove directory only if now empty
+                    user_dir.rmdir()
 
-            # Metadata and contacts — explicit path within the same user directory
-            for source_name in ("metadata", "contacts"):
-                props = self._registry.get_source_properties(source_name) or {}
-                connection = props.get("connection", {})
-                if connection.get("backend") == "file" and connection.get("path"):
-                    Path(connection["path"]).unlink(missing_ok=True)
+            # Metadata and contacts — file path
+            for src_name in ("metadata", "contacts"):
+                props = self._registry.get_source_properties(src_name) or {}
+                conn = props.get("connection", {})
+                if "path" in conn:
+                    Path(conn["path"]).unlink(missing_ok=True)
 
-        # Registry file
-        if self._registry_props.get("backend") == "file":
-            Path(self._registry_props["path"]).unlink(missing_ok=True)
-
+        # Per-user registry file
+        reg_conn = self._registry_props.get("connection", self._registry_props)
+        if "path" in reg_conn:
+            Path(reg_conn["path"]).unlink(missing_ok=True)
 
     # ------------------------------------------------------------------ #
-    # Internal                                                             #
+    # Internal source access (via DataRegistry.connect_source)            #
     # ------------------------------------------------------------------ #
 
     def _ensure_kb_source(self) -> KBSource:
+        if self._kb_source is not None:
+            return self._kb_source
         if self._registry is None:
-            raise ValueError("Registry not ready — call initialize() or connect() first.")
-        
-        if self._kb_source is None:
-            props = self._registry.get_source_properties("kb") or {}
-            connection = props.get("connection", {})
-            if not connection:
-                raise ValueError(
-                    f"No 'kb' source found in registry for user {self._database!r}."
-                )
-            self._kb_source = _build_kb_source("kb", connection)
-            
-        return self._kb_source 
+            raise ValueError("Registry not ready — call build() or connect() first.")
+        source = self._registry.connect_source("kb")
+        if source is None:
+            raise ValueError(f"No 'kb' source in registry for user {self._database!r}.")
+        self._kb_source = source
+        return source
 
     def _ensure_metadata_source(self) -> Any:
+        if self._metadata_source is not None:
+            return self._metadata_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        
-        if self._metadata_source is None:
-            props = self._registry.get_source_properties("metadata") or {}
-            connection = props.get("connection", {})
-            if not connection:
-                raise ValueError(f"No 'metadata' source in registry for user {self._database!r}.")
-            self._metadata_source = _build_json_source("metadata", connection)
-        return self._metadata_source
+        source = self._registry.connect_source("metadata")
+        if source is None:
+            raise ValueError(f"No 'metadata' source in registry for user {self._database!r}.")
+        self._metadata_source = source
+        return source
 
     def _ensure_contact_source(self) -> Any:
+        if self._contact_source is not None:
+            return self._contact_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        if self._contact_source is None:
-            props = self._registry.get_source_properties("contacts") or {}
-            connection = props.get("connection", {})
-            if not connection:
-                raise ValueError(f"No 'contacts' source in registry for user {self._database!r}.")
-            self._contact_source = _build_json_source("contacts", connection)
-        return self._contact_source
+        source = self._registry.connect_source("contacts")
+        if source is None:
+            raise ValueError(f"No 'contacts' source in registry for user {self._database!r}.")
+        self._contact_source = source
+        return source
 
     # ------------------------------------------------------------------ #
-    # KB  Operations                                                     #
+    # KB operations                                                        #
     # ------------------------------------------------------------------ #
 
     async def clear_kb(self) -> None:
@@ -307,7 +299,6 @@ class UserDataManager:
         mode: str = "append",
         options: dict | None = None,
     ) -> dict:
-        """Delegate to the KB source's import_data."""
         return self._ensure_kb_source().import_data(
             source, collection, self._database, entity, mode, options
         )
@@ -320,18 +311,26 @@ class UserDataManager:
         description: str | None = None,
         original: str | None = None,
     ) -> None:
-        """Register a source location in the KB and the registry, then optionally ingest content."""
+        """Register a source in the KB and registry, then optionally ingest content."""
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
-        source_id = await kb.add_source(self._database, location, name=name, description=description, original=original)
+        source_id = await kb.add_source(
+            self._database, location, name=name, description=description, original=original
+        )
 
         registry_name = name or location
+        src_cls = type(source)
+        src_conn = getattr(source, "properties", {}).get("connection") or {"path": str(location)}
         self._registry.register_record(
             name=registry_name,
             type="source",
             scope="/",
             description=description or "",
-            properties={"connection": {"backend": "file", "path": location}, "source_id": source_id},
+            properties={
+                "_class": f"{src_cls.__module__}.{src_cls.__qualname__}",
+                "connection": src_conn,
+                "source_id": source_id,
+            },
         )
 
         if queries:
@@ -342,10 +341,10 @@ class UserDataManager:
 
     def remove_source(self, source_name: str) -> None:
         """Remove a source from the DataRegistry without touching KB data."""
-        records = self._registry.list_records(record_type="source", scope="/") or []  # type: ignore[union-attr]
+        records = self._registry.list_records(record_type="source", scope="/") or []
         for record in records:
             if record.get("name") == source_name:
-                self._registry.deregister(record)  # type: ignore[union-attr]
+                self._registry.deregister(record)
                 return
 
     async def list_data(self) -> list[dict[str, Any]]:
@@ -355,7 +354,7 @@ class UserDataManager:
         return []
 
     async def list_sources(self, source_id: str | None = None) -> list[dict[str, Any]]:
-        """List registered data sources (SOURCE nodes in the KB)."""
+        """List SOURCE nodes in the KB graph."""
         nodes = self._ensure_kb_source().match_nodes(self._database, label="SOURCE")
         result: list[dict[str, Any]] = [
             {"id": n.get("id"), **n.get("properties", {})} for n in nodes
@@ -382,8 +381,6 @@ class UserDataManager:
         """Initialize the metadata store with null values for all schema-defined keys.
 
         Skips keys that are already set, so calling this on an existing user is safe.
-        Categories marked ``__open__: true`` (like credentials) are registered as empty
-        dicts but have no fixed sub-keys to seed.
         """
         schema = json.loads(Path(schema_path).read_text())
         meta = self._ensure_metadata_source()
@@ -415,14 +412,13 @@ class UserDataManager:
         return self._ensure_metadata_source().get("metadata") or {}
 
     # ------------------------------------------------------------------ #
-    # Contact source                                                       #
+    # Contact operations                                                   #
     # ------------------------------------------------------------------ #
 
     def seed_contact_schema(self, schema_path: str) -> None:
-        """Initialize the contacts store with empty protocol buckets for all schema-defined protocols.
+        """Initialize the contacts store with empty protocol buckets.
 
-        Skips protocols already present. Named entries (work, personal, …) are user-defined
-        and are not seeded — only the top-level protocol dict is ensured.
+        Skips protocols already present.
         """
         schema = json.loads(Path(schema_path).read_text())
         store = self._ensure_contact_source()

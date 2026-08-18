@@ -24,15 +24,21 @@ _CONTACT_SCHEMA  = str(_SRC / "contact_schema.json")
 
 
 async def _build_manager(user_id: str = "benchmark-user") -> Any:
-    from blue_data_user_source.data.manager import UserDataManager
-    mgr = UserDataManager(user_id, {"backend": "memory"})
+    from blue_data_user_source.data.manager import (
+        CLS_JSON_MEMORY,
+        CLS_KB_MEMORY,
+        UserDataManager,
+    )
+    _mem_json = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
+    _mem_kb   = {"_class": CLS_KB_MEMORY,   "connection": {"protocol": "kb/memory"}}
+    mgr = UserDataManager(user_id, _mem_json)
     await mgr.build(
         schema_path=_SCHEMA,
-        kb_source_props={"backend": "memory"},
+        kb_source_props=_mem_kb,
         metadata_schema_path=_METADATA_SCHEMA,
-        metadata_source_props={"backend": "memory"},
+        metadata_source_props=_mem_json,
         contact_schema_path=_CONTACT_SCHEMA,
-        contact_source_props={"backend": "memory"},
+        contact_source_props=_mem_json,
     )
     return mgr
 

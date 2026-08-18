@@ -11,6 +11,13 @@ from rich.console import Console
 from rich.table import Table
 
 from blue_data_user_source import FileSource, UDbError, UserSource
+from blue_data_user_source.data.manager import (
+    CLS_JSON_FILE,
+    CLS_JSON_MEMORY,
+    CLS_KB_FILE,
+    CLS_KB_MEMORY,
+    CLS_KB_NEO4J,
+)
 
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
 _SELECTED_DB_FILE = ".selected.database"
@@ -60,30 +67,65 @@ def _humanize_date(iso_str: str | None) -> str:
 
 def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
     data_dir.mkdir(parents=True, exist_ok=True)
-    return UserSource({
-        "store": {"backend": "file", "path": str(data_dir / "db.json")},
+    return UserSource("user_source", {
+        "registry": {
+            "_class": CLS_JSON_FILE,
+            "connection": {"protocol": "json/file", "path": str(data_dir / "registry.json")},
+        },
         "schema": str(schema_path) if schema_path else None,
     })
 
 
 def _user_registry_props(data_dir: Path, name: str) -> dict:
-    return {"backend": "file", "path": str(data_dir / "registries" / f"{name}.json")}
+    return {
+        "_class": CLS_JSON_FILE,
+        "connection": {
+            "protocol": "json/file",
+            "path": str(data_dir / "registries" / f"{name}.json"),
+        },
+    }
 
 
 def _user_kb_props(data_dir: Path, name: str, kb_backend: str, **kb_extras: Any) -> dict:
-    props: dict[str, Any] = {"backend": kb_backend}
     if kb_backend == "file":
-        props["directory"] = str(data_dir / "sources" / name)
-    props.update(kb_extras)
-    return props
+        return {
+            "_class": CLS_KB_FILE,
+            "connection": {
+                "protocol": "kb/file",
+                "directory": str(data_dir / "sources" / name),
+            },
+        }
+    if kb_backend == "memory":
+        return {
+            "_class": CLS_KB_MEMORY,
+            "connection": {"protocol": "kb/memory"},
+        }
+    if kb_backend == "neo4j":
+        return {
+            "_class": CLS_KB_NEO4J,
+            "connection": {"protocol": "kb/neo4j", **kb_extras},
+        }
+    raise ValueError(f"Unknown KB backend: {kb_backend!r}")
 
 
 def _user_metadata_props(data_dir: Path, name: str) -> dict:
-    return {"backend": "file", "path": str(data_dir / "sources" / name / "metadata.json")}
+    return {
+        "_class": CLS_JSON_FILE,
+        "connection": {
+            "protocol": "json/file",
+            "path": str(data_dir / "sources" / name / "metadata.json"),
+        },
+    }
 
 
 def _user_contact_props(data_dir: Path, name: str) -> dict:
-    return {"backend": "file", "path": str(data_dir / "sources" / name / "contacts.json")}
+    return {
+        "_class": CLS_JSON_FILE,
+        "connection": {
+            "protocol": "json/file",
+            "path": str(data_dir / "sources" / name / "contacts.json"),
+        },
+    }
 
 
 def _selected_db_path(data_dir: Path) -> Path:
@@ -173,13 +215,14 @@ def database_list(obj: dict, fmt: str) -> None:
         return
     t = Table(show_header=True, header_style="bold")
     t.add_column("Name", style="bold")
-    t.add_column("Registry Backend", style="dim")
+    t.add_column("Registry", style="dim")
     t.add_column("", max_width=3)
     for name in names:
         entry = source.get_user(name) or {}
-        reg_backend = entry.get("registry", {}).get("backend", "memory")
+        reg = entry.get("registry", {})
+        protocol = reg.get("connection", {}).get("protocol", "json/memory")
         marker = "[green]*[/green]" if name == selected else ""
-        t.add_row(name, reg_backend, marker)
+        t.add_row(name, protocol, marker)
     console.print(t)
 
 
@@ -192,16 +235,18 @@ def database_list(obj: dict, fmt: str) -> None:
     show_default=True,
     help="KBSource backend to use.",
 )
-@click.option("--neo4j-uri", default=None, help="Neo4j bolt URI (neo4j backend only).")
-@click.option("--neo4j-user", default=None, help="Neo4j username.")
+@click.option("--neo4j-host", default="localhost", show_default=True, help="Neo4j host (neo4j backend only).")
+@click.option("--neo4j-port", default=7687, show_default=True, type=int, help="Neo4j bolt port.")
+@click.option("--neo4j-user", default="neo4j", show_default=True, help="Neo4j username.")
 @click.option("--neo4j-password", default=None, help="Neo4j password.")
 @click.pass_obj
 def database_create(
     obj: dict,
     name: str,
     kb_backend: str,
-    neo4j_uri: str | None,
-    neo4j_user: str | None,
+    neo4j_host: str,
+    neo4j_port: int,
+    neo4j_user: str,
     neo4j_password: str | None,
 ) -> None:
     """Create a new user database."""
@@ -215,10 +260,15 @@ def database_create(
 
     kb_extras: dict[str, Any] = {}
     if kb_backend == "neo4j":
-        if not (neo4j_uri and neo4j_user and neo4j_password):
-            err.print("[red]Error:[/red] neo4j backend requires --neo4j-uri, --neo4j-user, --neo4j-password.")
+        if not neo4j_password:
+            err.print("[red]Error:[/red] neo4j backend requires --neo4j-password.")
             sys.exit(1)
-        kb_extras = {"uri": neo4j_uri, "username": neo4j_user, "password": neo4j_password}
+        kb_extras = {
+            "host": neo4j_host,
+            "port": neo4j_port,
+            "user": neo4j_user,
+            "password": neo4j_password,
+        }
 
     try:
         asyncio.run(source.create_user(

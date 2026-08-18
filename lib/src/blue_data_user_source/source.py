@@ -4,8 +4,14 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
-from blue_data_user_source.data.manager import UserDataManager, _build_json_source
+from blue_data_user_source.data.manager import (
+    CLS_JSON_MEMORY,
+    UserDataManager,
+    _build_json_source,
+    _enrich_props,
+)
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult
@@ -42,47 +48,82 @@ class UserSource(DataSource):
 
     Props accepted by ``__init__``:
 
-    - ``store`` — JSONSource config for the top-level user registry
-      (default: in-memory). File example: ``{"backend": "file", "path": "~/.udb/db.json"}``.
+    - ``registry`` — JSONSource config for the outer DataRegistry's backing store
+      (default: in-memory). File example::
+
+          {"_class": "blue_data.source.json.file_json_source.FileJSONSource",
+           "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"}}
+
     - ``schema`` — path to the KB graph schema JSON (default: ``data/schema.json``).
+      Stored as a property of the source record in the DataRegistry.
     - ``metadata_schema`` — path to the metadata schema JSON
-      (default: ``data/metadata_schema.json``).
+      (default: ``data/metadata_schema.json``). Stored as a source property.
+    - ``contact_schema`` — path to the contact schema JSON
+      (default: ``data/contact_schema.json``). Stored as a source property.
 
     Usage::
 
-        us = UserSource({
-            "store":           {"backend": "file", "path": "~/.udb/db.json"},
-            "schema":          "/path/to/schema.json",          # optional
-            "metadata_schema": "/path/to/metadata_schema.json", # optional
+        us = UserSource("user_source", {
+            "registry": {
+                "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+                "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"},
+            },
+            "schema": "/path/to/schema.json",           # optional
+            "metadata_schema": "/path/to/metadata.json" # optional
         })
         us.create_database("alice", properties={
-            "registry":        {"backend": "file", "path": "~/.udb/registries/alice.json"},
-            "kb_source":       {"backend": "file", "directory": "~/.udb/kb"},
-            "metadata_source": {"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
-            "contact_source":  {"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
+            "registry": {
+                "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+                "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+            },
+            "kb_source": {
+                "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
+                "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+            },
+            "metadata_source": {
+                "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+                "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+            },
+            "contact_source": {
+                "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+                "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+            },
         })
         results = us.execute_query("what are alice's skills?", database="alice")
         us.set_metadata("alice", "preferences.verbosity", "brief")
     """
 
-    def __init__(self, props: dict) -> None:
-        super().__init__(props.get("name", "user_source"), props)
-        self._store = _build_json_source("store", props.get("store", {"backend": "memory"}))
+    def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:
+        super().__init__(name, properties)
+        # Build the outer DataRegistry backed by the JSONSource from properties["registry"]
+        registry_json_props = self.properties.get("registry") or {
+            "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
+        }
+        registry_store = _build_json_source(f"{name}_registry", registry_json_props)
+        self._registry = DataRegistry(store=registry_store)
         self._managers: dict[str, UserDataManager] = {}
-        if self._store.get("users") is None:
-            self._store.set("users", {})
-        if props.get("schema") is not None:
-            self._store.set("schema", props["schema"])
-        elif self._store.get("schema") is None:
-            self._store.set("schema", _DEFAULT_SCHEMA_PATH)
-        if props.get("metadata_schema") is not None:
-            self._store.set("metadata_schema", props["metadata_schema"])
-        elif self._store.get("metadata_schema") is None:
-            self._store.set("metadata_schema", _DEFAULT_METADATA_SCHEMA_PATH)
-        if props.get("contact_schema") is not None:
-            self._store.set("contact_schema", props["contact_schema"])
-        elif self._store.get("contact_schema") is None:
-            self._store.set("contact_schema", _DEFAULT_CONTACT_SCHEMA_PATH)
+
+        # Register the source record in the outer DataRegistry, storing schema paths as properties.
+        # On first run the record is created; on subsequent runs only explicitly provided values update it.
+        existing = self._registry.get_source_record(name)
+        if existing is None:
+            cls = type(self)
+            self._registry.register_record(
+                name=name,
+                type="source",
+                scope="/",
+                description=f"{name} user data source",
+                properties={
+                    "_class": f"{cls.__module__}.{cls.__qualname__}",
+                    "schema": self.properties.get("schema") or _DEFAULT_SCHEMA_PATH,
+                    "metadata_schema": self.properties.get("metadata_schema") or _DEFAULT_METADATA_SCHEMA_PATH,
+                    "contact_schema": self.properties.get("contact_schema") or _DEFAULT_CONTACT_SCHEMA_PATH,
+                },
+            )
+        else:
+            for key in ("schema", "metadata_schema", "contact_schema"):
+                if self.properties.get(key):
+                    self._registry.set_source_property(name, key, self.properties[key])
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #
@@ -94,8 +135,9 @@ class UserSource(DataSource):
     def fetch_database_metadata(self, database: str) -> dict:
         return self.get_user(database) or {}
 
+
     def create_database(self, database: str, properties: dict | None = None) -> dict:
-        """Create a new user.  ``properties`` must contain four keys:
+        """Create a new user.  ``properties`` must contain:
         ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``.
         """
         p = properties or {}
@@ -113,13 +155,11 @@ class UserSource(DataSource):
     # ------------------------------------------------------------------ #
 
     def fetch_database_collections(self, database: str) -> list[str]:
-        manager = self._get_manager(database)
-        records = manager._registry.list_records(record_type="source", scope="/") or []
+        records = self._get_manager(database)._registry.list_records(record_type="source", scope="/") or []
         return [r["name"] for r in records]
 
     def fetch_database_collection_metadata(self, database: str, collection: str) -> dict:
-        manager = self._get_manager(database)
-        return manager._registry.get_source_properties(collection) or {}
+        return self._get_manager(database)._registry.get_source_properties(collection) or {}
 
     # ------------------------------------------------------------------ #
     # DataSource: query                                                    #
@@ -166,13 +206,6 @@ class UserSource(DataSource):
     # User management (UserSource-specific API)                            #
     # ------------------------------------------------------------------ #
 
-    def add_user(self, name: str, registry_props: dict) -> None:
-        """Wire up an existing registry that already has all three sources registered."""
-        manager = UserDataManager(name, registry_props)
-        manager.connect()
-        self._store.set(f"users.{name}", {"registry": registry_props})
-        self._managers[name] = manager
-
     async def create_user(
         self,
         name: str,
@@ -181,31 +214,40 @@ class UserSource(DataSource):
         metadata_source_props: dict,
         contact_source_props: dict,
     ) -> None:
-        """Build a fresh registry + all three sources, seed schema, and register the user."""
-        schema_path = self._store.get("schema")
-        metadata_schema_path = self._store.get("metadata_schema")
-        contact_schema_path = self._store.get("contact_schema")
+        """Build a fresh per-user registry + all three sources, seed schema, register the user."""
         manager = UserDataManager(name, registry_props)
-        await manager.build(schema_path, kb_source_props, metadata_schema_path, metadata_source_props, contact_schema_path, contact_source_props)
-        self._store.set(f"users.{name}", {"registry": registry_props})
+        await manager.build(
+            schema_path=self._registry.get_source_property(self.name, "schema"),
+            kb_source_props=kb_source_props,
+            metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema"),
+            metadata_source_props=metadata_source_props,
+            contact_schema_path=self._registry.get_source_property(self.name, "contact_schema"),
+            contact_source_props=contact_source_props,
+        )
+        # Register the user as a database entry with enriched registry props
+        self._registry.register_source_database(
+            self.name, name, properties={"registry": _enrich_props(registry_props, "json")}
+        )
         self._managers[name] = manager
 
     def list_users(self) -> list[str]:
-        return list((self._store.get("users") or {}).keys())
+        return [r["name"] for r in (self._registry.list_source_databases(self.name) or [])]
 
     def get_user(self, name: str) -> dict | None:
-        return self._store.get(f"users.{name}")
+        """Return the properties dict of the user's database record (contains ``registry`` key)."""
+        record = self._registry.get_source_database(self.name, name)
+        return record.get("properties") if record else None
 
     def remove_user(self, name: str) -> None:
-        """Remove user from the store; backing files are untouched."""
-        self._store.delete(f"users.{name}")
+        """Remove user from the registry; backing files are untouched."""
+        self._registry.deregister_source_database(self.name, name)
         self._managers.pop(name, None)
 
     async def reset_user(self, name: str) -> None:
         await self._get_manager(name).reset(
-            schema_path=self._store.get("schema"),
-            metadata_schema_path=self._store.get("metadata_schema"),
-            contact_schema_path=self._store.get("contact_schema"),
+            schema_path=self._registry.get_source_property(self.name, "schema"),
+            metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema"),
+            contact_schema_path=self._registry.get_source_property(self.name, "contact_schema"),
         )
 
     async def delete_user(self, name: str) -> None:
@@ -375,10 +417,12 @@ class UserSource(DataSource):
 
     def _get_manager(self, name: str) -> UserDataManager:
         if name not in self._managers:
-            entry = self._store.get(f"users.{name}")
-            if entry is None:
+            db_props = self.get_user(name)
+            if db_props is None:
                 raise QueryError(f"User not found: {name!r}")
-            registry_props = entry.get("registry", {"backend": "memory"})
+            registry_props = db_props.get("registry") or {
+                "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
+            }
             manager = UserDataManager(name, registry_props)
             manager.connect()
             self._managers[name] = manager
