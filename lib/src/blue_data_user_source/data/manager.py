@@ -17,6 +17,7 @@ from blue_data_kb_source.kb_source import KBSource
 # Canonical class paths — import these in CLI / tests instead of hard-coding strings.
 CLS_JSON_MEMORY = "blue_data.source.json.memory_json_source.MemoryJSONSource"
 CLS_JSON_FILE   = "blue_data.source.json.file_json_source.FileJSONSource"
+CLS_JSON_REDIS  = "blue_data.source.json.redis.redis_json_source.RedisJSONSource"
 CLS_KB_MEMORY   = "blue_data_kb_source.memory_kb_source.MemoryKBSource"
 CLS_KB_FILE     = "blue_data_kb_source.file_kb_source.FileKBSource"
 CLS_KB_NEO4J    = "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource"
@@ -55,9 +56,11 @@ def _build_json_source(name: str, props: dict) -> Any:
     """Bootstrap a JSONSource using DataSource.instantiate."""
     enriched = _enrich_props(props, "json")
     conn = enriched.get("connection", {})
-    if "path" in conn:
+    if conn.get("protocol", "").startswith("json/file") and "path" in conn:
         Path(conn["path"]).parent.mkdir(parents=True, exist_ok=True)
-    return DataSource.instantiate(enriched["_class"], name, properties={"connection": conn})
+    # Pass through all top-level keys (e.g. "namespace" for Redis) alongside connection
+    extra = {k: v for k, v in enriched.items() if k not in ("_class", "connection")}
+    return DataSource.instantiate(enriched["_class"], name, properties={"connection": conn, **extra})
 
 
 # ------------------------------------------------------------------ #
