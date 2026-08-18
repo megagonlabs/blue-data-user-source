@@ -288,7 +288,7 @@ class UserDataManager:
             on_tool_result=on_tool_result,
         )
         data = result if isinstance(result, list) else ([{"answer": result}] if result else [])
-        print(f"Query executed: {query}\nResults: {data}\nMetadata: {metadata}")
+        print(f"Query executed: {query}")
         return data, metadata
 
     async def import_data(
