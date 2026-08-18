@@ -101,9 +101,23 @@ udb database delete alice --yes
 | Option | Default | Description |
 |---|---|---|
 | `--kb-backend` | `file` | KB backend: `memory`, `file`, or `neo4j` |
-| `--neo4j-uri` | — | Neo4j bolt URI (neo4j backend only) |
-| `--neo4j-user` | — | Neo4j username |
-| `--neo4j-password` | — | Neo4j password |
+| `--neo4j-host` | `localhost` | Neo4j host (neo4j backend only) |
+| `--neo4j-port` | `7687` | Neo4j bolt port |
+| `--neo4j-user` | `neo4j` | Neo4j username |
+| `--neo4j-password` | — | Neo4j password (required for neo4j backend) |
+
+```bash
+# File backend (default)
+udb database create alice
+
+# Neo4j backend
+udb database create alice \
+  --kb-backend neo4j \
+  --neo4j-host db.example.com \
+  --neo4j-port 7687 \
+  --neo4j-user neo4j \
+  --neo4j-password secret
+```
 
 ---
 
@@ -251,15 +265,15 @@ Data is persisted under `~/.udb/` by default:
 
 ```
 ~/.udb/
-├── .selected.database     # active database name (written by 'udb database select')
-├── db.json                # user store (list of registered databases)
+├── .selected.database         # active database name (written by 'udb database select')
+├── registry.json              # outer DataRegistry store (databases + source properties)
 ├── registries/
-│   └── alice.json         # per-user DataRegistry (list of sources)
-├── kb/
-│   └── alice.json         # per-user knowledge graph (file backend)
+│   └── alice.json             # per-user DataRegistry store (sources registered for alice)
 └── sources/
-    ├── alice.metadata.json
-    └── alice.contacts.json
+    └── alice/
+        ├── alice.json         # per-user knowledge graph (file KB backend)
+        ├── metadata.json      # user metadata
+        └── contacts.json      # user contact methods
 ```
 
 Use `--data-dir` to store databases elsewhere:

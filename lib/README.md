@@ -31,53 +31,67 @@ pip install -e ".[dev]"
 
 ### Construct a multi-user source
 
-`UserSource` takes a `props` dict with `"store"` (where to keep the user list) and an optional `"schema"` path:
+`UserSource(name, properties)` takes a name and a properties dict. The `"registry"` property points to the JSONSource that backs the outer DataRegistry (where users are registered as databases and schema paths are stored as source properties):
 
 ```python
 import asyncio
 from blue_data_user_source import UserSource, FileSource
 
 # File-backed (survives process restarts)
-us = UserSource({
-    "store": {"backend": "file", "path": "~/.udb/db.json"},
+us = UserSource("user_source", {
+    "registry": {
+        "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+        "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"},
+    },
     "schema": "data/schema.json",   # optional — used when creating/resetting databases
 })
 
 # In-memory (useful for testing)
-us = UserSource({"store": {"backend": "memory"}})
+us = UserSource("user_source", {
+    "registry": {
+        "_class": "blue_data.source.json.memory_json_source.MemoryJSONSource",
+        "connection": {"protocol": "json/memory"},
+    },
+})
 ```
 
 ### Manage databases
 
-Each database (user) has its own `DataRegistry` backed by a separate JSONSource. The registry holds the KB source and any other sources added via `add_source`:
+Each database (user) has its own `DataRegistry` backed by a separate JSONSource. The `"registry"` property on each database record is a JSONSource config from which the per-user DataRegistry can be instantiated. The per-user DataRegistry holds the KB source, metadata source, contacts source, and any additional sources added via `add_source`:
 
 ```python
 async def main() -> None:
-    # Create database — builds registry + KB from scratch, seeds schema
+    # Create database — builds registry + all three sources from scratch, seeds schema
     await us.create_user(
         "alice",
-        registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
-        kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
-        metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
-        contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
+        registry_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+        },
+        kb_source_props={
+            "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
+            "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+        },
+        metadata_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+        },
+        contact_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+        },
     )
 
-    # Add database — connects to an existing registry that already has sources registered
-    us.add_user(
-        "bob",
-        registry_props={"backend": "file", "path": "~/.udb/registries/bob.json"},
-    )
-
-    print(us.list_users())       # ["alice", "bob"]
+    print(us.list_users())       # ["alice"]
 
     # Reset — clear KB data + imported registry entries, reseed schema
     await us.reset_user("alice")
 
-    # Remove from main store only (KB data kept)
+    # Remove from outer registry only (KB data kept)
     us.remove_user("alice")
 
-    # Remove from main store AND wipe all backing files
-    await us.delete_user("bob")
+    # Remove from outer registry AND wipe all backing files
+    await us.delete_user("alice")
 
 asyncio.run(main())
 ```
@@ -88,10 +102,22 @@ asyncio.run(main())
 async def main() -> None:
     await us.create_user(
         "alice",
-        registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
-        kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
-        metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
-        contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
+        registry_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+        },
+        kb_source_props={
+            "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
+            "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+        },
+        metadata_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+        },
+        contact_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+        },
     )
 
     # Type 1 — register a file as a queryable source (no extraction)
@@ -131,47 +157,66 @@ export OPENAI_API_KEY=sk-...
 
 ## API
 
-### `UserSource(props)`
+### `UserSource(name, properties)`
 
-Constructs a multi-user source from a props dict.
+Constructs a multi-user source. `name` identifies this source in the outer DataRegistry.
 
-| prop | Type | Description |
+| property | Type | Description |
 |---|---|---|
-| `store` | `dict` | JSONSource config for the user-list store: `{"backend": "memory"}` or `{"backend": "file", "path": "..."}` |
-| `schema` | `str` | Default path to `schema.json` (optional); used when creating or resetting databases |
+| `registry` | `dict` | JSONSource config for the outer DataRegistry's backing store (see source properties below) |
+| `schema` | `str` | Default path to `schema.json` (optional); stored as a source property and used when creating or resetting databases |
+| `metadata_schema` | `str` | Default path to `metadata_schema.json` (optional) |
+| `contact_schema` | `str` | Default path to `contact_schema.json` (optional) |
 
 ### Database management
 
 | Method | Description |
 |---|---|
 | `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props)` *(async)* | Build registry + all three sources from scratch and seed schema |
-| `add_user(name, registry_props)` | Connect to an existing registry that already has sources registered |
 | `list_users()` | Return list of database names |
-| `get_user(name)` | Return main-store entry for one database, or `None` |
-| `remove_user(name)` | Remove database from main store; backing files unchanged |
+| `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
+| `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
 | `reset_user(name)` *(async)* | Wipe KB data + imported registry entries, then reseed schema |
-| `delete_user(name)` *(async)* | Destroy all backing files and remove from main store |
+| `delete_user(name)` *(async)* | Destroy all backing files and remove from the outer registry |
 
-**`registry_props`** — JSONSource config for the per-database DataRegistry:
-
-```python
-{"backend": "file", "path": "~/.udb/registries/alice.json"}
-{"backend": "memory"}
-```
-
-**`kb_source_props`** — KB backend config:
+**Source properties format** — all source configs use `_class` + `connection`:
 
 ```python
-{"backend": "memory"}
-{"backend": "file", "directory": "~/.udb/kb"}
-{"backend": "neo4j", "uri": "bolt://localhost:7687", "username": "neo4j", "password": "..."}
-```
+# In-memory JSON (registry, metadata, contacts)
+{
+    "_class": "blue_data.source.json.memory_json_source.MemoryJSONSource",
+    "connection": {"protocol": "json/memory"},
+}
 
-**`metadata_source_props`** / **`contact_source_props`** — JSONSource config for the per-database metadata and contacts stores:
+# File-backed JSON (registry, metadata, contacts)
+{
+    "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+    "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+}
 
-```python
-{"backend": "file", "path": "~/.udb/sources/alice.metadata.json"}
-{"backend": "file", "path": "~/.udb/sources/alice.contacts.json"}
+# In-memory KB
+{
+    "_class": "blue_data_kb_source.memory_kb_source.MemoryKBSource",
+    "connection": {"protocol": "kb/memory"},
+}
+
+# File-backed KB (default for CLI)
+{
+    "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
+    "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+}
+
+# Neo4j KB
+{
+    "_class": "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource",
+    "connection": {
+        "protocol": "kb/neo4j",
+        "host": "localhost",
+        "port": 7687,
+        "user": "neo4j",
+        "password": "...",
+    },
+}
 ```
 
 ### Source management
@@ -186,6 +231,9 @@ Constructs a multi-user source from a props dict.
 | optional_property | Type | Description |
 |---|---|---|
 | `queries` | `list[str]` | Extraction queries — each drives one `import_text` call (Type 2) |
+| `name` | `str` | Human-readable label for the source |
+| `description` | `str` | Optional description |
+| `original` | `str` | Original publication date or provenance note |
 
 ### Query
 
@@ -194,7 +242,7 @@ Constructs a multi-user source from a props dict.
 | `execute_query(query, database, optional_properties)` | Execute a natural language query; returns `list[QueryResult]` or `str` |
 | `execute_query_nl(query, database, optional_properties)` | Alias — same behaviour |
 
-`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness and freshness, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB.
+`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness, freshness, and privacy, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB.
 
 | optional_property | Type | Description |
 |---|---|---|
@@ -222,37 +270,6 @@ Constructs a multi-user source from a props dict.
 class QueryResult:
     query: str
     results: list[Any]
-```
-
-## KB backends
-
-### Memory
-
-Runs entirely in-process. Data is lost on exit — useful for testing and short-lived sessions.
-
-```python
-{"backend": "memory"}
-```
-
-### File (default for CLI)
-
-Persists data to JSON files in a directory — one file per database.
-
-```python
-{"backend": "file", "directory": "~/.udb/kb"}
-```
-
-### Neo4j
-
-Persists data to a running Neo4j instance.
-
-```python
-{
-    "backend": "neo4j",
-    "uri": "bolt://localhost:7687",
-    "username": "neo4j",
-    "password": "password",
-}
 ```
 
 ## Schema
@@ -314,7 +331,7 @@ cd lib
 pytest tests/unit/
 ```
 
-85 tests, ~1 s.
+93 tests, ~1 s.
 
 ### Benchmarks
 
@@ -398,16 +415,16 @@ lib/
 │       ├── sources/
 │       │   └── file.py            # FileSource
 │       ├── reasoning/
-│       │   ├── metric.py          # CompletenessMetric, FreshnessMetric
+│       │   ├── metric.py          # CompletenessMetric, FreshnessMetric, PrivacyMetric
 │       │   └── reasoner.py        # UserQueryReasoner
 │       ├── data/
-│       │   ├── manager.py         # UserDataManager — KB delegation layer
+│       │   ├── manager.py         # UserDataManager — source lifecycle + CLS_* constants
 │       │   └── planner.py         # UserDataPlanner
 │       └── interaction/
 │           ├── contact.py         # ContactManager, ContactMethod
 │           └── manager.py         # InteractionManager
 └── tests/
-    ├── conftest.py                # shared manager fixture (all-memory backends)
+    ├── conftest.py                # shared manager fixture (all-memory sources)
     ├── unit/
     │   ├── doubles/
     │   │   └── sources.py         # make_mock_kb helper
