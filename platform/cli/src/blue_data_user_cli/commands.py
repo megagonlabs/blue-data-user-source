@@ -10,7 +10,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from blue_data_user_source import FileSource, UDbError, UserSource
+from blue_data_user_source import FileSource, FileUserSource, UDbError
 from blue_data_user_source.data.manager import (
     CLS_JSON_FILE,
     CLS_JSON_MEMORY,
@@ -65,13 +65,10 @@ def _humanize_date(iso_str: str | None) -> str:
         return iso_str
 
 
-def _make_source(data_dir: Path, schema_path: Path | None = None) -> UserSource:
+def _make_source(data_dir: Path, schema_path: Path | None = None) -> FileUserSource:
     data_dir.mkdir(parents=True, exist_ok=True)
-    return UserSource("user_source", {
-        "registry": {
-            "_class": CLS_JSON_FILE,
-            "connection": {"protocol": "json/file", "path": str(data_dir / "registry.json")},
-        },
+    return FileUserSource("user_source", {
+        "connection": {"path": str(data_dir / "registry.json")},
         "schema": str(schema_path) if schema_path else None,
     })
 

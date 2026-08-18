@@ -106,14 +106,15 @@ class UserSource(DataSource):
         # Register the source record in the outer DataRegistry, storing schema paths as properties.
         # On first run the record is created; on subsequent runs only explicitly provided values update it.
         existing = self._registry.get_source_record(name)
+        cls = type(self)
         if existing is None:
-            cls = type(self)
             self._registry.register_record(
                 name=name,
                 type="source",
                 scope="/",
                 description=f"{name} user data source",
                 properties={
+                    **self.properties,
                     "_class": f"{cls.__module__}.{cls.__qualname__}",
                     "schema": self.properties.get("schema") or _DEFAULT_SCHEMA_PATH,
                     "metadata_schema": self.properties.get("metadata_schema") or _DEFAULT_METADATA_SCHEMA_PATH,
@@ -121,7 +122,7 @@ class UserSource(DataSource):
                 },
             )
         else:
-            for key in ("schema", "metadata_schema", "contact_schema"):
+            for key in ("connection", "registry", "schema", "metadata_schema", "contact_schema"):
                 if self.properties.get(key):
                     self._registry.set_source_property(name, key, self.properties[key])
 
