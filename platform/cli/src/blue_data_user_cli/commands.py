@@ -1409,9 +1409,10 @@ def contact_group() -> None:
 
 @contact_group.command("list")
 @click.argument("path", nargs=-1)
+@click.option("-r", "--recursive", is_flag=True, help="List all fields recursively as a flat key=value table.")
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
 @click.pass_obj
-def contact_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
+def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -> None:
     """List contacts at the given path, or all protocols if no path given.
 
     Examples:
@@ -1420,6 +1421,8 @@ def contact_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
       udb contact list
       udb contact list email
       udb contact list email work
+      udb contact list email --recursive
+      udb contact list --recursive
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1429,6 +1432,7 @@ def contact_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
+    dotted = ".".join(path)
     node: Any = all_contacts
     for i, segment in enumerate(path):
         if not isinstance(node, dict) or segment not in node:
@@ -1436,12 +1440,76 @@ def contact_list(obj: dict, path: tuple[str, ...], fmt: str) -> None:
             if i == 0 and segment in _CONTACT_SCHEMA:
                 node = {}
                 break
-            err.print(f"[red]Error:[/red] Key not found: {'.'.join(path)!r}")
+            err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
             sys.exit(1)
         node = node[segment]
 
     if fmt == "json":
         console.print_json(json.dumps(node))
+        return
+
+    if recursive:
+        def _merge_entry(stored_entry: Any, schema_fields: dict) -> dict[str, Any]:
+            """Merge stored values with schema field specs; schema keys always present."""
+            stored_entry = stored_entry if isinstance(stored_entry, dict) else {}
+            merged: dict[str, Any] = {}
+            for field in schema_fields:
+                merged[field] = stored_entry.get(field)
+            for k, v in stored_entry.items():
+                if k not in merged:
+                    merged[k] = v
+            return merged
+
+        def _flatten(subtree: Any, prefix: str = "") -> list[tuple[str, Any]]:
+            if isinstance(subtree, dict):
+                rows: list[tuple[str, Any]] = []
+                for k, v in subtree.items():
+                    full = f"{prefix}.{k}" if prefix else k
+                    rows.extend(_flatten(v, full))
+                return rows
+            return [(prefix, subtree)]
+
+        if not path:
+            protocols = dict.fromkeys(list(_CONTACT_SCHEMA.keys()) + list(all_contacts.keys()))
+            merged_root: dict[str, Any] = {}
+            for proto in protocols:
+                schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+                entries = all_contacts.get(proto, {})
+                entries = entries if isinstance(entries, dict) else {}
+                merged_proto = {
+                    entry_name: _merge_entry(details, schema_fields)
+                    for entry_name, details in entries.items()
+                    if isinstance(details, dict)
+                }
+                if merged_proto:
+                    merged_root[proto] = merged_proto
+            flat = _flatten(merged_root)
+        elif len(path) == 1:
+            proto = path[0]
+            schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+            entries = node if isinstance(node, dict) else {}
+            merged_proto = {
+                entry_name: _merge_entry(details, schema_fields)
+                for entry_name, details in entries.items()
+                if isinstance(details, dict)
+            }
+            flat = _flatten(merged_proto, dotted)
+        else:
+            proto = path[0]
+            schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+            merged_entry = _merge_entry(node, schema_fields)
+            flat = _flatten(merged_entry, dotted)
+
+        t = Table(show_header=True, header_style="bold")
+        t.add_column("Key", style="bold")
+        t.add_column("Value")
+        for key, val in flat:
+            val_str = json.dumps(val) if isinstance(val, (list, dict)) else (str(val) if val is not None else "[dim]—[/dim]")
+            t.add_row(key, val_str)
+        if not flat:
+            console.print("[dim](no entries)[/dim]")
+        else:
+            console.print(t)
         return
 
     if not path:
