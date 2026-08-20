@@ -297,6 +297,22 @@ await us.remove_contact_method("alice", "email", "work")
 | `email` | Sends SMTP email; awaits inbound reply | Requires `[email]` extra; see detail keys below |
 | `webhook` | POSTs JSON to a URL; awaits REST response | Requires `[webhook]` extra |
 
+#### Webhook contact method detail keys
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `url` | yes | — | POST target for outgoing questions |
+| `response_base_url` | yes | — | Base URL of `udb-api` (response_url sent in payload: `{response_base_url}/interactions/{id}/response`) |
+| `headers` | no | _(none)_ | Extra HTTP headers for the outgoing POST |
+| `timeout` | no | `300` | Seconds to wait for a response |
+
+```python
+await us.add_contact_method("alice", "webhook", "ops", {
+    "url": "https://example.com/hook",
+    "response_base_url": "http://localhost:8000",
+}, preference=2)
+```
+
 #### Email contact method detail keys
 
 | Key | Required | Default | Description |
