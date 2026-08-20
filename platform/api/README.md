@@ -7,8 +7,8 @@ REST API for the user database — manage users, query their knowledge graphs, a
 The library is not yet published to PyPI. Install both packages from source:
 
 ```bash
-# 1. Install the library
-cd lib && pip install -e '.[webhook]' && cd ..
+# 1. Install the library (with optional extras for contact methods)
+cd lib && pip install -e '.[webhook,email]' && cd ..
 
 # 2. Install the API server
 cd platform/api && pip install -e .
@@ -174,10 +174,19 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
 {
   "protocol": "email",
   "name": "work",
-  "details": {"address": "alice@example.com"},
+  "details": {
+    "address": "alice@example.com",
+    "from_address": "agent@udb.example.com",
+    "smtp_host": "smtp.example.com",
+    "reply_domain": "udb.example.com",
+    "response_base_url": "http://localhost:8000",
+    "inbound_provider": "mailgun"
+  },
   "preference": 1
 }
 ```
+
+See [Email contact method](#email-contact-method) below for all detail keys.
 
 Webhook contact method example:
 
@@ -209,13 +218,75 @@ The external system posts Alice's reply back to `response_url`, unblocking the w
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/interactions/{id}/response` | Post a human reply to a pending webhook interaction |
+| `POST` | `/interactions/{id}/response` | Resolve a pending interaction via JSON (webhook / REST) |
+| `GET` | `/interactions/{id}/respond` | HTML form for responding (link in email body) |
+| `POST` | `/interactions/{id}/respond` | Submit the HTML form response |
+| `POST` | `/interactions/email/inbound` | Inbound email webhook — resolves a pending email interaction |
+
+**`POST /interactions/{id}/response`** — used by webhooks and direct API callers:
 
 ```json
 {"text": "Use the home address please."}
 ```
 
-Returns `404` if the interaction ID is unknown or has already timed out, `409` if it was already resolved.
+Returns `404` if the interaction ID is unknown or has already timed out, `409` if already resolved.
+
+**`GET /interactions/{id}/respond`** — HTML form served to users who click the link in an email. No API key required; the interaction ID acts as a bearer token. Returns `404` if the interaction has expired.
+
+**`POST /interactions/email/inbound?provider=<name>`** — accepts inbound email webhooks from Mailgun, Postmark, or Sendgrid and resolves the corresponding pending Future. No API key required.
+
+| `provider` | Payload format | Reply text field |
+|---|---|---|
+| `mailgun` | `application/x-www-form-urlencoded` | `stripped-text` / `body-plain` fallback |
+| `postmark` | `application/json` | `StrippedTextReply` / `TextBody` fallback |
+| `sendgrid` | `application/x-www-form-urlencoded` | `text` (client-side quote stripping) |
+
+Configure your inbound email provider to route mail addressed to `interaction-*@{reply_domain}` to `POST /interactions/email/inbound?provider=<name>`. Delivery is idempotent — duplicate POSTs for the same interaction are accepted without error.
+
+---
+
+## Email contact method
+
+Requires `pip install -e '../../lib[email]'` (`aiosmtplib`).
+
+When the agent needs to contact a user, it sends an SMTP email with:
+- `Reply-To: interaction-{id}@{reply_domain}` — so a direct email reply routes back through the inbound webhook
+- A clickable link to `{response_base_url}/interactions/{id}/respond` — as a fallback for clients that don't support direct reply-to
+
+Detail keys for the `email` protocol:
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `address` | yes | — | Recipient email address |
+| `inbound_provider` | no | _(none)_ | `mailgun`, `postmark`, `sendgrid`, `smtp_server`, or `stdio` |
+| `from_address` | yes¹ | `"agent"` | Sender shown in From: |
+| `smtp_host` | yes¹ | — | SMTP server hostname |
+| `smtp_port` | no | `587` | SMTP port |
+| `smtp_user` | no | `from_address` | SMTP auth username |
+| `smtp_password` | no | `""` | SMTP auth password |
+| `smtp_use_tls` | no | `True` | Use STARTTLS |
+| `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To` address |
+| `response_base_url` | yes¹ | — | Base URL of this API server |
+| `subject` | no | `"A question for you"` | Email subject |
+| `timeout` | no | `300` | Seconds to wait for reply |
+
+¹ Not required when `inbound_provider` is `"stdio"`.
+
+**`inbound_provider: "stdio"`** — development mode: prints email content to stdout and reads reply from stdin. Useful for local testing without an SMTP server or inbound webhook.
+
+```bash
+# Add a stdio email contact for local testing
+curl -X POST http://localhost:8000/alice/contacts \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "protocol": "email",
+    "name": "dev",
+    "details": {
+      "address": "alice@example.com",
+      "inbound_provider": "stdio"
+    }
+  }'
+```
 
 ---
 

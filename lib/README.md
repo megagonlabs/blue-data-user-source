@@ -16,6 +16,10 @@ The package is not yet published to PyPI. Install it directly from the local sou
 ```bash
 cd lib
 pip install -e .
+
+# With optional extras
+pip install -e ".[webhook]"   # outgoing webhook contact method (httpx)
+pip install -e ".[email]"     # outgoing email contact method (aiosmtplib)
 ```
 
 ## Development setup
@@ -263,6 +267,69 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | `set_metadata(database, key, value)` | Set a metadata value |
 | `delete_metadata(database, key)` | Delete a metadata value |
 
+### Contact methods
+
+Each user stores preferred contact channels in their contacts source. The agent picks the lowest-preference entry when it needs to ask a question.
+
+```python
+# Add a contact method
+await us.add_contact_method("alice", "email", "work", {
+    "address": "alice@example.com",
+    "from_address": "agent@udb.example.com",
+    "smtp_host": "smtp.example.com",
+    "reply_domain": "udb.example.com",
+    "response_base_url": "http://localhost:8000",
+    "inbound_provider": "mailgun",   # mailgun | postmark | sendgrid | smtp_server | stdio
+}, preference=1)
+
+# List, get, update, remove
+methods = await us.list_contact_methods("alice")
+method  = await us.get_contact_method("alice", "email", "work")
+await us.update_contact_method("alice", "email", "work", preference=0)
+await us.remove_contact_method("alice", "email", "work")
+```
+
+#### Supported protocols
+
+| Protocol | Trigger | Notes |
+|---|---|---|
+| `stdio` | Prompts stdout / reads stdin | Default when no contact methods are registered |
+| `email` | Sends SMTP email; awaits inbound reply | Requires `[email]` extra; see detail keys below |
+| `webhook` | POSTs JSON to a URL; awaits REST response | Requires `[webhook]` extra |
+
+#### Email contact method detail keys
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `address` | yes | — | Recipient email address |
+| `inbound_provider` | no | _(none)_ | How the reply arrives: `mailgun`, `postmark`, `sendgrid`, `smtp_server`, or `stdio` |
+| `from_address` | yes¹ | `"agent"` | Sender address shown in From: |
+| `smtp_host` | yes¹ | — | SMTP server hostname |
+| `smtp_port` | no | `587` | SMTP port |
+| `smtp_user` | no | `from_address` | SMTP username |
+| `smtp_password` | no | `""` | SMTP password |
+| `smtp_use_tls` | no | `True` | Use STARTTLS |
+| `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
+| `response_base_url` | yes¹ | — | Base URL of `udb-api` (link in email body + inbound endpoint) |
+| `subject` | no | `"A question for you"` | Email subject line |
+| `timeout` | no | `300` | Seconds to wait for a reply |
+
+¹ Not required when `inbound_provider` is `"stdio"`.
+
+**`inbound_provider: "stdio"`** — development / testing mode. Prints a formatted email block to stdout and reads the reply from stdin. No SMTP connection is made and no `udb-api` is needed.
+
+```python
+# Minimal stdio setup — useful in tests and local development
+await us.add_contact_method("alice", "email", "dev", {
+    "address": "alice@example.com",
+    "inbound_provider": "stdio",
+})
+```
+
+**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider parses the email reply and POSTs to `POST /interactions/email/inbound?provider=<name>` on `udb-api`, which resolves the pending Future. Configure your provider's inbound routing to deliver mail sent to `interaction-*@{reply_domain}` to that endpoint.
+
+**`smtp_server`** — reserved for a future `aiosmtpd`-based listener. Currently raises `NotImplementedError`.
+
 ### `QueryResult`
 
 ```python
@@ -331,7 +398,7 @@ cd lib
 pytest tests/unit/
 ```
 
-93 tests, ~1 s.
+130 tests, ~1 s.
 
 ### Benchmarks
 
@@ -421,15 +488,22 @@ lib/
 │       │   ├── manager.py         # UserDataManager — source lifecycle + CLS_* constants
 │       │   └── planner.py         # UserDataPlanner
 │       └── interaction/
-│           ├── contact.py         # ContactManager, ContactMethod
-│           └── manager.py         # InteractionManager
+│           ├── contact.py         # ContactManager, ContactMethod (stdio, webhook, email)
+│           ├── manager.py         # InteractionManager
+│           ├── pending.py         # pending_interactions dict (shared Future registry)
+│           └── email/
+│               ├── adapter.py     # InboundEmailAdapter ABC + provider registry
+│               ├── mailgun.py     # Mailgun inbound webhook adapter
+│               ├── postmark.py    # Postmark inbound webhook adapter
+│               ├── sendgrid.py    # Sendgrid Inbound Parse adapter
+│               └── smtp_server.py # Future aiosmtpd-based adapter (NotImplementedError)
 └── tests/
     ├── conftest.py                # shared manager fixture (all-memory sources)
     ├── unit/
     │   ├── doubles/
     │   │   └── sources.py         # make_mock_kb helper
     │   ├── data/                  # test_query_executor, test_query_planner, test_source_manager
-    │   ├── interaction/           # test_contact_manager, test_interaction_manager
+    │   ├── interaction/           # test_contact_manager, test_interaction_manager, test_email_adapters
     │   ├── reasoning/             # test_data_assessor, test_query_rewriter
     │   └── sources/               # test_file_source
     └── benchmarks/

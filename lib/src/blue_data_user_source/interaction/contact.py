@@ -33,6 +33,8 @@ class ContactMethod:
             return self._stdio_manager()
         if self.protocol == "webhook":
             return self._webhook_manager()
+        if self.protocol == "email":
+            return self._email_manager()
         raise InteractionError(
             f"Contact protocol '{self.protocol}' requires a registered handler."
         )
@@ -97,6 +99,147 @@ class ContactMethod:
             except asyncio.TimeoutError:
                 raise InteractionError(
                     f"No response received within {timeout}s for interaction {interaction_id!r}"
+                )
+            finally:
+                pending_interactions.pop(interaction_id, None)
+
+        async def _stop() -> None:
+            pass
+
+        return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
+
+
+    def _email_stdio_manager(self) -> InteractionManager:
+        """Email contact method in stdio mode — for local development and testing.
+
+        Prints a formatted email to stdout (To, From, Subject, Reply-To, body)
+        and reads the reply from stdin. No SMTP connection is made and no
+        pending_interactions Future is created.
+
+        Required detail keys:
+            address      — recipient email address (displayed in To: field)
+
+        Optional detail keys:
+            from_address — displayed in From: field (default: 'agent')
+            reply_domain — used to construct a display-only Reply-To address
+                           (default: 'localhost')
+            subject      — email subject line (default: 'A question for you')
+        """
+        address: str = self.details["address"]
+        from_address: str = self.details.get("from_address") or "agent"
+        reply_domain: str = (self.details.get("reply_domain") or "localhost").lstrip("@")
+        subject: str = self.details.get("subject") or "A question for you"
+
+        async def _start() -> None:
+            pass
+
+        async def _respond(message: str) -> str:
+            interaction_id = str(uuid4())
+            reply_to = f"interaction-{interaction_id}@{reply_domain}"
+            sys.stdout.write(
+                f"\n{'─' * 60}\n"
+                f"  To:       {address}\n"
+                f"  From:     {from_address}\n"
+                f"  Subject:  {subject}\n"
+                f"  Reply-To: {reply_to}\n"
+                f"{'─' * 60}\n"
+                f"\n{message}\n\n"
+                f"Reply: "
+            )
+            sys.stdout.flush()
+            return sys.stdin.readline().rstrip("\n")
+
+        async def _stop() -> None:
+            pass
+
+        return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
+
+    def _email_manager(self) -> InteractionManager:
+        """Outgoing email with async response via inbound email webhook or reply link.
+
+        Required detail keys:
+            address           — recipient email address
+            from_address      — sender address (e.g. 'Agent <agent@example.com>')
+            smtp_host         — SMTP server hostname (not required when inbound_provider='stdio')
+            reply_domain      — domain for Reply-To: interaction-{id}@reply_domain
+            response_base_url — base URL of the user source REST API
+                                (not required when inbound_provider='stdio')
+
+        Optional detail keys:
+            inbound_provider  — 'mailgun', 'postmark', 'sendgrid', 'smtp_server', or 'stdio'
+                                (default: none — email is sent, response via webhook or link)
+                                Use 'stdio' for local development: prints email to stdout,
+                                reads reply from stdin — no SMTP connection required.
+            smtp_port         — SMTP port (default: 587)
+            smtp_user         — SMTP username (default: from_address)
+            smtp_password     — SMTP password
+            smtp_use_tls      — use STARTTLS (default: True)
+            subject           — email subject (default: 'A question for you')
+            timeout           — seconds to wait for response (default: 300)
+        """
+        if self.details.get("inbound_provider") == "stdio":
+            return self._email_stdio_manager()
+
+        address: str = self.details["address"]
+        from_address: str = self.details["from_address"]
+        smtp_host: str = self.details["smtp_host"]
+        reply_domain: str = self.details["reply_domain"].lstrip("@")
+        response_base_url: str = self.details["response_base_url"].rstrip("/")
+        smtp_port: int = int(self.details.get("smtp_port", 587))
+        smtp_user: str = self.details.get("smtp_user") or from_address
+        smtp_password: str = self.details.get("smtp_password") or ""
+        smtp_use_tls: bool = bool(self.details.get("smtp_use_tls", True))
+        subject: str = self.details.get("subject") or "A question for you"
+        timeout: float = float(self.details.get("timeout", 300))
+
+        async def _start() -> None:
+            pass
+
+        async def _respond(message: str) -> str:
+            import aiosmtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            interaction_id = str(uuid4())
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[str] = loop.create_future()
+            pending_interactions[interaction_id] = future
+
+            reply_to = f"interaction-{interaction_id}@{reply_domain}"
+            respond_link = f"{response_base_url}/interactions/{interaction_id}/respond"
+
+            body_text = (
+                f"{message}\n\n"
+                f"Reply to this email with your answer, or click the link below:\n"
+                f"{respond_link}"
+            )
+            body_html = (
+                f"<p>{message}</p>"
+                f"<p>Reply to this email with your answer, or "
+                f'<a href="{respond_link}">click here</a> to respond.</p>'
+            )
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = from_address
+            msg["To"] = address
+            msg["Reply-To"] = reply_to
+            msg.attach(MIMEText(body_text, "plain"))
+            msg.attach(MIMEText(body_html, "html"))
+
+            try:
+                await aiosmtplib.send(
+                    msg,
+                    hostname=smtp_host,
+                    port=smtp_port,
+                    username=smtp_user,
+                    password=smtp_password,
+                    start_tls=smtp_use_tls,
+                )
+                return await asyncio.wait_for(future, timeout=timeout)
+            except asyncio.TimeoutError:
+                raise InteractionError(
+                    f"No email response within {timeout}s for interaction {interaction_id!r}"
                 )
             finally:
                 pending_interactions.pop(interaction_id, None)

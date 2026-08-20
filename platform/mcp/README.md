@@ -231,12 +231,34 @@ Common keys: `identity.name`, `identity.email`, `preferences.verbosity`,
 Details by protocol:
 
 ```
-email   → {"address": "alice@example.com"}
 slack   → {"channel": "#alice", "token": "xoxb-..."}
 webhook → {"url": "https://hooks.example.com/incoming",
            "response_base_url": "http://localhost:8000",
            "timeout": 300}
 ```
+
+**Email** has its own set of detail keys:
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `address` | yes | — | Recipient email address |
+| `inbound_provider` | no | _(none)_ | How the reply arrives: `mailgun`, `postmark`, `sendgrid`, `smtp_server`, or `stdio` |
+| `from_address` | yes¹ | `"agent"` | Displayed in From: |
+| `smtp_host` | yes¹ | — | SMTP server hostname |
+| `smtp_port` | no | `587` | SMTP port |
+| `smtp_user` | no | `from_address` | SMTP auth username |
+| `smtp_password` | no | `""` | SMTP auth password |
+| `smtp_use_tls` | no | `True` | Use STARTTLS |
+| `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
+| `response_base_url` | yes¹ | — | Base URL of `udb-api` (link in email body + inbound endpoint) |
+| `subject` | no | `"A question for you"` | Email subject |
+| `timeout` | no | `300` | Seconds to wait for reply |
+
+¹ Not required when `inbound_provider` is `"stdio"`.
+
+**`inbound_provider: "stdio"`** — prints email to stdout and reads reply from stdin. No SMTP or `udb-api` needed. Useful for local development and testing.
+
+**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider POSTs the parsed reply to `POST /interactions/email/inbound?provider=<name>` on `udb-api`. Configure your provider to route mail for `interaction-*@{reply_domain}` to that endpoint.
 
 For `webhook`, the agent will `POST` to `url` with:
 
@@ -284,8 +306,21 @@ set_metadata("alice", "identity.name", "Alice Smith")
 set_metadata("alice", "preferences.verbosity", "brief")
 set_metadata("alice", "skills", ["python", "data science"])
 
-# 3. Add a contact method
-add_contact("alice", "email", "work", {"address": "alice@example.com"}, preference=1)
+# 3. Add a contact method (email via Mailgun inbound)
+add_contact("alice", "email", "work", {
+    "address": "alice@example.com",
+    "from_address": "agent@udb.example.com",
+    "smtp_host": "smtp.example.com",
+    "reply_domain": "udb.example.com",
+    "response_base_url": "http://localhost:8000",
+    "inbound_provider": "mailgun",
+}, preference=1)
+
+# Or for local development (stdio mode — no SMTP needed)
+add_contact("alice", "email", "dev", {
+    "address": "alice@example.com",
+    "inbound_provider": "stdio",
+}, preference=0)
 
 # 4. Ingest a source with extraction queries
 add_source("alice", "alice_resume.txt",
