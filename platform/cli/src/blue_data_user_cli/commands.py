@@ -149,21 +149,21 @@ def _get_db(obj: dict) -> str:
 @click.group()
 @click.option(
     "--database",
-    envvar="UDB_DATABASE",
+    envvar="BLUE_DATA_USER_SOURCE_DATABASE",
     default=None,
-    help="Database (user) name. Overrides UDB_DATABASE env var.",
+    help="Database (user) name. Overrides BLUE_DATA_USER_SOURCE_DATABASE env var.",
 )
 @click.option(
     "--data-dir",
-    envvar="UDB_DATA_DIR",
+    envvar="BLUE_DATA_USER_SOURCE_DATA_DIR",
     default=str(_DEFAULT_DATA_DIR),
     show_default=True,
-    help="Directory where user data is stored. Overrides UDB_DATA_DIR env var.",
+    help="Directory where user data is stored. Overrides BLUE_DATA_USER_SOURCE_DATA_DIR env var.",
     type=click.Path(path_type=Path),
 )
 @click.option(
     "--schema-path",
-    envvar="UDB_SCHEMA_PATH",
+    envvar="BLUE_DATA_USER_SOURCE_SCHEMA_PATH",
     default=None,
     help="Path to schema.json for KB schema seeding.",
     type=click.Path(exists=True, path_type=Path),

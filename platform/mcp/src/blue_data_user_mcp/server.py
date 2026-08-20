@@ -26,7 +26,7 @@ Quick start
     udb-mcp
 
     # With a specific data directory
-    UDB_DATA_DIR=/path/to/data udb-mcp
+    BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data udb-mcp
 
 Claude Desktop config (~/.config/claude-desktop/claude_desktop_config.json):
     {
@@ -34,7 +34,7 @@ Claude Desktop config (~/.config/claude-desktop/claude_desktop_config.json):
         "blue-data-user": {
           "command": "udb-mcp",
           "env": {
-            "UDB_DATA_DIR": "/path/to/data"
+            "BLUE_DATA_USER_SOURCE_DATA_DIR": "/path/to/data"
           }
         }
       }
@@ -77,7 +77,7 @@ def _err(e: Exception) -> str:
 
 @mcp.tool()
 async def create_database(name: str) -> str:
-    """Create a new user database with file-backed storage under UDB_DATA_DIR.
+    """Create a new user database with file-backed storage under BLUE_DATA_USER_SOURCE_DATA_DIR.
 
     All storage paths (registry, KB, metadata, contacts) are derived
     automatically from the user name and the server's data directory. Use

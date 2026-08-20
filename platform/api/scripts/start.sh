@@ -1,5 +1,5 @@
 #!/bin/bash
 echo 'Starting blue-data-user api...'
 
-# start (bind to all interfaces by default; override with UDB_HOST if needed)
-UDB_HOST="${UDB_HOST:-0.0.0.0}" udb-api
+# start (bind to all interfaces by default; override with BLUE_DATA_USER_SOURCE_HOST if needed)
+BLUE_DATA_USER_SOURCE_HOST="${BLUE_DATA_USER_SOURCE_HOST:-0.0.0.0}" udb-api

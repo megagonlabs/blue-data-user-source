@@ -424,7 +424,7 @@ Exposes three MCP tools. Tool handlers are thin wrappers over the Python library
 
 Built with Click (argument parsing) and Rich (output). All commands are thin wrappers over the Python library.
 
-A default database may be configured via `--database` or the `UDB_DATABASE` env var, or persisted with `udb database select NAME`.
+A default database may be configured via `--database` or the `BLUE_DATA_USER_SOURCE_DATABASE` env var, or persisted with `udb database select NAME`.
 
 ### Global options
 
@@ -434,9 +434,9 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `--database NAME` | `UDB_DATABASE` | — | Active database ID |
-| `--data-dir DIR` | `UDB_DATA_DIR` | `~/.udb` | Directory for all database files |
-| `--schema-path PATH` | `UDB_SCHEMA_PATH` | — | Path to `schema.json` for KB seeding |
+| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database ID |
+| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory for all database files |
+| `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB seeding |
 
 ---
 

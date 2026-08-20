@@ -30,16 +30,16 @@ pip install -e .
 udb-mcp
 
 # With a specific data directory
-UDB_DATA_DIR=/path/to/data udb-mcp
+BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data udb-mcp
 
 # With a custom KB schema
-UDB_DATA_DIR=/path/to/data UDB_SCHEMA_PATH=/path/to/schema.json udb-mcp
+BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data BLUE_DATA_USER_SOURCE_SCHEMA_PATH=/path/to/schema.json udb-mcp
 ```
 
 Note: this server does not read the `udb` CLI's `~/.udb/registry.json` if
-`UDB_DATA_DIR` is changed from the default — it owns one independently-configured
+`BLUE_DATA_USER_SOURCE_DATA_DIR` is changed from the default — it owns one independently-configured
 `FileUserSource` for the process lifetime. Pointing both the CLI and this server
-at the same `UDB_DATA_DIR` (the default `~/.udb`) gives practical continuity.
+at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.udb`) gives practical continuity.
 
 ---
 
@@ -53,7 +53,7 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
     "blue-data-user": {
       "command": "udb-mcp",
       "env": {
-        "UDB_DATA_DIR": "/path/to/data"
+        "BLUE_DATA_USER_SOURCE_DATA_DIR": "/path/to/data"
       }
     }
   }
@@ -80,8 +80,8 @@ All configuration is via environment variables — there is no config file.
 
 | Variable | Default | Description |
 |---|---|---|
-| `UDB_DATA_DIR` | `~/.udb` | Directory where database files are stored |
-| `UDB_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
 
 ---
 
@@ -95,7 +95,7 @@ All configuration is via environment variables — there is no config file.
 |---|---|---|
 | `name` | `str` | User name, e.g. `"alice"` |
 
-Creates a new user with file-backed storage under `UDB_DATA_DIR`. All paths
+Creates a new user with file-backed storage under `BLUE_DATA_USER_SOURCE_DATA_DIR`. All paths
 (registry, KB, metadata, contacts) are derived from the user name automatically.
 Returns `{"name": "...", "created": true}`.
 
@@ -347,7 +347,7 @@ Claude / MCP client
         ▼
 blue_data_user_mcp.server   ← FastMCP app, 20 tool handlers (async)
         │
-blue_data_user_mcp.config   ← singleton FileUserSource factory (UDB_* env vars)
+blue_data_user_mcp.config   ← singleton FileUserSource factory (BLUE_DATA_USER_SOURCE_* env vars)
         │
    UserSource                ← lib/src/blue_data_user_source/
    └── FileUserSource        ← file-backed registry + per-user KB/metadata/contacts

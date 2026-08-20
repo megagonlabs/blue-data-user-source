@@ -59,14 +59,14 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 | Option | Env var | Default | Description |
 |---|---|---|---|
-| `--database NAME` | `UDB_DATABASE` | — | Active database (user) name |
-| `--data-dir DIR` | `UDB_DATA_DIR` | `~/.udb` | Directory where database files are stored |
-| `--schema-path PATH` | `UDB_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
+| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
+| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
 
 `--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.
 
 ```bash
-export UDB_DATABASE=alice
+export BLUE_DATA_USER_SOURCE_DATABASE=alice
 udb data query "jobs suitable for me"
 ```
 

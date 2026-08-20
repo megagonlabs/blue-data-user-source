@@ -29,7 +29,7 @@ export OPENAI_API_KEY=sk-...
 udb-api
 
 # Or with explicit configuration
-UDB_DATA_DIR=/data/udb UDB_API_KEY=secret udb-api
+BLUE_DATA_USER_SOURCE_DATA_DIR=/data/udb BLUE_DATA_USER_SOURCE_API_KEY=secret udb-api
 
 # Interactive docs
 open http://localhost:8000/docs
@@ -38,7 +38,7 @@ open http://localhost:8000/docs
 Create a user and query them:
 
 ```bash
-# Create user (with file-backend defaults derived from UDB_DATA_DIR)
+# Create user (with file-backend defaults derived from BLUE_DATA_USER_SOURCE_DATA_DIR)
 curl -X POST http://localhost:8000/databases/alice
 
 # Query
@@ -56,17 +56,17 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
 
 | Variable | Default | Description |
 |---|---|---|
-| `UDB_DATA_DIR` | `~/.udb` | Directory where database files are stored |
-| `UDB_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; leave unset to disable auth |
-| `UDB_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
-| `UDB_HOST` | `127.0.0.1` | Server bind address |
-| `UDB_PORT` | `8000` | Server port |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `BLUE_DATA_USER_SOURCE_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; leave unset to disable auth |
+| `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
+| `BLUE_DATA_USER_SOURCE_HOST` | `127.0.0.1` | Server bind address |
+| `BLUE_DATA_USER_SOURCE_PORT` | `8000` | Server port |
 
 Settings can also be loaded from a `.env` file in the working directory.
 
 ## Authentication
 
-When `UDB_API_KEY` is set, every request must include:
+When `BLUE_DATA_USER_SOURCE_API_KEY` is set, every request must include:
 
 ```
 X-API-Key: <your-key>
@@ -89,7 +89,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/databases` | List all registered users |
-| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `UDB_DATA_DIR`) |
+| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`) |
 | `GET` | `/databases/{name}` | Get user info and registry properties |
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
 | `POST` | `/databases/{name}/reset` | Reset KB data for a user and reseed the schema |
@@ -105,7 +105,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 }
 ```
 
-Omit any key to use the file-backend default derived from `UDB_DATA_DIR/sources/{name}/`.
+Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`.
 
 ### Query
 
@@ -292,7 +292,7 @@ curl -X POST http://localhost:8000/alice/contacts \
 
 ## Storage layout
 
-Data is persisted under `UDB_DATA_DIR` (default `~/.udb`):
+Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.udb`):
 
 ```
 ~/.udb/

@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="UDB_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="BLUE_DATA_USER_SOURCE_", env_file=".env", extra="ignore")
 
     data_dir: Path = Path("~/.udb").expanduser()
     api_key: str = ""

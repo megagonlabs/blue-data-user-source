@@ -1,7 +1,7 @@
 """UserSource singleton factory — reads all config from environment variables.
 
 The server owns a single FileUserSource instance for the process lifetime,
-configured entirely by UDB_* env vars. `user` is passed as an argument on
+configured entirely by BLUE_DATA_USER_SOURCE_* env vars. `user` is passed as an argument on
 every tool call — UserSource already supports multiple users (databases) on
 one registry.
 
@@ -69,10 +69,10 @@ def default_user_props(name: str) -> dict[str, Any]:
 
 
 def _build_source() -> tuple[FileUserSource, Path]:
-    d = Path(os.environ.get("UDB_DATA_DIR", "~/.udb")).expanduser().resolve()
+    d = Path(os.environ.get("BLUE_DATA_USER_SOURCE_DATA_DIR", "~/.udb")).expanduser().resolve()
     d.mkdir(parents=True, exist_ok=True)
     props: dict[str, Any] = {"connection": {"path": str(d / "registry.json")}}
-    schema = os.environ.get("UDB_SCHEMA_PATH", "")
+    schema = os.environ.get("BLUE_DATA_USER_SOURCE_SCHEMA_PATH", "")
     if schema:
         props["schema"] = schema
     return FileUserSource("user_source", props), d

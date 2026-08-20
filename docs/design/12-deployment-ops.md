@@ -97,31 +97,31 @@ All configuration is via environment variables. There are no configuration files
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `UDB_DATABASE` | No | — | Default user database ID used when none is specified per request |
+| `BLUE_DATA_USER_SOURCE_DATABASE` | No | — | Default user database ID used when none is specified per request |
 
 ### Storage
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `UDB_JSON_BACKEND_URL` | Yes | Connection URL for the JSON backend (e.g., `redis://localhost:6379`) |
-| `UDB_VECTOR_BACKEND_URL` | Yes | Connection URL for the Vector backend (e.g., `http://localhost:8002`) |
+| `BLUE_DATA_USER_SOURCE_JSON_BACKEND_URL` | Yes | Connection URL for the JSON backend (e.g., `redis://localhost:6379`) |
+| `BLUE_DATA_USER_SOURCE_VECTOR_BACKEND_URL` | Yes | Connection URL for the Vector backend (e.g., `http://localhost:8002`) |
 
 ### LLM and Embeddings
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes (default provider) | API key for the LLM and embedding model provider |
-| `UDB_LLM_MODEL` | No | LLM model name (default: `gpt-4o`) |
-| `UDB_EMBED_MODEL` | No | Embedding model name (default: `text-embedding-3-small`) |
+| `BLUE_DATA_USER_SOURCE_LLM_MODEL` | No | LLM model name (default: `gpt-4o`) |
+| `BLUE_DATA_USER_SOURCE_EMBED_MODEL` | No | Embedding model name (default: `text-embedding-3-small`) |
 
 ### Server
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `UDB_REST_PORT` | No | `8000` | Port for the REST API |
-| `UDB_MCP_PORT` | No | `8001` | Port for the MCP server |
-| `UDB_REST_ENABLED` | No | `true` | Set to `false` to disable the REST API |
-| `UDB_MCP_ENABLED` | No | `true` | Set to `false` to disable the MCP server |
+| `BLUE_DATA_USER_SOURCE_REST_PORT` | No | `8000` | Port for the REST API |
+| `BLUE_DATA_USER_SOURCE_MCP_PORT` | No | `8001` | Port for the MCP server |
+| `BLUE_DATA_USER_SOURCE_REST_ENABLED` | No | `true` | Set to `false` to disable the REST API |
+| `BLUE_DATA_USER_SOURCE_MCP_ENABLED` | No | `true` | Set to `false` to disable the MCP server |
 
 ### Observability
 
