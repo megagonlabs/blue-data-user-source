@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+webhook = [
+    "httpx>=0.27",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

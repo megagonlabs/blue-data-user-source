@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from typing import Any
+from uuid import uuid4
 
 from blue_data_user_source.interaction.manager import InteractionManager
+from blue_data_user_source.interaction.pending import pending_interactions
 from blue_data_user_source.types import InteractionError
 
 
@@ -11,7 +14,7 @@ class ContactMethod:
     """Stores metadata for one contact channel and provides an InteractionManager."""
 
     SUPPORTED_PROTOCOLS = frozenset(
-        {"session", "email", "sms", "stdio", "messaging", "enterprise", "notification"}
+        {"session", "email", "sms", "stdio", "messaging", "enterprise", "notification", "webhook"}
     )
 
     def __init__(self, protocol: str, name: str, details: dict[str, Any]) -> None:
@@ -28,6 +31,8 @@ class ContactMethod:
     def interact(self) -> InteractionManager:
         if self.protocol == "stdio":
             return self._stdio_manager()
+        if self.protocol == "webhook":
+            return self._webhook_manager()
         raise InteractionError(
             f"Contact protocol '{self.protocol}' requires a registered handler."
         )
@@ -40,6 +45,61 @@ class ContactMethod:
             sys.stdout.write(f"\n{message}\n> ")
             sys.stdout.flush()
             return sys.stdin.readline().rstrip("\n")
+
+        async def _stop() -> None:
+            pass
+
+        return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
+
+    def _webhook_manager(self) -> InteractionManager:
+        """Outgoing webhook with async response via the user source REST API.
+
+        Required detail keys:
+            url               — POST target for outgoing questions
+            response_base_url — base URL of the user source REST API
+                                (response_url sent in payload:
+                                 {response_base_url}/interactions/{id}/response)
+
+        Optional detail keys:
+            headers           — extra HTTP headers for the outgoing POST
+            timeout           — seconds to wait for a response (default: 300)
+        """
+        url: str = self.details["url"]
+        response_base_url: str = self.details["response_base_url"].rstrip("/")
+        headers: dict[str, str] = self.details.get("headers") or {}
+        timeout: float = float(self.details.get("timeout", 300))
+
+        async def _start() -> None:
+            pass
+
+        async def _respond(message: str) -> str:
+            import httpx
+
+            interaction_id = str(uuid4())
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[str] = loop.create_future()
+            pending_interactions[interaction_id] = future
+
+            response_url = f"{response_base_url}/interactions/{interaction_id}/response"
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        url,
+                        json={
+                            "interaction_id": interaction_id,
+                            "message": message,
+                            "response_url": response_url,
+                        },
+                        headers=headers,
+                        timeout=10.0,
+                    )
+                return await asyncio.wait_for(future, timeout=timeout)
+            except asyncio.TimeoutError:
+                raise InteractionError(
+                    f"No response received within {timeout}s for interaction {interaction_id!r}"
+                )
+            finally:
+                pending_interactions.pop(interaction_id, None)
 
         async def _stop() -> None:
             pass

@@ -166,6 +166,15 @@ class UserSource(DataSource):
     # DataSource: query                                                    #
     # ------------------------------------------------------------------ #
 
+    async def async_execute_query(
+        self,
+        query: str,
+        database: str | None = None,
+        optional_properties: dict | None = None,
+    ) -> Any:
+        """Async version of execute_query for use from async contexts (e.g. FastAPI)."""
+        return await self._run_query(query, database, optional_properties=optional_properties)
+
     def execute_query(
         self,
         query,
