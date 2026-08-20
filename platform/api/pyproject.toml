@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blue-data-user-api"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "blue-data-user-source>=0.1.0",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "httpx>=0.27",
+    "pydantic-settings>=2.0",
+]
+
+[project.scripts]
+udb-api = "blue_data_user_api.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--tb=short -q"
+pythonpath = ["src", "../../lib/src"]
+testpaths = ["tests"]
