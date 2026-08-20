@@ -140,6 +140,47 @@ async def test_identify_picks_lowest_preference(contact_manager: ContactManager)
     assert method.preference == 1
 
 
+async def test_identify_skips_llm_when_only_one_method(
+    contact_manager: ContactManager,
+) -> None:
+    await contact_manager.create_contact_method("email", "work", {}, preference=5)
+    with patch(
+        "blue_data_user_source.reasoning.reasoner._llm_complete", new=AsyncMock()
+    ) as mock_llm:
+        method = await contact_manager.identify_contact_method()
+    assert method.protocol == "email"
+    mock_llm.assert_not_called()
+
+
+async def test_identify_uses_llm_choice_among_multiple_methods(
+    contact_manager: ContactManager,
+) -> None:
+    await contact_manager.create_contact_method("email", "work", {}, preference=1)
+    await contact_manager.create_contact_method("sms", "mobile", {}, preference=5)
+    mock_llm = AsyncMock(return_value={"protocol": "sms", "name": "mobile"})
+    with patch(
+        "blue_data_user_source.reasoning.reasoner._llm_complete", new=mock_llm
+    ):
+        method = await contact_manager.identify_contact_method()
+    assert method.protocol == "sms"
+    assert method.name == "mobile"
+    mock_llm.assert_awaited_once()
+
+
+async def test_identify_falls_back_when_llm_choice_is_invalid(
+    contact_manager: ContactManager,
+) -> None:
+    await contact_manager.create_contact_method("email", "work", {}, preference=1)
+    await contact_manager.create_contact_method("sms", "mobile", {}, preference=5)
+    mock_llm = AsyncMock(return_value={"protocol": "webhook", "name": "nonexistent"})
+    with patch(
+        "blue_data_user_source.reasoning.reasoner._llm_complete", new=mock_llm
+    ):
+        method = await contact_manager.identify_contact_method()
+    assert method.protocol == "email"
+    assert method.preference == 1
+
+
 # ── stdio interaction ─────────────────────────────────────────────────────────
 
 async def test_stdio_send_writes_prompt_and_reads_response(monkeypatch: pytest.MonkeyPatch) -> None:

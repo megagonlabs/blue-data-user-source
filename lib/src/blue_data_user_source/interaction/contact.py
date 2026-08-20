@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -333,4 +334,43 @@ class ContactManager:
         methods = await self.list_contact_methods()
         if not methods:
             return ContactMethod(protocol="stdio", name="default", details={})
-        return min(methods, key=lambda m: m.preference)
+        if len(methods) == 1:
+            return methods[0]
+        return await self._choose_contact_method(methods)
+
+    async def _choose_contact_method(self, methods: list[ContactMethod]) -> ContactMethod:
+        """Ask an LLM to pick among several available contact methods.
+
+        Falls back to the lowest-``preference`` method if the LLM call fails
+        or returns a choice that isn't one of the options.
+        """
+        from blue_data_user_source.reasoning.reasoner import _llm_complete
+
+        fallback = min(methods, key=lambda m: m.preference)
+
+        preferred_channel = self._data_manager.get_metadata("availability.preferred_channel")
+        working_hours = self._data_manager.get_metadata("availability.working_hours")
+        now = datetime.now(timezone.utc)
+
+        options = "\n".join(
+            f"- protocol={m.protocol!r}, name={m.name!r}, preference={m.preference} "
+            "(lower preference = more favored)"
+            for m in methods
+        )
+        prompt = (
+            "Choose the best contact method to reach a user right now, from the options below.\n\n"
+            f"Available contact methods:\n{options}\n\n"
+            f"User's stated preferred channel (free text, may be empty or not match any option): "
+            f"{preferred_channel or 'not specified'}\n"
+            f"User's working hours (free text): {working_hours or 'not specified'}\n"
+            f"Current time (UTC): {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n"
+            "Weigh the stated preferred channel and working hours alongside each method's "
+            "preference ranking. Pick exactly one method from the list above. "
+            'Return only a JSON object: {"protocol": "<protocol>", "name": "<name>"}'
+        )
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        if isinstance(result, dict):
+            for method in methods:
+                if method.protocol == result.get("protocol") and method.name == result.get("name"):
+                    return method
+        return fallback
