@@ -9,7 +9,6 @@ from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
 
-
 # ------------------------------------------------------------------ #
 # Class paths for DataSource.instantiate                               #
 # ------------------------------------------------------------------ #
@@ -21,6 +20,8 @@ CLS_JSON_REDIS  = "blue_data.source.json.redis.redis_json_source.RedisJSONSource
 CLS_KB_MEMORY   = "blue_data_kb_source.memory_kb_source.MemoryKBSource"
 CLS_KB_FILE     = "blue_data_kb_source.file_kb_source.FileKBSource"
 CLS_KB_NEO4J    = "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource"
+CLS_VECTOR_MEMORY = "blue_data.source.vector.memory_vector_source.MemoryVectorSource"
+CLS_VECTOR_FILE   = "blue_data.source.vector.file_vector_source.FileVectorSource"
 
 # Legacy mapping — kept for backward compatibility when reading stored configs
 # that pre-date the _class / connection property format.
@@ -32,6 +33,22 @@ _KB_BACKENDS: dict[str, str] = {
 _JSON_BACKENDS: dict[str, str] = {
     "memory": CLS_JSON_MEMORY,
     "file":   CLS_JSON_FILE,
+}
+_VECTOR_BACKENDS: dict[str, str] = {
+    "memory": CLS_VECTOR_MEMORY,
+    "file":   CLS_VECTOR_FILE,
+}
+_BACKEND_CLASSES: dict[str, dict[str, str]] = {
+    "kb": _KB_BACKENDS,
+    "json": _JSON_BACKENDS,
+    "vector": _VECTOR_BACKENDS,
+}
+
+# Default embedding model + vector backend for per-session interaction-transcript
+# DocumentDataSources when the caller doesn't supply doc_source_props explicitly.
+DEFAULT_DOC_SOURCE_PROPS: dict = {
+    "embedding_model": "dummy",
+    "vector_source": {"backend": "memory"},
 }
 
 
@@ -45,11 +62,29 @@ def _enrich_props(props: dict, kind: str) -> dict:
     if "_class" in props:
         return props
     backend = props.get("backend", "memory")
-    backends = _KB_BACKENDS if kind == "kb" else _JSON_BACKENDS
+    backends = _BACKEND_CLASSES[kind]
     cls = backends.get(backend)
     if cls is None:
         raise ValueError(f"Unknown {kind} backend: {backend!r}")
     return {"_class": cls, "connection": props}
+
+
+def _build_embedding_model(spec: str | dict | None) -> Any:
+    """Build an EmbeddingModel from a simple string spec ('dummy' or 'openai').
+
+    Live embedding-model objects can't round-trip through the registry's
+    generic _class/connection reconnection path, so callers that need one
+    (currently only per-session DocumentDataSource construction) build it
+    directly from this small string switch instead.
+    """
+    from blue_data_doc_source import DummyEmbeddingModel, OpenAIEmbeddingModel
+
+    name = spec if isinstance(spec, str) else (spec or {}).get("name", "dummy")
+    if name == "dummy":
+        return DummyEmbeddingModel()
+    if name == "openai":
+        return OpenAIEmbeddingModel()
+    raise ValueError(f"Unknown embedding model: {name!r}")
 
 
 def _build_json_source(name: str, props: dict) -> Any:
@@ -74,6 +109,13 @@ class UserDataManager:
     - ``"kb"``       (KBSource) — knowledge graph.
     - ``"metadata"`` (JSONSource) — user metadata / preferences.
     - ``"contacts"`` (JSONSource) — contact methods.
+    - ``"sessions"`` (JSONSource) — session / query / interaction records.
+    - ``"session-{id}"`` (DocumentDataSource) — per-session interaction transcripts,
+      created on demand via :meth:`ensure_session_doc_source`. Unlike the sources
+      above, these are NOT reconstructed via the registry's generic
+      ``connect_source`` path — their embedding model is a live object that can't
+      round-trip through ``_class``/``connection`` reflection, so this manager
+      rebuilds and caches them itself from ``doc_source_props``.
     - Additional sources added at runtime via :meth:`add_source`.
 
     All source instantiation goes through ``DataSource.instantiate`` using
@@ -91,14 +133,19 @@ class UserDataManager:
         mgr.connect()
     """
 
-    def __init__(self, database: str, registry_props: dict) -> None:
+    def __init__(
+        self, database: str, registry_props: dict, doc_source_props: dict | None = None,
+    ) -> None:
         self._database = database
         self._registry_props = registry_props
+        self._doc_source_props = doc_source_props or DEFAULT_DOC_SOURCE_PROPS
         self._registry: DataRegistry | None = None
         # Optional overrides — set directly by callers (e.g. test mocks)
         self._kb_source: Any = None
         self._metadata_source: Any = None
         self._contact_source: Any = None
+        self._session_source: Any = None
+        self._session_doc_sources: dict[str, Any] = {}
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -112,6 +159,7 @@ class UserDataManager:
         metadata_source_props: dict,
         contact_schema_path: str | None,
         contact_source_props: dict,
+        session_source_props: dict,
     ) -> None:
         """Create the per-user DataRegistry, instantiate + register all sources, seed schemas."""
         registry_store = _build_json_source("registry", self._registry_props)
@@ -150,6 +198,16 @@ class UserDataManager:
         if contact_schema_path:
             self.seed_contact_schema(contact_schema_path)
 
+        # Sessions source — no fixed schema; session records are created on demand.
+        sess_enriched = _enrich_props(session_source_props, "json")
+        sess_conn = sess_enriched.get("connection", {})
+        if "path" in sess_conn:
+            Path(sess_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
+        sess_source = DataSource.instantiate(
+            sess_enriched["_class"], "sessions", properties={"connection": sess_conn},
+        )
+        self._registry.register_source(sess_source)
+
     def connect(self) -> None:
         """Load the per-user DataRegistry from its existing store; sources are lazy via connect_source."""
         registry_store = _build_json_source("registry", self._registry_props)
@@ -164,7 +222,7 @@ class UserDataManager:
     ) -> None:
         """Clear and reseed selected sources back to schema defaults."""
         if sources is None:
-            sources = {"kb", "metadata", "contacts"}
+            sources = {"kb", "metadata", "contacts", "sessions"}
 
         if "kb" in sources:
             await self.clear_kb()
@@ -181,10 +239,15 @@ class UserDataManager:
             if contact_schema_path:
                 self.seed_contact_schema(contact_schema_path)
 
-        # Deregister any additional imported sources from the registry
+        if "sessions" in sources:
+            self.clear_sessions()
+
+        # Deregister any additional imported sources from the registry, including
+        # any per-session doc sources ("session-{id}") created via ensure_session_doc_source.
+        self._session_doc_sources.clear()
         source_records = self._registry.list_records(record_type="source", scope="/")
         for record in source_records:
-            if record["name"] not in ("kb", "metadata", "contacts"):
+            if record["name"] not in ("kb", "metadata", "contacts", "sessions"):
                 self._registry.deregister(record)
 
     def destroy(self) -> None:
@@ -199,8 +262,8 @@ class UserDataManager:
                 with contextlib.suppress(OSError):
                     user_dir.rmdir()
 
-            # Metadata and contacts — file path
-            for src_name in ("metadata", "contacts"):
+            # Metadata, contacts, and sessions — file path
+            for src_name in ("metadata", "contacts", "sessions"):
                 props = self._registry.get_source_properties(src_name) or {}
                 conn = props.get("connection", {})
                 if "path" in conn:
@@ -246,6 +309,17 @@ class UserDataManager:
         if source is None:
             raise ValueError(f"No 'contacts' source in registry for user {self._database!r}.")
         self._contact_source = source
+        return source
+
+    def _ensure_session_source(self) -> Any:
+        if self._session_source is not None:
+            return self._session_source
+        if self._registry is None:
+            raise ValueError("Registry not ready — call build() or connect() first.")
+        source = self._registry.connect_source("sessions")
+        if source is None:
+            raise ValueError(f"No 'sessions' source in registry for user {self._database!r}.")
+        self._session_source = source
         return source
 
     # ------------------------------------------------------------------ #
@@ -449,3 +523,49 @@ class UserDataManager:
 
     def delete_contact(self, protocol: str, name: str) -> None:
         self._ensure_contact_source().delete(f"contacts.{protocol}.{name}")
+
+    # ------------------------------------------------------------------ #
+    # Session operations                                                   #
+    # ------------------------------------------------------------------ #
+
+    def clear_sessions(self) -> None:
+        self._ensure_session_source().set("sessions", {})
+
+    def get_session_source(self) -> Any:
+        return self._ensure_session_source()
+
+    # ------------------------------------------------------------------ #
+    # Session document source (per-session interaction transcripts)       #
+    # ------------------------------------------------------------------ #
+
+    def ensure_session_doc_source(self, session_id: str) -> Any:
+        """Return the DocumentDataSource for *session_id*, building + registering it on first use.
+
+        Not reconnected via DataRegistry.connect_source — see class docstring.
+        Cached per-process in self._session_doc_sources; a fresh process rebuilds
+        it (with a fresh, empty vector backend unless doc_source_props points at
+        a persistent one, e.g. the "file" vector backend).
+        """
+        if session_id in self._session_doc_sources:
+            return self._session_doc_sources[session_id]
+        if self._registry is None:
+            raise ValueError("Registry not ready — call build() or connect() first.")
+
+        from blue_data_doc_source import DocumentDataSource
+
+        name = f"session-{session_id}"
+        embedding_model = _build_embedding_model(self._doc_source_props.get("embedding_model"))
+        vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
+        vector_enriched = _enrich_props(vector_props, "vector")
+        vector_conn = vector_enriched.get("connection", {})
+        if "directory" in vector_conn:
+            Path(vector_conn["directory"]).mkdir(parents=True, exist_ok=True)
+        vector_source = DataSource.instantiate(
+            vector_enriched["_class"], f"{name}-vectors", properties={"connection": vector_conn},
+        )
+        doc_source = DocumentDataSource(
+            name=name, embedding_model=embedding_model, vector_source=vector_source,
+        )
+        self._registry.register_source(doc_source)
+        self._session_doc_sources[session_id] = doc_source
+        return doc_source

@@ -35,5 +35,6 @@ async def manager(user_id: str) -> UserDataManager:
         metadata_source_props=_MEM_JSON,
         contact_schema_path=_CONTACT_SCHEMA,
         contact_source_props=_MEM_JSON,
+        session_source_props=_MEM_JSON,
     )
     return mgr

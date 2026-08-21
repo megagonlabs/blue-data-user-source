@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from blue_data_user_api.config import settings
-from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query
+from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query, sessions
 from blue_data_user_api.source import create_source
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ app.include_router(data.router)
 app.include_router(metadata.router)
 app.include_router(contacts.router)
 app.include_router(interactions.router)
+app.include_router(sessions.router)
 
 
 @app.get("/health", tags=["health"])

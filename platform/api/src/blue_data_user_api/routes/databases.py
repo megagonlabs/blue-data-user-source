@@ -16,6 +16,8 @@ class CreateDatabaseRequest(BaseModel):
     kb_source: dict[str, Any] | None = None
     metadata_source: dict[str, Any] | None = None
     contact_source: dict[str, Any] | None = None
+    session_source: dict[str, Any] | None = None
+    doc_source: dict[str, Any] | None = None
 
 
 @router.get("", summary="List users")
@@ -33,6 +35,8 @@ async def create_database(name: str, body: CreateDatabaseRequest, request: Reque
         "kb_source": body.kb_source or defaults["kb_source"],
         "metadata_source": body.metadata_source or defaults["metadata_source"],
         "contact_source": body.contact_source or defaults["contact_source"],
+        "session_source": body.session_source or defaults["session_source"],
+        "doc_source": body.doc_source or defaults["doc_source"],
     }
     await source.create_user(
         name,
@@ -40,6 +44,8 @@ async def create_database(name: str, body: CreateDatabaseRequest, request: Reque
         kb_source_props=props["kb_source"],
         metadata_source_props=props["metadata_source"],
         contact_source_props=props["contact_source"],
+        session_source_props=props["session_source"],
+        doc_source_props=props["doc_source"],
     )
     return {"name": name}
 

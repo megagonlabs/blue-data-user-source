@@ -116,8 +116,8 @@ Expanded question set Q:
 **Context Expansion Sources**
 
 - User profile
-- Session history
-- Previous interactions
+- Session history — the current session's own prior queries and resolved interactions, tracked by the Session Manager (below)
+- Previous interactions — resolved Q/A transcripts, ingested into the session's `DocumentDataSource` for semantic recall (below)
 - Historical preferences
 - Organizational knowledge
 - Domain templates
@@ -211,11 +211,13 @@ Input: **(qi, di, Mi)**
 The layer:
 
 1. Selects communication channel via Contact Manager
-2. Generates clarification request via Interaction Manager
-3. Sends interaction to user
-4. Waits for response
-5. Returns updated data to Reasoning Layer for reassessment
-6. Repeats if necessary
+2. Mints an `interaction_id` via the Session Manager, recording the interaction as `"pending"` under the current session/query
+3. Generates clarification request via Interaction Manager, passing the same `interaction_id` so the transport-level correlation and the durable record share one id
+4. Sends interaction to user
+5. Waits for response
+6. Records the response via the Session Manager (`"resolved"`, or `"timeout"` if the wait fails) and ingests the transcript into the session's `DocumentDataSource`
+7. Returns updated data to Reasoning Layer for reassessment
+8. Repeats if necessary
 
 ### Contact Manager
 
@@ -224,9 +226,10 @@ Selects the most appropriate communication mechanism.
 **Responsibilities**
 
 - Manage available communication channels
-- Track active user sessions
 - Maintain communication preferences
 - Rank and select optimal contact method
+
+Session tracking itself — which sessions are active, what they contain — is owned by the Session Manager below, not the Contact Manager; the Contact Manager only picks *how* to reach the user for a given interaction.
 
 **Supported Channels**
 
@@ -270,6 +273,35 @@ The Interaction Manager then:
 2. Waits for user response
 3. Updates context
 4. Triggers reassessment in the Reasoning Layer
+
+### Session Manager
+
+Tracks sessions, and the queries and interactions within them, as a durable record — per-user, mirroring the Contact Manager's storage pattern (a `sessions` JSONSource in the per-user DataRegistry, dotted-path CRUD).
+
+**Responsibilities**
+
+- Create sessions and mint session ids
+- Record each external query appended to a session
+- Record each clarification interaction (question, response, contact method used) under its query
+- Mint `interaction_id`s that double as the transport-level correlation key the Interaction Manager uses to wait for a reply
+- Ingest resolved interaction transcripts into a per-session `DocumentDataSource`, for later semantic recall as a Context Expansion Source
+- End sessions
+
+**Reuse-or-create at the query boundary**
+
+`UserSource._run_query` (the shared implementation behind `execute_query`/`execute_query_nl`) decides session continuity before invoking the Reasoning Layer: if the caller supplied a session id, the query is appended to that session (or rejected if it doesn't exist or has ended); otherwise a fresh single-query session is created automatically. This means a caller that wants a multi-query conversation must pass back the `session_id` it received from a prior call — the Session Manager itself never guesses at continuity.
+
+**Session lifecycle**
+
+```
+active ──(end_session)──> ended
+```
+
+An ended session accepts no further queries; `create_query` raises. There is no automatic expiry — sessions stay `"active"` until explicitly ended.
+
+**Relationship to Contact Manager**
+
+The Contact Manager and Session Manager are used together but track different things: Contact Manager picks *which* channel to use for a given interaction; Session Manager records *that* the interaction happened, what was asked, what was answered, and ties it back to the session and query it belongs to. See §6 of [10-data-model.md](10-data-model.md) for the exact record schema.
 
 ---
 

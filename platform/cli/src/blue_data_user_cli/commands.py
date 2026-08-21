@@ -21,7 +21,8 @@ from blue_data_user_source.data.manager import (
 
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
 _SELECTED_DB_FILE = ".selected.database"
-_INTERNAL_SOURCES = {"kb", "metadata", "contacts"}
+_SELECTED_SESSION_FILE = ".selected.session"
+_INTERNAL_SOURCES = {"kb", "metadata", "contacts", "sessions"}
 
 console = Console()
 err = Console(stderr=True)
@@ -125,6 +126,32 @@ def _user_contact_props(data_dir: Path, name: str) -> dict:
     }
 
 
+def _user_session_props(data_dir: Path, name: str) -> dict:
+    return {
+        "_class": CLS_JSON_FILE,
+        "connection": {
+            "protocol": "json/file",
+            "path": str(data_dir / "sources" / name / "sessions.json"),
+        },
+    }
+
+
+def _user_doc_source_props(data_dir: Path, name: str, doc_backend: str) -> dict:
+    """Config for per-session interaction-transcript DocumentDataSources.
+
+    "memory" (default) doesn't persist ingested transcripts across CLI
+    invocations (each command is a fresh process) — use "file" for that.
+    """
+    if doc_backend == "memory":
+        return {"embedding_model": "dummy", "vector_source": {"backend": "memory"}}
+    if doc_backend == "file":
+        return {
+            "embedding_model": "dummy",
+            "vector_source": {"backend": "file", "directory": str(data_dir / "sources" / name / "sessions")},
+        }
+    raise ValueError(f"Unknown doc-source backend: {doc_backend!r}")
+
+
 def _selected_db_path(data_dir: Path) -> Path:
     return data_dir / _SELECTED_DB_FILE
 
@@ -140,6 +167,30 @@ def _get_db(obj: dict) -> str:
             return db
     err.print("[red]Error:[/red] No database selected. Use --database or run 'udb database select NAME'.")
     sys.exit(1)
+
+
+def _selected_session_path(data_dir: Path) -> Path:
+    return data_dir / _SELECTED_SESSION_FILE
+
+
+def _get_session(obj: dict, session: str | None) -> str | None:
+    """Resolve a session id: --session flag → env var → .selected.session file → None.
+
+    Unlike _get_db, an unresolved session is NOT an error — None means the
+    caller should let the query auto-create a new session (reuse-or-create).
+    """
+    if session:
+        return session
+    import os
+    env_session = os.environ.get("BLUE_DATA_USER_SOURCE_SESSION")
+    if env_session:
+        return env_session
+    sel_path = _selected_session_path(obj["data_dir"])
+    if sel_path.exists():
+        sel = sel_path.read_text().strip()
+        if sel:
+            return sel
+    return None
 
 
 # ------------------------------------------------------------------ #
@@ -236,6 +287,13 @@ def database_list(obj: dict, fmt: str) -> None:
 @click.option("--neo4j-port", default=7687, show_default=True, type=int, help="Neo4j bolt port.")
 @click.option("--neo4j-user", default="neo4j", show_default=True, help="Neo4j username.")
 @click.option("--neo4j-password", default=None, help="Neo4j password.")
+@click.option(
+    "--doc-backend",
+    default="file",
+    type=click.Choice(["memory", "file"]),
+    show_default=True,
+    help="Vector backend for per-session interaction-transcript storage.",
+)
 @click.pass_obj
 def database_create(
     obj: dict,
@@ -245,6 +303,7 @@ def database_create(
     neo4j_port: int,
     neo4j_user: str,
     neo4j_password: str | None,
+    doc_backend: str,
 ) -> None:
     """Create a new user database."""
     data_dir: Path = obj["data_dir"]
@@ -274,11 +333,14 @@ def database_create(
             _user_kb_props(data_dir, name, kb_backend, **kb_extras),
             _user_metadata_props(data_dir, name),
             _user_contact_props(data_dir, name),
+            _user_session_props(data_dir, name),
+            _user_doc_source_props(data_dir, name, doc_backend),
         ))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    console.print(f"Created database: [bold]{name}[/bold]")
+    _selected_db_path(data_dir).write_text(name)
+    console.print(f"Created database: [bold]{name}[/bold] (selected)")
 
 
 @database_group.command("delete")
@@ -298,6 +360,9 @@ def database_delete(obj: dict, name: str, yes: bool) -> None:
     sel_path = _selected_db_path(obj["data_dir"])
     if sel_path.exists() and sel_path.read_text().strip() == name:
         sel_path.unlink()
+        sess_sel_path = _selected_session_path(obj["data_dir"])
+        if sess_sel_path.exists():
+            sess_sel_path.unlink()
     console.print(f"Deleted database: [bold]{name}[/bold]")
 
 
@@ -397,6 +462,129 @@ def database_config_show(obj: dict, fmt: str) -> None:
     for key, value in _flatten(entry):
         t.add_row(key, value)
     console.print(t)
+
+
+# ------------------------------------------------------------------ #
+# udb session                                                         #
+# ------------------------------------------------------------------ #
+
+@cli.group("session")
+def session_group() -> None:
+    """Session management — a session groups the queries/interactions of one conversation."""
+
+
+@session_group.command("start")
+@click.pass_obj
+def session_start(obj: dict) -> None:
+    """Create a new session for the active database and select it."""
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    session_id = asyncio.run(source.create_session(db))
+    _selected_session_path(obj["data_dir"]).write_text(session_id)
+    console.print(f"Started session: [bold]{session_id}[/bold] (selected)")
+
+
+@session_group.command("select")
+@click.argument("session_id")
+@click.pass_obj
+def session_select(obj: dict, session_id: str) -> None:
+    """Select the active session, so 'udb data query' doesn't need --session."""
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    if asyncio.run(source.get_session(db, session_id)) is None:
+        err.print(f"[red]Error:[/red] Session '{session_id}' not found.")
+        sys.exit(1)
+    _selected_session_path(obj["data_dir"]).write_text(session_id)
+    console.print(f"Selected session: [bold]{session_id}[/bold]")
+
+
+@session_group.command("end")
+@click.argument("session_id", required=False, default=None)
+@click.pass_obj
+def session_end(obj: dict, session_id: str | None) -> None:
+    """End a session (defaults to the selected session). Clears the selection if it matches."""
+    db = _get_db(obj)
+    data_dir: Path = obj["data_dir"]
+    sid = _get_session(obj, session_id)
+    if sid is None:
+        err.print("[red]Error:[/red] No session selected. Pass SESSION_ID or run 'udb session select ID'.")
+        sys.exit(1)
+    source = _make_source(data_dir)
+    try:
+        asyncio.run(source.end_session(db, sid))
+    except UDbError as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    sel_path = _selected_session_path(data_dir)
+    if sel_path.exists() and sel_path.read_text().strip() == sid:
+        sel_path.unlink()
+    console.print(f"Ended session: [bold]{sid}[/bold]")
+
+
+@session_group.command("list")
+@click.option(
+    "--format", "fmt",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    show_default=True,
+)
+@click.pass_obj
+def session_list(obj: dict, fmt: str) -> None:
+    """List sessions for the active database."""
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+    sessions = asyncio.run(source.list_sessions(db))
+    selected = _get_session(obj, None)
+    if fmt == "json":
+        console.print_json(json.dumps(sessions))
+        return
+    if not sessions:
+        console.print("[dim](no sessions)[/dim]")
+        return
+    t = Table(show_header=True, header_style="bold")
+    t.add_column("Session ID", style="bold")
+    t.add_column("Status")
+    t.add_column("Queries", justify="right")
+    t.add_column("Created")
+    t.add_column("", max_width=3)
+    for sid, record in sessions.items():
+        marker = "[green]*[/green]" if sid == selected else ""
+        t.add_row(sid, record.get("status", ""), str(len(record.get("queries", {}))),
+                   _humanize_date(record.get("created_at")), marker)
+    console.print(t)
+
+
+@session_group.command("show")
+@click.argument("session_id", required=False, default=None)
+@click.option(
+    "--format", "fmt",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    show_default=True,
+)
+@click.pass_obj
+def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
+    """Show a session's queries and interactions (defaults to the selected session)."""
+    db = _get_db(obj)
+    sid = _get_session(obj, session_id)
+    if sid is None:
+        err.print("[red]Error:[/red] No session selected. Pass SESSION_ID or run 'udb session select ID'.")
+        sys.exit(1)
+    source = _make_source(obj["data_dir"])
+    record = asyncio.run(source.get_session(db, sid))
+    if record is None:
+        err.print(f"[red]Error:[/red] Session '{sid}' not found.")
+        sys.exit(1)
+    if fmt == "json":
+        console.print_json(json.dumps(record))
+        return
+    console.print(f"Session [bold]{sid}[/bold] — status: {record.get('status')}, created: {_humanize_date(record.get('created_at'))}")
+    for qid, q in record.get("queries", {}).items():
+        console.print(f"\n[bold]Query[/bold] {qid}: {q.get('query')}")
+        for iid, ia in q.get("interactions", {}).items():
+            console.print(f"  [dim]interaction {iid}[/dim] ({ia.get('status')}) via {ia.get('contact', {}).get('protocol')}")
+            console.print(f"    Q: {ia.get('question')}")
+            console.print(f"    A: {ia.get('response')}")
 
 
 # ------------------------------------------------------------------ #
@@ -584,8 +772,9 @@ def data_query(
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     props: dict[str, Any] = {"top_k": top_k}
-    if session:
-        props["session"] = session
+    resolved_session = _get_session(obj, session)
+    if resolved_session:
+        props["session"] = resolved_session
     if fmt == "nl":
         props["output_form"] = "nl"
     try:
@@ -595,10 +784,14 @@ def data_query(
             )
             props["on_tool_call"] = on_tool_call
             props["on_tool_result"] = on_tool_result
-            results = source.execute_query(text, database=db, optional_properties=props)
+            results, session_id = source.execute_query(text, database=db, optional_properties=props)
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
+    if not resolved_session:
+        # Auto-select-after-auto-create: continue this session on the next query
+        # without requiring an explicit 'udb session select'.
+        _selected_session_path(obj["data_dir"]).write_text(session_id)
     if fmt == "nl":
         click.echo(results)
         return

@@ -29,6 +29,14 @@ def _default_user_props(name: str, data_dir: Path) -> dict[str, Any]:
             "_class": CLS_JSON_FILE,
             "connection": {"protocol": "json/file", "path": str(base / "contacts.json")},
         },
+        "session_source": {
+            "_class": CLS_JSON_FILE,
+            "connection": {"protocol": "json/file", "path": str(base / "sessions.json")},
+        },
+        "doc_source": {
+            "embedding_model": "dummy",
+            "vector_source": {"backend": "file", "directory": str(base / "sessions")},
+        },
     }
 
 

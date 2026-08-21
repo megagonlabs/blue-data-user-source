@@ -9,6 +9,7 @@ Tool groups
 Users (write)    — create_database, delete_database, reset_database
 Users (read)     — list_databases, get_database
 Query            — query
+Sessions         — session_start, session_end, get_session, list_sessions
 Data (write)     — add_source, remove_source
 Data (read)      — list_data, list_sources
 Metadata (write) — set_metadata, delete_metadata
@@ -95,6 +96,8 @@ async def create_database(name: str) -> str:
             kb_source_props=props["kb_source"],
             metadata_source_props=props["metadata_source"],
             contact_source_props=props["contact_source"],
+            session_source_props=props["session_source"],
+            doc_source_props=props["doc_source"],
         )
         return _ok({"name": name, "created": True})
     except Exception as e:
@@ -186,10 +189,76 @@ async def query(
         optional: dict[str, Any] = {"output_form": output_form}
         if session:
             optional["session"] = session
-        result = await get_source().async_execute_query(
+        result, session_id = await get_source().async_execute_query(
             question, database=user, optional_properties=optional
         )
-        return _ok(result)
+        return _ok({"results": result, "session_id": session_id})
+    except Exception as e:
+        return _err(e)
+
+
+# ---------------------------------------------------------------------------
+# Sessions
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def session_start(user: str) -> str:
+    """Create a new session for a user, so multiple queries can share context and history.
+
+    Pass the returned session_id as the `session` argument to `query` calls
+    to append them to this session instead of each getting an ad hoc one.
+
+    Args:
+        user: User name.
+    """
+    try:
+        session_id = await get_source().create_session(user)
+        return _ok({"user": user, "session_id": session_id})
+    except Exception as e:
+        return _err(e)
+
+
+@mcp.tool()
+async def session_end(user: str, session_id: str) -> str:
+    """End a session. Further queries cannot be appended to it.
+
+    Args:
+        user:       User name.
+        session_id: Session to end.
+    """
+    try:
+        await get_source().end_session(user, session_id)
+        return _ok({"user": user, "session_id": session_id, "ended": True})
+    except Exception as e:
+        return _err(e)
+
+
+@mcp.tool()
+async def get_session(user: str, session_id: str) -> str:
+    """Get a session's queries and interactions.
+
+    Args:
+        user:       User name.
+        session_id: Session to retrieve.
+    """
+    try:
+        record = await get_source().get_session(user, session_id)
+        if record is None:
+            return _err(ValueError(f"Session {session_id!r} not found for {user!r}"))
+        return _ok({"session_id": session_id, **record})
+    except Exception as e:
+        return _err(e)
+
+
+@mcp.tool()
+async def list_sessions(user: str) -> str:
+    """List all sessions for a user.
+
+    Args:
+        user: User name.
+    """
+    try:
+        return _ok(await get_source().list_sessions(user))
     except Exception as e:
         return _err(e)
 

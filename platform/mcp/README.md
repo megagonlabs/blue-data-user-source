@@ -4,8 +4,9 @@ MCP server that exposes `UserSource` operations as tools for LLM clients (Claude
 Desktop, Claude Code, and any MCP-compatible host).
 
 An LLM agent connected through this server can create and manage user databases,
-run natural-language queries against per-user knowledge graphs, read and write
-metadata, and manage contact methods.
+run natural-language queries against per-user knowledge graphs, group queries and
+clarification interactions into sessions, read and write metadata, and manage
+contact methods.
 
 ---
 
@@ -96,7 +97,8 @@ All configuration is via environment variables — there is no config file.
 | `name` | `str` | User name, e.g. `"alice"` |
 
 Creates a new user with file-backed storage under `BLUE_DATA_USER_SOURCE_DATA_DIR`. All paths
-(registry, KB, metadata, contacts) are derived from the user name automatically.
+(registry, KB, metadata, contacts, sessions) are derived from the user name automatically,
+including a file-backed vector store for per-session interaction transcripts.
 Returns `{"name": "...", "created": true}`.
 
 #### `delete_database`
@@ -143,11 +145,35 @@ Returns registry properties for the user (storage paths, class, schema paths).
 | `user` | `str` | User name (database to query) |
 | `question` | `str` | Natural-language question |
 | `output_form` | `str` | `"json"` (default — structured rows) or `"nl"` (prose) |
-| `session` | `str \| None` | Optional session id for query context continuity |
+| `session` | `str \| None` | Session id to append this query to (reused). Omit to auto-create a new single-query session — **reuse-or-create** |
 
 Runs a multi-step agent: contextualises and expands the question, queries the
 KB in parallel across sub-questions, assesses result quality, and optionally
-requests user clarification via their configured contact method.
+requests user clarification via their configured contact method. Returns
+`{"results": [...], "session_id": "..."}` — `session_id` is the reused or
+newly-created session; pass it back as `session` on the next call to continue
+the same conversation.
+
+---
+
+### Sessions
+
+#### `session_start`
+
+`user` — creates a new session for the user. Returns `{"user": "...", "session_id": "..."}`.
+
+#### `session_end`
+
+`user`, `session_id` — ends a session; further queries against it are rejected.
+Returns `{"user": "...", "session_id": "...", "ended": true}`.
+
+#### `get_session`
+
+`user`, `session_id` — returns the session's record: `{"session_id": "...", "created_at": ..., "ended_at": ..., "status": ..., "doc_source_name": ..., "queries": {...}}`. See [10-data-model.md](../../docs/design/10-data-model.md) §6 for the full query/interaction schema.
+
+#### `list_sessions`
+
+`user` — returns `dict[session_id, record]` for all sessions.
 
 ---
 
@@ -345,7 +371,7 @@ list_sources("alice")
 Claude / MCP client
         │  MCP (stdio transport)
         ▼
-blue_data_user_mcp.server   ← FastMCP app, 20 tool handlers (async)
+blue_data_user_mcp.server   ← FastMCP app, 23 tool handlers (async)
         │
 blue_data_user_mcp.config   ← singleton FileUserSource factory (BLUE_DATA_USER_SOURCE_* env vars)
         │

@@ -48,6 +48,7 @@ async def _build_manager(user_id: str = "benchmark-user") -> Any:
         metadata_source_props=_mem_json,
         contact_schema_path=_CONTACT_SCHEMA,
         contact_source_props=_mem_json,
+        session_source_props=_mem_json,
     )
     return mgr
 

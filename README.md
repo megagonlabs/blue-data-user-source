@@ -5,8 +5,8 @@ A per-user personal data store with natural language querying, LLM-based data ex
 ## What it does
 
 - **Import** documents and extract structured data from them using LLM-based extraction keyed by schema-style attribute names.
-- **Query** the store in natural language; results are assessed for completeness and freshness and the user is prompted for clarification when needed.
-- **Interact** via configurable contact channels (stdio, email, SMS, etc.) to verify stale data or fill in missing information, with responses persisted back to the store.
+- **Query** the store in natural language; results are assessed for completeness and freshness and the user is prompted for clarification when needed. Queries and their clarification interactions are grouped into sessions.
+- **Interact** via configurable contact channels (stdio, email, SMS, etc.) to verify stale data or fill in missing information, with responses persisted back to the store and to the session's record.
 - **Output** query results as structured JSON, a Rich table, or a synthesized natural language answer.
 
 ## Repository layout
@@ -22,8 +22,14 @@ blue-data-user-source/
 │           ├── querying/
 │           └── reasoning/
 ├── platform/
-│   └── cli/                    # Command-line interface (udb)
-│       ├── src/blue_data_user_cli/
+│   ├── cli/                    # Command-line interface (udb)
+│   │   ├── src/blue_data_user_cli/
+│   │   └── tests/
+│   ├── mcp/                    # MCP server (udb-mcp)
+│   │   ├── src/blue_data_user_mcp/
+│   │   └── tests/
+│   └── api/                    # REST API (udb-api)
+│       ├── src/blue_data_user_api/
 │       └── tests/
 └── docs/design/                # Architecture and design documents
 ```
@@ -88,3 +94,5 @@ See [lib/README.md](lib/README.md#running-tests) for full benchmark details.
 |---|---|
 | [lib/](lib/README.md) | `blue-data-user-source` — core Python library |
 | [platform/cli/](platform/cli/README.md) | `blue-data-user-cli` — `udb` CLI |
+| [platform/mcp/](platform/mcp/README.md) | `blue-data-user-mcp` — MCP server (`udb-mcp`) |
+| [platform/api/](platform/api/README.md) | `blue-data-user-api` — REST API (`udb-api`) |

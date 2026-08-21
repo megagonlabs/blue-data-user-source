@@ -17,7 +17,9 @@ class UserSource(DataSource):
 
     def create_database(self, database: str, properties: dict | None = None) -> dict: ...
     # Sync DataSource override; delegates to create_user via asyncio.run().
-    # properties must contain: registry, kb_source, metadata_source, contact_source keys.
+    # properties must contain: registry, kb_source, metadata_source, contact_source,
+    # session_source keys. doc_source is optional (defaults to a dummy-embedding,
+    # in-memory vector backend — see Session Manager below).
 
     async def create_user(
         self,
@@ -26,6 +28,8 @@ class UserSource(DataSource):
         kb_source_props: dict,
         metadata_source_props: dict,
         contact_source_props: dict,
+        session_source_props: dict,
+        doc_source_props: dict | None = None,
     ) -> None: ...
 
     def add_user(self, name: str, registry_props: dict) -> None: ...
@@ -44,7 +48,9 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> list[QueryResult]: ...
+    ) -> tuple[list[QueryResult], str]: ...
+    # Returns (results, session_id) — the reused or newly-created session
+    # this query landed in. See "session" in optional_properties below.
 
     def execute_query_nl(
         self,
@@ -52,7 +58,16 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> list[QueryResult]: ...
+    ) -> tuple[list[QueryResult], str]: ...
+    # Returns (results, session_id) when optional_properties["output_form"] == "json";
+    # (str, session_id) when "nl".
+
+    # ---- sessions ----
+
+    async def create_session(self, database: str) -> str: ...
+    async def end_session(self, database: str, session_id: str) -> None: ...
+    async def get_session(self, database: str, session_id: str) -> dict | None: ...
+    async def list_sessions(self, database: str) -> dict[str, Any]: ...
 
     def import_data(
         self,
@@ -105,13 +120,15 @@ us = UserSource({
     "schema": "data/schema.json",
 })
 
-# Create a database — all four source props required
+# Create a database — five source props required, doc_source optional
 await us.create_user(
     "alice",
     registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
     kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
     metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
     contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
+    session_source_props={"backend": "file", "path": "~/.udb/sources/alice.sessions.json"},
+    doc_source_props={"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "~/.udb/sources/alice/sessions"}},
 )
 
 # Type 1 — register file source for future queries
@@ -124,8 +141,9 @@ await us.add_source(
     optional_properties={"queries": ["What skills does the user have?"]}
 )
 
-# Query (sync — wraps asyncio internally)
-results = us.execute_query(
+# Query (sync — wraps asyncio internally). Reuse-or-create: pass "session" to
+# append to an existing session, omit it to auto-create a new one.
+results, session_id = us.execute_query(
     "jobs suitable for me",
     database="alice",
     optional_properties={"session": session.cid}
@@ -136,7 +154,7 @@ results = us.execute_query(
 
 | Key | Type | Method | Description |
 |-----|------|--------|-------------|
-| `"session"` | `str` | `execute_query` | Session ID; used as query context and primary contact channel for user interaction |
+| `"session"` | `str` | `execute_query` | Session ID to append this query to (reused). Raises `QueryError` if unknown or already ended. Omit to auto-create a new single-query session — reuse-or-create, see Session Manager (§04-detailed-architecture.md) |
 | `"output_form"` | `"json"` \| `"nl"` | `execute_query` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized string |
 | `"top_k"` | `int` | `execute_query` | Max KB results per sub-query (default: 10) |
 | `"queries"` | `list[str]` | `add_source` | Extraction queries — drives Type 2 ingestion (one `import_text` call each) |
@@ -151,6 +169,28 @@ class QueryResult:
 ```
 
 `execute_query` returns one `QueryResult` per resolved sub-question.
+
+### Sessions
+
+```python
+session_id = await us.create_session("alice")
+
+results, session_id = us.execute_query(
+    "jobs suitable for me", database="alice",
+    optional_properties={"session": session_id},
+)
+# further queries with the same session_id continue this session
+
+record = await us.get_session("alice", session_id)
+# {"created_at": ..., "ended_at": None, "status": "active",
+#  "doc_source_name": "session-<id>", "queries": {...}}
+
+sessions = await us.list_sessions("alice")   # dict[session_id, record]
+
+await us.end_session("alice", session_id)    # further create_query calls raise
+```
+
+See §6 of [10-data-model.md](10-data-model.md) for the full session/query/interaction record schema.
 
 ### Exceptions
 
@@ -170,7 +210,7 @@ FastAPI application. Endpoints map 1:1 to Python library operations. All handler
 
 A default database may be configured server-side at startup; when configured, the `database` field in request bodies is optional.
 
-### `POST /query`
+### `POST /{name}/query`
 
 Execute a natural language query.
 
@@ -179,7 +219,6 @@ Execute a natural language query.
 ```json
 {
   "query": "jobs suitable for me",
-  "database": "alice",
   "session": "optional-session-id"
 }
 ```
@@ -187,13 +226,14 @@ Execute a natural language query.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `query` | string | yes | Natural language query |
-| `database` | string | no | Database ID; uses server default if omitted |
-| `session` | string | no | Session ID for query context and user interaction |
+| `session` | string | no | Session ID to append this query to (reused, 404 if unknown/ended). Omitted → a new single-query session is auto-created — reuse-or-create, see Session Manager |
 
 **Response `200 OK`** (`application/json`)
 
 ```json
 {
+  "database": "alice",
+  "query": "jobs suitable for me",
   "results": [
     {
       "query": "What skills does the user have?",
@@ -203,9 +243,29 @@ Execute a natural language query.
       "query": "Does the user prefer remote work?",
       "results": [true]
     }
-  ]
+  ],
+  "session_id": "1c1919ff-9881-4429-8c52-ab6abae6ff1a"
 }
 ```
+
+`session_id` is always present — the session that was reused, or the one just auto-created.
+
+---
+
+### Sessions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/{name}/sessions` | Create a new session |
+| `GET` | `/{name}/sessions` | List sessions for a database |
+| `GET` | `/{name}/sessions/{session_id}` | Get one session's queries and interactions |
+| `POST` | `/{name}/sessions/{session_id}/end` | End a session |
+
+`POST /{name}/sessions` → `201 Created`, `{"database": "alice", "session_id": "..."}`.
+
+`GET /{name}/sessions/{session_id}` → `200 OK` with the full record (see §6 of [10-data-model.md](10-data-model.md)), or `404` if unknown.
+
+`POST /{name}/sessions/{session_id}/end` → `200 OK`, `{"database": "alice", "session_id": "...", "ended": true}`, or `404` if unknown.
 
 ---
 
@@ -263,19 +323,20 @@ Remove a source from the DataRegistry. KG data is preserved.
 
 ---
 
-### `POST /databases`
+### `POST /databases/{name}`
 
-Create a new database.
+Create a new database. All fields optional — omitted ones fall back to file-backend defaults derived from the server's data directory.
 
 **Request** (`application/json`)
 
 ```json
 {
-  "name": "alice",
   "registry": {"backend": "file", "path": "..."},
   "kb_source": {"backend": "file", "directory": "..."},
   "metadata_source": {"backend": "file", "path": "..."},
-  "contact_source": {"backend": "file", "path": "..."}
+  "contact_source": {"backend": "file", "path": "..."},
+  "session_source": {"backend": "file", "path": "..."},
+  "doc_source": {"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "..."}}
 }
 ```
 
@@ -348,16 +409,31 @@ Exposes three MCP tools. Tool handlers are thin wrappers over the Python library
       },
       "session": {
         "type": "string",
-        "description": "Active session ID. Used as query context and as the primary contact channel when user interaction is required."
+        "description": "Session ID to append this query to (reused). Omit to auto-create a new single-query session — reuse-or-create."
       }
     }
   }
 }
 ```
 
-**Returns:** JSON text content — array of `{"query": "...", "results": [...]}` objects, one per resolved sub-question.
+**Returns:** JSON text content — `{"results": [...], "session_id": "..."}`, where `results` is an array of `{"query": "...", "results": [...]}` objects, one per resolved sub-question. `session_id` is the reused or newly-created session.
 
 **On error:** structured MCP error content containing the `UDbError` message.
+
+---
+
+### Tools: `session_start`, `session_end`, `get_session`, `list_sessions`
+
+Thin wrappers over the Session Manager (see [04-detailed-architecture.md](04-detailed-architecture.md)):
+
+| Tool | Params | Returns |
+|------|--------|---------|
+| `session_start` | `user` | `{"user": "...", "session_id": "..."}` |
+| `session_end` | `user`, `session_id` | `{"user": "...", "session_id": "...", "ended": true}` |
+| `get_session` | `user`, `session_id` | `{"session_id": "...", ...record fields, see §6 of 10-data-model.md}` |
+| `list_sessions` | `user` | `dict[session_id, record]` |
+
+Pass the `session_id` returned by `session_start` as the `session` argument to `execute_query` to continue that session across multiple calls.
 
 ---
 
@@ -444,7 +520,7 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 | Command | Description |
 |---------|-------------|
-| `udb database create NAME` | Create a new database |
+| `udb database create NAME` | Create a new database, and select it as active (auto-select-after-create) |
 | `udb database delete NAME [--yes]` | Delete a database and all its data |
 | `udb database select NAME` | Set the active database (persists to `.selected.database`) |
 | `udb database list [--format]` | List all databases |
@@ -457,9 +533,27 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--kb-backend` | `file` | KB backend: `memory`, `file`, or `neo4j` |
-| `--neo4j-uri` | — | Neo4j bolt URI |
-| `--neo4j-user` | — | Neo4j username |
-| `--neo4j-password` | — | Neo4j password |
+| `--neo4j-host` | `localhost` | Neo4j host (neo4j backend only) |
+| `--neo4j-port` | `7687` | Neo4j bolt port |
+| `--neo4j-user` | `neo4j` | Neo4j username |
+| `--neo4j-password` | — | Neo4j password (required for neo4j backend) |
+| `--doc-backend` | `file` | Vector backend for per-session interaction transcripts: `memory` or `file` |
+
+---
+
+### `udb session`
+
+A session groups the queries/interactions of one conversation. Commands mirror `udb database`'s create/select/list pattern.
+
+| Command | Description |
+|---------|-------------|
+| `udb session start` | Create a new session for the active database and select it (persists to `.selected.session`) |
+| `udb session select SESSION_ID` | Set the active session |
+| `udb session end [SESSION_ID]` | End a session (defaults to the selected session); clears the selection if it matches |
+| `udb session list [--format]` | List sessions for the active database |
+| `udb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected session) |
+
+Session selection resolves the same way as `--database`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. **Unlike** database selection, an unresolved session is not an error — `udb data query` falls through to auto-creating a new session (reuse-or-create), and that new session is then auto-selected for the next call.
 
 ---
 
@@ -483,9 +577,11 @@ All `data` commands require an active database.
 
 | Option | Description |
 |--------|-------------|
-| `--session SESSION_ID` | Session ID for query context and interaction |
+| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (see `udb session` above), then to auto-create if neither is set |
 | `--format table\|json\|nl` | Output format (default: `table`) |
 | `--top-k N` | Max results (default: 10) |
+
+When a query auto-creates a new session (no `--session`, no selected session), the CLI writes it to `.selected.session` so the next `udb data query` call continues the same session automatically.
 
 **Example**
 

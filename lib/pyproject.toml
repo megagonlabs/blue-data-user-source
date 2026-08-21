@@ -9,6 +9,7 @@ requires-python = ">=3.10"
 dependencies = [
     "blue-data>=0.1.0",
     "blue-data-kb-source>=0.1.0",
+    "blue-data-doc-source>=0.1.0",
 ]
 
 [project.optional-dependencies]

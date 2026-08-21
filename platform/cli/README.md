@@ -25,11 +25,8 @@ export OPENAI_API_KEY=sk-...
 ## Quick start
 
 ```bash
-# Create a database
+# Create a database (auto-selects it — saves to ~/.udb/.selected.database)
 udb database create alice
-
-# Select the active database (saves to ~/.udb/.selected.database)
-udb database select alice
 
 # Register a file as a data source (Type 1)
 udb data source add resume.txt
@@ -47,6 +44,13 @@ udb data query "What jobs are suitable for me?" --format nl
 
 # Query — raw JSON
 udb data query "What jobs are suitable for me?" --format json
+
+# Sessions — group multiple queries into one conversation
+udb session start                              # creates and selects a session
+udb data query "What jobs are suitable for me?" # continues the selected session
+udb data query "What about remote roles?"       # same session — has context from the previous query
+udb session show                                # see the session's queries and interactions
+udb session end                                 # done — clears the selection
 ```
 
 ## Commands
@@ -105,6 +109,7 @@ udb database delete alice --yes
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
 | `--neo4j-password` | — | Neo4j password (required for neo4j backend) |
+| `--doc-backend` | `file` | Vector backend for per-session interaction transcripts: `memory` or `file` |
 
 ```bash
 # File backend (default)
@@ -118,6 +123,30 @@ udb database create alice \
   --neo4j-user neo4j \
   --neo4j-password secret
 ```
+
+---
+
+### `udb session`
+
+A session groups the queries and clarification interactions of one conversation. `udb data query` uses whatever session is selected (or auto-creates one if none is — see below), the same way `udb database select` works for databases.
+
+| Command | Description |
+|---|---|
+| `udb session start` | Create a new session for the active database and select it |
+| `udb session select ID` | Set the active session |
+| `udb session end [ID]` | End a session (defaults to the selected one); clears the selection if it matches |
+| `udb session list` | List sessions for the active database |
+| `udb session show [ID]` | Show a session's queries and interactions (defaults to the selected one) |
+
+```bash
+udb session start
+udb data query "What jobs are suitable for me?"
+udb session show
+udb session list
+udb session end
+```
+
+**Resolution order** for the session used by `udb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and that session is then written to `.selected.session`, so the next query continues it automatically.
 
 ---
 
@@ -143,7 +172,7 @@ udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N
 
 | Option | Description |
 |---|---|
-| `--session SESSION_ID` | Session ID for query context and user interaction |
+| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`udb session select`/`start`), then auto-creates one if neither is set — see [`udb session`](#udb-session) |
 | `--format` | `table` (default) · `json` · `nl` |
 | `--top-k N` | Maximum results (default: 10) |
 
@@ -265,7 +294,8 @@ Data is persisted under `~/.udb/` by default:
 
 ```
 ~/.udb/
-├── .selected.database         # active database name (written by 'udb database select')
+├── .selected.database         # active database name (written by 'udb database select'/'create')
+├── .selected.session           # active session id (written by 'udb session select'/'start', and auto-created sessions)
 ├── registry.json              # outer DataRegistry store (databases + source properties)
 ├── registries/
 │   └── alice.json             # per-user DataRegistry store (sources registered for alice)
@@ -273,7 +303,9 @@ Data is persisted under `~/.udb/` by default:
     └── alice/
         ├── alice.json         # per-user knowledge graph (file KB backend)
         ├── metadata.json      # user metadata
-        └── contacts.json      # user contact methods
+        ├── contacts.json      # user contact methods
+        ├── sessions.json      # session / query / interaction records
+        └── sessions/          # per-session interaction transcripts (file vector backend, --doc-backend file)
 ```
 
 Use `--data-dir` to store databases elsewhere:

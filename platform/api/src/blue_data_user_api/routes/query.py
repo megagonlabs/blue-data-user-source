@@ -19,5 +19,7 @@ async def query_database(name: str, body: QueryRequest, request: Request) -> dic
     optional: dict = {"output_form": body.output_form}
     if body.session:
         optional["session"] = body.session
-    result = await request.app.state.source.async_execute_query(body.query, database=name, optional_properties=optional)
-    return {"database": name, "query": body.query, "results": result}
+    result, session_id = await request.app.state.source.async_execute_query(
+        body.query, database=name, optional_properties=optional
+    )
+    return {"database": name, "query": body.query, "results": result, "session_id": session_id}

@@ -76,10 +76,12 @@ class UserQueryReasoner:
         source: UserSource,
         manager: UserDataManager | None = None,
         session_id: str | None = None,
+        query_id: str | None = None,
     ) -> None:
         self._source = source
         self._manager = manager
         self._session_id = session_id
+        self._query_id = query_id
         self._metrics: list[UserDataMetric] = list(self._DEFAULT_METRICS)
         if manager is not None:
             self._metrics.append(PrivacyMetric(manager=manager))
@@ -133,17 +135,25 @@ class UserQueryReasoner:
         metadata: dict[str, Any],
         metrics: list[MetricEvaluation],
     ) -> tuple[list[Any], dict[str, Any]]:
-        from blue_data_user_source.interaction import ContactManager
-        from blue_data_user_source.types import QueryError
+        from blue_data_user_source.interaction import ContactManager, SessionManager
+        from blue_data_user_source.types import InteractionError, QueryError
 
         if self._manager is None:
             raise QueryError("No data manager available for user clarification")
+
+        session_manager = SessionManager(
+            database=self._manager._database, data_manager=self._manager
+        )
+        # Callers that go through UserSource._run_query always supply session_id/query_id
+        # (reuse-or-create is decided there); direct callers get an ad hoc single-query
+        # session here so every interaction still lands in a durable record.
+        session_id = self._session_id or await session_manager.create_session()
+        query_id = self._query_id or await session_manager.create_query(session_id, query)
 
         contact_manager = ContactManager(
             database=self._manager._database, data_manager=self._manager
         )
         channel = await contact_manager.identify_contact_method()
-        interaction = channel.interact()
 
         failing_names = [m.name for m in metrics if not m.passes]
         raw_question = (
@@ -174,9 +184,20 @@ class UserQueryReasoner:
         if not user_question:
             user_question = raw_question
 
+        interaction_id = await session_manager.create_interaction(
+            session_id, query_id, user_question, channel.protocol, channel.name
+        )
+        interaction = channel.interact(interaction_id=interaction_id)
+
         await interaction.start()
-        response = await interaction.send(user_question)
+        try:
+            response = await interaction.send(user_question)
+        except InteractionError:
+            await session_manager.mark_interaction_timeout(session_id, query_id, interaction_id)
+            raise
         await interaction.stop()
+
+        await session_manager.resolve_interaction(session_id, query_id, interaction_id, response)
 
         context = f"Question: {query}\nUser Response: {response}"
         await self._manager.store_data(context, queries=[query])

@@ -59,6 +59,7 @@ async def source():
         kb_source_props=_MEMORY_KB,
         metadata_source_props=_MEMORY_REGISTRY,
         contact_source_props=_MEMORY_REGISTRY,
+        session_source_props=_MEMORY_REGISTRY,
     )
     return inst
 
@@ -124,11 +125,12 @@ async def test_get_database_unknown_returns_error():
 async def test_query_returns_results():
     mock_result = [{"query": "test", "results": []}]
     with patch.object(
-        config_module.get_source(), "async_execute_query", new=AsyncMock(return_value=mock_result)
+        config_module.get_source(), "async_execute_query",
+        new=AsyncMock(return_value=(mock_result, "sess-1")),
     ):
         from blue_data_user_mcp.server import query
         result = json.loads(await query(USER, "What skills does alice have?"))
-    assert result == mock_result
+    assert result == {"results": mock_result, "session_id": "sess-1"}
 
 
 # ---------------------------------------------------------------------------

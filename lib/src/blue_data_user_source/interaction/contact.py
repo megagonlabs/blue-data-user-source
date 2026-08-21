@@ -29,18 +29,26 @@ class ContactMethod:
     def preference(self) -> int:
         return int(self.details.get("preference", 0))
 
-    def interact(self) -> InteractionManager:
+    def interact(self, interaction_id: str | None = None) -> InteractionManager:
+        """Build an InteractionManager for this contact method.
+
+        ``interaction_id`` lets a caller (e.g. SessionManager) supply the id
+        used to correlate an async reply, so the same id backs both the
+        transport-level pending_interactions Future and any durable record
+        the caller keeps. When omitted, protocols that need one generate
+        their own (existing standalone-usage behavior).
+        """
         if self.protocol == "stdio":
-            return self._stdio_manager()
+            return self._stdio_manager(interaction_id)
         if self.protocol == "webhook":
-            return self._webhook_manager()
+            return self._webhook_manager(interaction_id)
         if self.protocol == "email":
-            return self._email_manager()
+            return self._email_manager(interaction_id)
         raise InteractionError(
             f"Contact protocol '{self.protocol}' requires a registered handler."
         )
 
-    def _stdio_manager(self) -> InteractionManager:
+    def _stdio_manager(self, interaction_id: str | None = None) -> InteractionManager:  # noqa: ARG002 — stdio has no async correlation to key
         async def _start() -> None:
             pass
 
@@ -54,7 +62,7 @@ class ContactMethod:
 
         return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
 
-    def _webhook_manager(self) -> InteractionManager:
+    def _webhook_manager(self, interaction_id: str | None = None) -> InteractionManager:
         """Outgoing webhook with async response via the user source REST API.
 
         Required detail keys:
@@ -78,18 +86,18 @@ class ContactMethod:
         async def _respond(message: str) -> str:
             import httpx
 
-            interaction_id = str(uuid4())
+            iid = interaction_id or str(uuid4())
             loop = asyncio.get_running_loop()
             future: asyncio.Future[str] = loop.create_future()
-            pending_interactions[interaction_id] = future
+            pending_interactions[iid] = future
 
-            response_url = f"{response_base_url}/interactions/{interaction_id}/response"
+            response_url = f"{response_base_url}/interactions/{iid}/response"
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         url,
                         json={
-                            "interaction_id": interaction_id,
+                            "interaction_id": iid,
                             "message": message,
                             "response_url": response_url,
                         },
@@ -99,10 +107,10 @@ class ContactMethod:
                 return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
                 raise InteractionError(
-                    f"No response received within {timeout}s for interaction {interaction_id!r}"
+                    f"No response received within {timeout}s for interaction {iid!r}"
                 )
             finally:
-                pending_interactions.pop(interaction_id, None)
+                pending_interactions.pop(iid, None)
 
         async def _stop() -> None:
             pass
@@ -110,7 +118,7 @@ class ContactMethod:
         return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
 
 
-    def _email_stdio_manager(self) -> InteractionManager:
+    def _email_stdio_manager(self, interaction_id: str | None = None) -> InteractionManager:
         """Email contact method in stdio mode — for local development and testing.
 
         Prints a formatted email to stdout (To, From, Subject, Reply-To, body)
@@ -135,8 +143,8 @@ class ContactMethod:
             pass
 
         async def _respond(message: str) -> str:
-            interaction_id = str(uuid4())
-            reply_to = f"interaction-{interaction_id}@{reply_domain}"
+            iid = interaction_id or str(uuid4())
+            reply_to = f"interaction-{iid}@{reply_domain}"
             sys.stdout.write(
                 f"\n{'─' * 60}\n"
                 f"  To:       {address}\n"
@@ -155,7 +163,7 @@ class ContactMethod:
 
         return InteractionManager(on_start=_start, on_response=_respond, on_stop=_stop)
 
-    def _email_manager(self) -> InteractionManager:
+    def _email_manager(self, interaction_id: str | None = None) -> InteractionManager:
         """Outgoing email with async response via inbound email webhook or reply link.
 
         Required detail keys:
@@ -179,7 +187,7 @@ class ContactMethod:
             timeout           — seconds to wait for response (default: 300)
         """
         if self.details.get("inbound_provider") == "stdio":
-            return self._email_stdio_manager()
+            return self._email_stdio_manager(interaction_id)
 
         address: str = self.details["address"]
         from_address: str = self.details["from_address"]
@@ -197,17 +205,18 @@ class ContactMethod:
             pass
 
         async def _respond(message: str) -> str:
-            import aiosmtplib
             from email.mime.multipart import MIMEMultipart
             from email.mime.text import MIMEText
 
-            interaction_id = str(uuid4())
+            import aiosmtplib
+
+            iid = interaction_id or str(uuid4())
             loop = asyncio.get_running_loop()
             future: asyncio.Future[str] = loop.create_future()
-            pending_interactions[interaction_id] = future
+            pending_interactions[iid] = future
 
-            reply_to = f"interaction-{interaction_id}@{reply_domain}"
-            respond_link = f"{response_base_url}/interactions/{interaction_id}/respond"
+            reply_to = f"interaction-{iid}@{reply_domain}"
+            respond_link = f"{response_base_url}/interactions/{iid}/respond"
 
             body_text = (
                 f"{message}\n\n"
@@ -240,10 +249,10 @@ class ContactMethod:
                 return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
                 raise InteractionError(
-                    f"No email response within {timeout}s for interaction {interaction_id!r}"
+                    f"No email response within {timeout}s for interaction {iid!r}"
                 )
             finally:
-                pending_interactions.pop(interaction_id, None)
+                pending_interactions.pop(iid, None)
 
         async def _stop() -> None:
             pass

@@ -2,7 +2,7 @@
 
 Python library for UDb — a multi-user knowledge base with natural language querying, LLM-based extraction, and interactive data quality assurance.
 
-Backed by [blue-data](../blue-data) and [blue-data-kb-source](../blue-data-kb-source).
+Backed by [blue-data](../blue-data), [blue-data-kb-source](../blue-data-kb-source), and [blue-data-doc-source](../blue-data-doc-source) (per-session interaction transcripts).
 
 ## Requirements
 
@@ -65,7 +65,7 @@ Each database (user) has its own `DataRegistry` backed by a separate JSONSource.
 
 ```python
 async def main() -> None:
-    # Create database — builds registry + all three sources from scratch, seeds schema
+    # Create database — builds registry + all built-in sources from scratch, seeds schema
     await us.create_user(
         "alice",
         registry_props={
@@ -84,6 +84,12 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
         },
+        session_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"},
+        },
+        # doc_source_props is optional — defaults to a dummy-embedding, in-memory
+        # vector backend for per-session interaction transcripts. See "Sessions" below.
     )
 
     print(us.list_users())       # ["alice"]
@@ -122,6 +128,10 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
         },
+        session_source_props={
+            "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"},
+        },
     )
 
     # Type 1 — register a file as a queryable source (no extraction)
@@ -137,16 +147,17 @@ async def main() -> None:
     # Remove a source from the registry (KG data is preserved)
     us.remove_source("alice", "resume.txt")
 
-    # Query — returns list[QueryResult]
-    results = us.execute_query("jobs suitable for me", database="alice")
+    # Query — returns (list[QueryResult], session_id). Omitting "session" auto-creates
+    # a new single-query session; pass the returned session_id back in to continue it.
+    results, session_id = us.execute_query("jobs suitable for me", database="alice")
     for r in results:
         print(r.query, "→", r.results)
 
-    # Query — returns a natural language string
-    answer = us.execute_query(
+    # Query — returns (natural language string, session_id)
+    answer, session_id = us.execute_query(
         "jobs suitable for me",
         database="alice",
-        optional_properties={"output_form": "nl"},
+        optional_properties={"output_form": "nl", "session": session_id},
     )
     print(answer)
 
@@ -176,7 +187,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 
 | Method | Description |
 |---|---|
-| `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props)` *(async)* | Build registry + all three sources from scratch and seed schema |
+| `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None)` *(async)* | Build registry + all built-in sources from scratch and seed schema. `doc_source_props` is optional — defaults to a dummy-embedding, in-memory vector backend (see [Sessions](#sessions)) |
 | `list_users()` | Return list of database names |
 | `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
 | `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
@@ -243,14 +254,14 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 
 | Method | Description |
 |---|---|
-| `execute_query(query, database, optional_properties)` | Execute a natural language query; returns `list[QueryResult]` or `str` |
+| `execute_query(query, database, optional_properties)` | Execute a natural language query; returns `(list[QueryResult], session_id)` or `(str, session_id)` |
 | `execute_query_nl(query, database, optional_properties)` | Alias — same behaviour |
 
-`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness, freshness, and privacy, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB.
+`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness, freshness, and privacy, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB *and* recorded in the session (see [Sessions](#sessions)).
 
 | optional_property | Type | Description |
 |---|---|---|
-| `session` | `str` | Session ID for interaction context |
+| `session` | `str` | Session ID to append this query to (reused). Raises `QueryError` if unknown or already ended. Omit to auto-create a new single-query session — **reuse-or-create** |
 | `output_form` | `"json"` \| `"nl"` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized natural language string |
 | `top_k` | `int` | Max KB results per sub-query (default: 10) |
 
@@ -346,6 +357,52 @@ await us.add_contact_method("alice", "email", "dev", {
 
 **`smtp_server`** — reserved for a future `aiosmtpd`-based listener. Currently raises `NotImplementedError`.
 
+### Sessions
+
+A session groups the queries and clarification interactions of one conversation. `execute_query`/`execute_query_nl` use **reuse-or-create** semantics: pass `session` in `optional_properties` to append to an existing session, or omit it to auto-create a new single-query one. Every `execute_query` call returns the `session_id` it landed in.
+
+```python
+session_id = await us.create_session("alice")
+
+results, session_id = us.execute_query(
+    "jobs suitable for me", database="alice",
+    optional_properties={"session": session_id},
+)
+# further calls with the same session_id continue this session
+
+record = await us.get_session("alice", session_id)
+# {"created_at": ..., "ended_at": None, "status": "active",
+#  "doc_source_name": "session-<id>",
+#  "queries": {"<query_id>": {"query": ..., "interactions": {...}}}}
+
+sessions = await us.list_sessions("alice")   # dict[session_id, record]
+
+await us.end_session("alice", session_id)    # further queries against it raise QueryError
+```
+
+| Method | Description |
+|---|---|
+| `create_session(database)` *(async)* | Create a new session; returns `session_id` |
+| `get_session(database, session_id)` *(async)* | Return the session's record (queries + interactions), or `None` |
+| `list_sessions(database)` *(async)* | Return `dict[session_id, record]` for all sessions |
+| `end_session(database, session_id)` *(async)* | Mark a session `"ended"`; further queries against it raise |
+
+Each clarification interaction — question sent, response received, which contact method handled it — is recorded under its query in the session, and the resolved Q/A pair is also ingested as text into a per-session `DocumentDataSource` (from `blue-data-doc-source`) for later semantic recall. The `interaction_id` recorded here is the same id used internally to correlate an async webhook/email reply (see [Contact methods](#contact-methods) above).
+
+By default, per-session interaction transcripts use a `DummyEmbeddingModel` and an in-memory vector backend — fine for tests, but transcripts won't survive a process restart. Pass `doc_source_props` to `create_user` for a persistent backend:
+
+```python
+await us.create_user(
+    "alice",
+    # ...other props...
+    session_source_props={...},
+    doc_source_props={
+        "embedding_model": "dummy",  # or "openai"
+        "vector_source": {"backend": "file", "directory": "~/.udb/sources/alice/sessions"},
+    },
+)
+```
+
 ### `QueryResult`
 
 ```python
@@ -375,13 +432,20 @@ The `udb` CLI exposes all library operations. See [platform/cli/README.md](../pl
 udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 database commands:
-  udb database create NAME    Create a new database
+  udb database create NAME    Create a new database (auto-selects it)
   udb database delete NAME    Delete a database and all its data
   udb database select NAME    Set the active database
   udb database list           List all databases
   udb database search KEYWORD Search databases by name
   udb database reset          Clear KB data and reseed schema
   udb database config show    Show stored configuration
+
+session commands:
+  udb session start           Create a new session (auto-selects it)
+  udb session select ID       Set the active session
+  udb session end [ID]        End a session (defaults to the selected one)
+  udb session list            List sessions for the active database
+  udb session show [ID]       Show a session's queries and interactions
 
 data commands:
   udb data query TEXT         Execute a natural language query
@@ -407,14 +471,14 @@ Database files are stored under `~/.udb/` by default.
 
 ### Unit tests
 
-Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `FreshnessMetric`, `CompletenessMetric`, `PrivacyMetric`, and `UserDataPlanner`.
+Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `SessionManager`, `FreshnessMetric`, `CompletenessMetric`, `PrivacyMetric`, and `UserDataPlanner`. `SessionManager` tests exercise a real `DocumentDataSource` (`DummyEmbeddingModel` + in-memory vector backend) — no network calls.
 
 ```bash
 cd lib
 pytest tests/unit/
 ```
 
-130 tests, ~1 s.
+145 tests, ~2 s.
 
 ### Benchmarks
 
@@ -505,6 +569,7 @@ lib/
 │       │   └── planner.py         # UserDataPlanner
 │       └── interaction/
 │           ├── contact.py         # ContactManager, ContactMethod (stdio, webhook, email)
+│           ├── session.py         # SessionManager — sessions, queries, interactions
 │           ├── manager.py         # InteractionManager
 │           ├── pending.py         # pending_interactions dict (shared Future registry)
 │           └── email/
@@ -514,12 +579,12 @@ lib/
 │               ├── sendgrid.py    # Sendgrid Inbound Parse adapter
 │               └── smtp_server.py # Future aiosmtpd-based adapter (NotImplementedError)
 └── tests/
-    ├── conftest.py                # shared manager fixture (all-memory sources)
+    ├── conftest.py                # shared manager fixture (all-memory sources incl. sessions)
     ├── unit/
     │   ├── doubles/
     │   │   └── sources.py         # make_mock_kb helper
     │   ├── data/                  # test_query_executor, test_query_planner, test_source_manager
-    │   ├── interaction/           # test_contact_manager, test_interaction_manager, test_email_adapters
+    │   ├── interaction/           # test_contact_manager, test_session_manager, test_interaction_manager, test_email_adapters
     │   ├── reasoning/             # test_data_assessor, test_query_rewriter
     │   └── sources/               # test_file_source
     └── benchmarks/

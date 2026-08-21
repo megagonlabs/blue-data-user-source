@@ -183,3 +183,55 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Rationale:** Self-hosted deployments use heterogeneous observability infrastructure (Grafana, Datadog, Jaeger, etc.). Emitting to standard interfaces (structured stdout, Prometheus, OTLP) keeps UDb decoupled from any specific platform. Raw user data is never included in span attributes.
 
 **Consequences:** UDb takes a dependency on the OpenTelemetry Python SDK (`opentelemetry-sdk`, `opentelemetry-exporter-otlp`). All significant I/O boundaries (LLM calls, storage ops, interface requests) must be instrumented with spans.
+
+---
+
+## ADR-015 — Session Manager: Per-User, Not Global
+
+**Date:** 2026-08-21
+**Status:** Accepted
+
+**Decision:** `SessionManager` follows the same per-user pattern as `ContactManager` and `UserDataManager` — each user's `DataRegistry` gets its own `sessions` JSONSource, rather than one global session store shared across all users.
+
+**Rationale:** A global store was considered (sessions are conceptually "across multiple users"), but every session is always created in the context of one user, and a per-user store keeps the same convention as `contacts`/`metadata` (dotted-path CRUD on a JSONSource returned by `UserDataManager`), avoiding a second storage pattern in the codebase. Cross-user session listing, if ever needed, can iterate `UserSource._managers`.
+
+**Consequences:** `UserDataManager` gained a fourth built-in source (`sessions`, alongside `kb`/`metadata`/`contacts`), wired into `build`/`connect`/`reset`/`destroy`. `SessionManager(database, data_manager)` is constructed the same way as `ContactManager`.
+
+---
+
+## ADR-016 — Per-Session DocumentDataSource for Interaction Transcripts
+
+**Date:** 2026-08-21
+**Status:** Accepted
+
+**Decision:** Each session gets its own `DocumentDataSource` (from `blue-data-doc-source`), named `session-{session_id}` and registered in the user's `DataRegistry`, created on demand via `UserDataManager.ensure_session_doc_source()`. Resolved interaction Q/A pairs are ingested into it as text via `DocumentDataSource.ingest_text()`.
+
+**Rationale:** Interaction transcripts are free text that benefits from the same chunk/embed/search pipeline KB sources use, and `blue-data-doc-source` already provides that pipeline. Scoping one `DocumentDataSource` per session (not one shared source per user) keeps each session's transcript independently addressable and matches the transcript's natural lifetime.
+
+**Consequences:** `blue-data-doc-source` becomes a `blue-data-user-source` dependency (`lib/pyproject.toml`). Unlike `kb`/`metadata`/`contacts`/`sessions`, a session's `DocumentDataSource` is **not** reconstructed via `DataRegistry.connect_source()` — its embedding model is a live Python object that can't round-trip through the registry's `_class`/`connection` reflection. `UserDataManager` instead rebuilds and caches it per-process from `doc_source_props` (an `{"embedding_model": "dummy"|"openai", "vector_source": {"backend": "memory"|"file", ...}}` config passed at `create_user` time and persisted on the user's database record so reconnects see the same config). A `DummyEmbeddingModel` + in-memory vector backend is the default; CLI/MCP/REST default to a file-backed vector store instead, so transcripts survive process restarts. `blue-data-doc-source` also gained a public `DocumentDataSource.ingest_text()` method (a thin wrapper over the existing private `_pipeline.ingest_text`) so this ingestion doesn't have to go through the file-path-only `DOCUMENT.INGEST` op or reach into a private attribute.
+
+---
+
+## ADR-017 — Unified `interaction_id` Across Transport Correlation and Durable Records
+
+**Date:** 2026-08-21
+**Status:** Accepted
+
+**Decision:** `ContactMethod.interact()` accepts an optional `interaction_id`. When `UserQueryReasoner.request_user_interaction` drives an interaction, it mints the id via `SessionManager.create_interaction()` first and passes it in, so the same id keys both the transport-level `pending_interactions` Future-correlation dict (webhook/email) and the durable session record. When no id is supplied (e.g. `ContactMethod` used standalone), protocols that need one generate their own, preserving prior behavior.
+
+**Rationale:** Before this change, `interaction_id` existed only as an ephemeral, in-memory correlation key generated fresh inside `_webhook_manager`/`_email_manager` — there was no durable record of an interaction ever having happened. Introducing a second, independently-minted id for the durable record would have meant cross-referencing two ids for what is conceptually one event.
+
+**Consequences:** `interact()`'s signature grew an optional parameter (backward compatible — existing callers and tests are unaffected). Every interaction, including `stdio` (which has no async correlation need), now gets a session-scoped id and a structured record with `status: "pending" | "resolved" | "timeout"`.
+
+---
+
+## ADR-018 — Reuse-or-Create Session Semantics
+
+**Date:** 2026-08-21
+**Status:** Accepted
+
+**Decision:** `UserSource._run_query` (via `execute_query`/`execute_query_nl`/`async_execute_query`): if the caller supplies a `session` in `optional_properties`, the query is appended to that existing session (raising `QueryError` if it doesn't exist or has already ended); if omitted, a new single-query session is created automatically. `UserQueryReasoner.request_user_interaction`, called either through this path or directly, applies the same fallback if it somehow still has no session/query id.
+
+**Rationale:** The original session-management sketch had two requirements in tension — "execute_query creates a new session" and "a session can span multiple queries." Reuse-or-create satisfies both: repeated calls without a `session` each get their own ad hoc session, while a caller that wants continuity across calls passes the `session_id` it got back.
+
+**Consequences:** `session_id` — previously accepted by `execute_query` and silently dropped after being stored on the reasoner — is now load-bearing. `execute_query`/`execute_query_nl`/`async_execute_query` return `(results, session_id)` instead of just `results` — a breaking change to the Python library's public return shape, propagated to the CLI (`data query` auto-selects the returned session for the next call, mirroring `database create`'s auto-select), MCP (`query` tool result gains `session_id`), and REST (`POST /{name}/query` response gains `session_id`). A companion `end_session` was added (`SessionManager.end_session`, exposed via CLI `session end`, MCP `session_end`, REST `POST /{name}/sessions/{id}/end`) so a session's lifecycle has an explicit terminus, not just implicit accumulation.

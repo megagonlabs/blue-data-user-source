@@ -41,10 +41,15 @@ Create a user and query them:
 # Create user (with file-backend defaults derived from BLUE_DATA_USER_SOURCE_DATA_DIR)
 curl -X POST http://localhost:8000/databases/alice
 
-# Query
+# Query — omitting "session" auto-creates a new one; response includes session_id
 curl -X POST http://localhost:8000/alice/query \
   -H 'Content-Type: application/json' \
   -d '{"query": "What skills does alice have?"}'
+
+# Continue the same session
+curl -X POST http://localhost:8000/alice/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "What about remote roles?", "session": "<session_id from above>"}'
 
 # Set metadata
 curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
@@ -101,17 +106,21 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
   "registry":        {"_class": "...", "connection": {...}},
   "kb_source":       {"_class": "...", "connection": {...}},
   "metadata_source": {"_class": "...", "connection": {...}},
-  "contact_source":  {"_class": "...", "connection": {...}}
+  "contact_source":  {"_class": "...", "connection": {...}},
+  "session_source":  {"_class": "...", "connection": {...}},
+  "doc_source":      {"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "..."}}
 }
 ```
 
-Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`.
+Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`. `doc_source` configures the vector backend used for per-session interaction transcripts (see [Sessions](#sessions) below).
 
 ### Query
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/{name}/query` | Natural-language query against a user's knowledge graph |
+
+**Request:**
 
 ```json
 {
@@ -121,7 +130,43 @@ Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE
 }
 ```
 
-`output_form` is `"json"` (default) or `"nl"` for a prose answer.
+`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused); omit it to auto-create a new single-query session — **reuse-or-create**.
+
+**Response:**
+
+```json
+{
+  "database": "alice",
+  "query": "What skills does alice have?",
+  "results": [...],
+  "session_id": "1c1919ff-9881-4429-8c52-ab6abae6ff1a"
+}
+```
+
+`session_id` is always present — the session that was reused, or the one just auto-created.
+
+### Sessions
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/{name}/sessions` | Create a new session |
+| `GET` | `/{name}/sessions` | List sessions for a database |
+| `GET` | `/{name}/sessions/{session_id}` | Get one session's queries and interactions |
+| `POST` | `/{name}/sessions/{session_id}/end` | End a session |
+
+```bash
+# Start a session, then query within it
+SID=$(curl -s -X POST http://localhost:8000/alice/sessions | jq -r .session_id)
+curl -X POST http://localhost:8000/alice/query \
+  -H 'Content-Type: application/json' \
+  -d "{\"query\": \"What skills does alice have?\", \"session\": \"$SID\"}"
+
+# Inspect and end it
+curl http://localhost:8000/alice/sessions/$SID
+curl -X POST http://localhost:8000/alice/sessions/$SID/end
+```
+
+`GET /{name}/sessions/{session_id}` returns `404` if unknown. `POST .../end` returns `404` if unknown; ending an already-ended session is idempotent (`200`). See [10-data-model.md](../../docs/design/10-data-model.md) §6 for the full record schema.
 
 ### Data
 
@@ -303,7 +348,9 @@ Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.udb`):
     └── alice/
         ├── alice.json         # per-user knowledge graph (file KB backend)
         ├── metadata.json      # user metadata
-        └── contacts.json      # user contact methods
+        ├── contacts.json      # user contact methods
+        ├── sessions.json      # session / query / interaction records
+        └── sessions/          # per-session interaction transcripts (file vector backend)
 ```
 
 ---

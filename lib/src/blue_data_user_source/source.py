@@ -6,13 +6,16 @@ from typing import Any
 
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
+
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
+    DEFAULT_DOC_SOURCE_PROPS,
     UserDataManager,
     _build_json_source,
     _enrich_props,
 )
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
+from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult
 
@@ -139,7 +142,8 @@ class UserSource(DataSource):
 
     def create_database(self, database: str, properties: dict | None = None) -> dict:
         """Create a new user.  ``properties`` must contain:
-        ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``.
+        ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``, ``session_source``.
+        ``doc_source`` is optional (defaults to a dummy-embedding, in-memory vector backend).
         """
         p = properties or {}
         asyncio.run(self.create_user(
@@ -148,6 +152,8 @@ class UserSource(DataSource):
             kb_source_props=p["kb_source"],
             metadata_source_props=p["metadata_source"],
             contact_source_props=p["contact_source"],
+            session_source_props=p["session_source"],
+            doc_source_props=p.get("doc_source"),
         ))
         return {}
 
@@ -171,8 +177,12 @@ class UserSource(DataSource):
         query: str,
         database: str | None = None,
         optional_properties: dict | None = None,
-    ) -> Any:
-        """Async version of execute_query for use from async contexts (e.g. FastAPI)."""
+    ) -> tuple[Any, str]:
+        """Async version of execute_query for use from async contexts (e.g. FastAPI).
+
+        Returns ``(results, session_id)`` — the reused or newly-created session
+        this query landed in (see "session" in optional_properties).
+        """
         return await self._run_query(query, database, optional_properties=optional_properties)
 
     def execute_query(
@@ -181,7 +191,8 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> list[dict]:
+    ) -> tuple[list[dict], str]:
+        """Returns ``(results, session_id)`` — see async_execute_query."""
         return asyncio.run(self._run_query(query, database, collection, optional_properties))
 
     def execute_query_nl(
@@ -192,7 +203,8 @@ class UserSource(DataSource):
         schema: dict | None = None,    # noqa: ARG002 — UserSource uses its own reasoner
         llm_fn=None,                   # noqa: ARG002 — UserSource uses its own reasoner
         optional_properties: dict | None = None,
-    ) -> list[dict]:
+    ) -> tuple[list[dict], str]:
+        """Returns ``(results, session_id)`` — see async_execute_query."""
         return asyncio.run(self._run_query(query, database, collection, optional_properties))
 
     # ------------------------------------------------------------------ #
@@ -223,9 +235,11 @@ class UserSource(DataSource):
         kb_source_props: dict,
         metadata_source_props: dict,
         contact_source_props: dict,
+        session_source_props: dict,
+        doc_source_props: dict | None = None,
     ) -> None:
-        """Build a fresh per-user registry + all three sources, seed schema, register the user."""
-        manager = UserDataManager(name, registry_props)
+        """Build a fresh per-user registry + all sources, seed schema, register the user."""
+        manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
         await manager.build(
             schema_path=self._registry.get_source_property(self.name, "schema"),
             kb_source_props=kb_source_props,
@@ -233,10 +247,16 @@ class UserSource(DataSource):
             metadata_source_props=metadata_source_props,
             contact_schema_path=self._registry.get_source_property(self.name, "contact_schema"),
             contact_source_props=contact_source_props,
+            session_source_props=session_source_props,
         )
-        # Register the user as a database entry with enriched registry props
+        # Register the user as a database entry with enriched registry props.
+        # doc_source_props is persisted here (not in the per-user registry) because
+        # it's read again by _get_manager on every reconnect, before build() would run.
         self._registry.register_source_database(
-            self.name, name, properties={"registry": _enrich_props(registry_props, "json")}
+            self.name, name, properties={
+                "registry": _enrich_props(registry_props, "json"),
+                "doc_source": doc_source_props or DEFAULT_DOC_SOURCE_PROPS,
+            }
         )
         self._managers[name] = manager
 
@@ -355,6 +375,25 @@ class UserSource(DataSource):
     async def remove_contact_method(self, database: str, protocol: str, name: str) -> None:
         await self._contact_manager(database).delete_contact_method(protocol, name)
 
+    # ------------------------------------------------------------------ #
+    # Sessions                                                             #
+    # ------------------------------------------------------------------ #
+
+    def _session_manager(self, database: str) -> SessionManager:
+        return SessionManager(database=database, data_manager=self._get_manager(database))
+
+    async def create_session(self, database: str) -> str:
+        return await self._session_manager(database).create_session()
+
+    async def end_session(self, database: str, session_id: str) -> None:
+        await self._session_manager(database).end_session(session_id)
+
+    async def get_session(self, database: str, session_id: str) -> dict | None:
+        return await self._session_manager(database).get_session(session_id)
+
+    async def list_sessions(self, database: str) -> dict[str, Any]:
+        return await self._session_manager(database).list_sessions()
+
     async def list_contact_methods(
         self, database: str, protocol: str | None = None
     ) -> list[ContactMethod]:
@@ -370,14 +409,33 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,  # noqa: ARG002 — routing to KB; collection unused
         optional_properties: dict | None = None,
-    ) -> list[dict]:
-        """Async query implementation shared by execute_query and execute_query_nl."""
+    ) -> tuple[Any, str]:
+        """Async query implementation shared by execute_query and execute_query_nl.
+
+        Reuse-or-create session semantics: if "session" is present in
+        optional_properties, this query is appended to that existing session
+        (raises QueryError if it doesn't exist or has ended); otherwise a new
+        single-query session is created automatically. Returns (results, session_id).
+        """
         props = optional_properties or {}
-        session_id = str(props["session"]) if "session" in props else None
         output_form = str(props.get("output_form", "json"))
 
         manager = self._get_manager(database)
-        reasoner = UserQueryReasoner(source=self, manager=manager, session_id=session_id)
+        session_manager = self._session_manager(database)
+        if "session" in props:
+            session_id = str(props["session"])
+            session = await session_manager.get_session(session_id)
+            if session is None:
+                raise QueryError(f"Unknown session {session_id!r}")
+            if session.get("status") == "ended":
+                raise QueryError(f"Session {session_id!r} has ended; cannot add a query to it.")
+        else:
+            session_id = await session_manager.create_session()
+        query_id = await session_manager.create_query(session_id, query, output_form)
+
+        reasoner = UserQueryReasoner(
+            source=self, manager=manager, session_id=session_id, query_id=query_id
+        )
 
         # Phase 1: contextualize then expand (sequential — expand uses the rewritten query)
         rewritten = await reasoner.contextualize_query(query)
@@ -422,8 +480,8 @@ class UserSource(DataSource):
                 results.append(QueryResult(query=query, results=new_items))
 
         if output_form == "nl":
-            return await reasoner.synthesize_results_nl(query, results)
-        return results
+            return await reasoner.synthesize_results_nl(query, results), session_id
+        return results, session_id
 
     def _get_manager(self, name: str) -> UserDataManager:
         if name not in self._managers:
@@ -433,7 +491,8 @@ class UserSource(DataSource):
             registry_props = db_props.get("registry") or {
                 "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
             }
-            manager = UserDataManager(name, registry_props)
+            doc_source_props = db_props.get("doc_source") or DEFAULT_DOC_SOURCE_PROPS
+            manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
             manager.connect()
             self._managers[name] = manager
         return self._managers[name]
