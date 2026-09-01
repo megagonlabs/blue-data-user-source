@@ -538,6 +538,38 @@ class UserDataManager:
     # Session document source (per-session interaction transcripts)       #
     # ------------------------------------------------------------------ #
 
+    def _session_transcripts_dir(self, session_id: str) -> Path | None:
+        """Directory for raw interaction-transcript ``.txt`` files, or ``None``.
+
+        Mirrors the persistence of the session's vector backend: when
+        ``doc_source_props`` points the vector store at a "file" backend,
+        transcripts are written next to it (under ``transcripts/{session_id}``)
+        so both survive a process restart. When the vector backend is
+        in-memory (the default), there's nothing durable to write to, so this
+        returns ``None`` and callers should skip persisting the raw file.
+        """
+        vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
+        vector_enriched = _enrich_props(vector_props, "vector")
+        directory = vector_enriched.get("connection", {}).get("directory")
+        if directory is None:
+            return None
+        path = Path(directory) / "transcripts" / session_id
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def save_session_transcript(self, session_id: str, file_name: str, text: str) -> Path | None:
+        """Persist raw interaction-transcript text as a ``.txt`` file on disk.
+
+        No-op (returns ``None``) when the session's doc source uses an
+        in-memory vector backend — see :meth:`_session_transcripts_dir`.
+        """
+        directory = self._session_transcripts_dir(session_id)
+        if directory is None:
+            return None
+        file_path = directory / file_name
+        file_path.write_text(text)
+        return file_path
+
     def ensure_session_doc_source(self, session_id: str) -> Any:
         """Return the DocumentDataSource for *session_id*, building + registering it on first use.
 

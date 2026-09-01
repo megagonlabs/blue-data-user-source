@@ -391,6 +391,8 @@ Each clarification interaction — question sent, response received, which conta
 
 By default, per-session interaction transcripts use a `DummyEmbeddingModel` and an in-memory vector backend — fine for tests, but transcripts won't survive a process restart. Pass `doc_source_props` to `create_user` for a persistent backend:
 
+When `doc_source_props` points the vector backend at `"file"`, each resolved interaction's raw `Q: ...\nA: ...` transcript is also saved as a `.txt` file — named `{query_id}-{interaction_id}.txt` — under `{directory}/transcripts/{session_id}/`, alongside the vector store. With the (default) in-memory backend, nothing is written to disk.
+
 ```python
 await us.create_user(
     "alice",

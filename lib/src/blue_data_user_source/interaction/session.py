@@ -17,7 +17,9 @@ class SessionManager:
 
     Resolved interaction transcripts are additionally ingested into a
     per-session ``DocumentDataSource`` via ``UserDataManager.ensure_session_doc_source``,
-    for later semantic recall during query context expansion.
+    for later semantic recall during query context expansion, and — when a
+    file-backed vector store is configured — saved as a raw ``.txt`` file via
+    ``UserDataManager.save_session_transcript``.
     """
 
     def __init__(self, database: str, data_manager: Any) -> None:
@@ -105,11 +107,13 @@ class SessionManager:
         self._store().set(f"{path}.resolved_at", self._now())
 
         question = (self._store().get(path) or {}).get("question", "")
+        text = f"Q: {question}\nA: {response}"
+        file_name = f"{query_id}-{interaction_id}.txt"
+
+        self._data_manager.save_session_transcript(session_id, file_name, text)
+
         doc_source = self._data_manager.ensure_session_doc_source(session_id)
-        doc_source.ingest_text(
-            f"Q: {question}\nA: {response}",
-            file_name=f"{query_id}-{interaction_id}.txt",
-        )
+        doc_source.ingest_text(text, file_name=file_name)
 
     async def mark_interaction_timeout(
         self, session_id: str, query_id: str, interaction_id: str,

@@ -1,11 +1,17 @@
 """Tests for SessionManager."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from blue_data_user_source.data.manager import UserDataManager
+from blue_data_user_source.data.manager import CLS_JSON_MEMORY, CLS_KB_MEMORY, UserDataManager
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.types import InteractionError
+
+_SCHEMA = str(Path(__file__).parent.parent.parent.parent / "src" / "blue_data_user_source" / "data" / "schema.json")
+_MEM_JSON = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
+_MEM_KB = {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}}
 
 
 @pytest.fixture
@@ -120,6 +126,40 @@ async def test_resolve_interaction_ingests_transcript_into_session_doc_source(
     assert any("sure, blue" in c.get("text", "") for c in chunks)
     # Cached per-process — resolving a second interaction reuses the same instance.
     assert manager.ensure_session_doc_source(session_id) is doc_source
+
+
+async def test_resolve_interaction_saves_transcript_file_when_file_backed(
+    tmp_path: Path, user_id: str,
+) -> None:
+    directory = tmp_path / "sessions"
+    file_backed_manager = UserDataManager(
+        user_id, _MEM_JSON,
+        doc_source_props={
+            "embedding_model": "dummy",
+            "vector_source": {"backend": "file", "directory": str(directory)},
+        },
+    )
+    await file_backed_manager.build(
+        schema_path=_SCHEMA,
+        kb_source_props=_MEM_KB,
+        metadata_schema_path=None,
+        metadata_source_props=_MEM_JSON,
+        contact_schema_path=None,
+        contact_source_props=_MEM_JSON,
+        session_source_props=_MEM_JSON,
+    )
+    file_backed_session_manager = SessionManager(database=user_id, data_manager=file_backed_manager)
+
+    session_id = await file_backed_session_manager.create_session()
+    query_id = await file_backed_session_manager.create_query(session_id, "q?")
+    interaction_id = await file_backed_session_manager.create_interaction(
+        session_id, query_id, "Could you clarify?", "stdio", "default"
+    )
+    await file_backed_session_manager.resolve_interaction(session_id, query_id, interaction_id, "sure, blue")
+
+    transcript_path = directory / "transcripts" / session_id / f"{query_id}-{interaction_id}.txt"
+    assert transcript_path.is_file()
+    assert "sure, blue" in transcript_path.read_text()
 
 
 async def test_mark_interaction_timeout_sets_status(session_manager: SessionManager) -> None:
