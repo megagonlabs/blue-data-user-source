@@ -15,10 +15,12 @@ class SessionManager:
     in the dotted-path JSONSource returned by ``UserDataManager.get_session_source()``
     — same convention as ``ContactManager``.
 
-    Resolved interaction transcripts are additionally ingested into a
-    per-session ``DocumentDataSource`` via ``UserDataManager.ensure_session_doc_source``,
-    for later semantic recall during query context expansion, and — when a
-    file-backed vector store is configured — saved as a raw ``.txt`` file via
+    Resolved interaction transcripts are additionally ingested into the shared
+    ``"session_content"`` ``DocumentDataSource`` via
+    ``UserDataManager.ensure_session_doc_source`` — one document source holding
+    every session's transcripts, not one source per session — for later
+    semantic recall during query context expansion, and — when a file-backed
+    vector store is configured — saved as a raw ``.txt`` file via
     ``UserDataManager.save_session_transcript``.
     """
 
@@ -43,7 +45,7 @@ class SessionManager:
             "created_at": self._now(),
             "ended_at": None,
             "status": "active",
-            "doc_source_name": f"session-{session_id}",
+            "doc_source_name": "session_content",
             "queries": {},
         })
         return session_id

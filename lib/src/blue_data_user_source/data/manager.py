@@ -110,12 +110,13 @@ class UserDataManager:
     - ``"metadata"`` (JSONSource) — user metadata / preferences.
     - ``"contacts"`` (JSONSource) — contact methods.
     - ``"sessions"`` (JSONSource) — session / query / interaction records.
-    - ``"session-{id}"`` (DocumentDataSource) — per-session interaction transcripts,
+    - ``"session_content"`` (DocumentDataSource) — shared across all sessions;
+      holds every session's interaction transcripts (one file per interaction),
       created on demand via :meth:`ensure_session_doc_source`. Unlike the sources
-      above, these are NOT reconstructed via the registry's generic
-      ``connect_source`` path — their embedding model is a live object that can't
+      above, it is NOT reconstructed via the registry's generic
+      ``connect_source`` path — its embedding model is a live object that can't
       round-trip through ``_class``/``connection`` reflection, so this manager
-      rebuilds and caches them itself from ``doc_source_props``.
+      rebuilds and caches it itself from ``doc_source_props``.
     - Additional sources added at runtime via :meth:`add_source`.
 
     All source instantiation goes through ``DataSource.instantiate`` using
@@ -145,7 +146,7 @@ class UserDataManager:
         self._metadata_source: Any = None
         self._contact_source: Any = None
         self._session_source: Any = None
-        self._session_doc_sources: dict[str, Any] = {}
+        self._session_doc_source: Any = None
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -243,8 +244,8 @@ class UserDataManager:
             self.clear_sessions()
 
         # Deregister any additional imported sources from the registry, including
-        # any per-session doc sources ("session-{id}") created via ensure_session_doc_source.
-        self._session_doc_sources.clear()
+        # the shared "session_content" doc source created via ensure_session_doc_source.
+        self._session_doc_source = None
         source_records = self._registry.list_records(record_type="source", scope="/")
         for record in source_records:
             if record["name"] not in ("kb", "metadata", "contacts", "sessions"):
@@ -571,21 +572,26 @@ class UserDataManager:
         return file_path
 
     def ensure_session_doc_source(self, session_id: str) -> Any:
-        """Return the DocumentDataSource for *session_id*, building + registering it on first use.
+        """Return the shared "session_content" DocumentDataSource, built + registered on first use.
+
+        A single DocumentDataSource holds interaction transcripts for *all*
+        sessions (one file per interaction, named ``{query_id}-{interaction_id}.txt``)
+        rather than one source per session — *session_id* is accepted for a
+        stable call signature but no longer affects the source's identity.
 
         Not reconnected via DataRegistry.connect_source — see class docstring.
-        Cached per-process in self._session_doc_sources; a fresh process rebuilds
+        Cached per-process in self._session_doc_source; a fresh process rebuilds
         it (with a fresh, empty vector backend unless doc_source_props points at
         a persistent one, e.g. the "file" vector backend).
         """
-        if session_id in self._session_doc_sources:
-            return self._session_doc_sources[session_id]
+        if self._session_doc_source is not None:
+            return self._session_doc_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
 
         from blue_data_doc_source import DocumentDataSource
 
-        name = f"session-{session_id}"
+        name = "session_content"
         embedding_model = _build_embedding_model(self._doc_source_props.get("embedding_model"))
         vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
         vector_enriched = _enrich_props(vector_props, "vector")
@@ -599,5 +605,5 @@ class UserDataManager:
             name=name, embedding_model=embedding_model, vector_source=vector_source,
         )
         self._registry.register_source(doc_source)
-        self._session_doc_sources[session_id] = doc_source
+        self._session_doc_source = doc_source
         return doc_source

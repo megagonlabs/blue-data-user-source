@@ -122,10 +122,13 @@ async def test_resolve_interaction_ingests_transcript_into_session_doc_source(
     await session_manager.resolve_interaction(session_id, query_id, interaction_id, "sure, blue")
 
     doc_source = manager.ensure_session_doc_source(session_id)
+    assert doc_source.name == "session_content"
     chunks = list(doc_source._pipeline._chunk_index.values())
     assert any("sure, blue" in c.get("text", "") for c in chunks)
-    # Cached per-process — resolving a second interaction reuses the same instance.
-    assert manager.ensure_session_doc_source(session_id) is doc_source
+    # Cached per-process, and shared across sessions — a second session's
+    # interactions ingest into the same single "session_content" source.
+    other_session_id = await session_manager.create_session()
+    assert manager.ensure_session_doc_source(other_session_id) is doc_source
 
 
 async def test_resolve_interaction_saves_transcript_file_when_file_backed(
