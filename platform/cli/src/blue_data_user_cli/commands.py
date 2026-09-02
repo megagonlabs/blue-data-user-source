@@ -22,7 +22,7 @@ from blue_data_user_source.data.manager import (
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
 _SELECTED_DB_FILE = ".selected.database"
 _SELECTED_SESSION_FILE = ".selected.session"
-_INTERNAL_SOURCES = {"kb", "metadata", "contacts", "sessions"}
+_INTERNAL_SOURCES = {"kb", "metadata", "contacts", "sessions", "session_content", "external_documents"}
 
 console = Console()
 err = Console(stderr=True)

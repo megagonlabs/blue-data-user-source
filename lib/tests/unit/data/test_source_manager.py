@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
     CLS_KB_MEMORY,
@@ -163,54 +161,37 @@ def _added_records(manager: UserDataManager) -> list[dict]:
     return [r for r in records if r["name"] not in _BUILTIN_SOURCE_NAMES]
 
 
-async def test_add_source_default_name_has_no_slash(manager: UserDataManager, tmp_path: Path) -> None:
+# ── add_source ingests via DocumentDataSource, no per-file registry entry ─────
+# (issue #90; per-file registry records deliberately dropped — see #95,
+# pending #89)
+
+async def test_add_source_creates_no_per_file_registry_record(manager: UserDataManager, tmp_path: Path) -> None:
     f = tmp_path / "data" / "resume.txt"
     f.parent.mkdir()
     f.write_text("Python\n")
     await manager.add_source(f)
 
-    records = _added_records(manager)
-    assert len(records) == 1
-    assert "/" not in records[0]["name"]
-    assert "." not in records[0]["name"]
+    assert _added_records(manager) == []
+    all_names = {r["name"] for r in manager._registry.list_records(record_type="source", scope="/")}
+    assert "external_documents" in all_names
 
 
-async def test_add_source_registers_absolute_path(manager: UserDataManager, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    f = tmp_path / "data" / "resume.txt"
-    f.parent.mkdir()
-    f.write_text("Python\n")
-    await manager.add_source(Path("data/resume.txt"))
-
-    records = _added_records(manager)
-    assert len(records) == 1
-    stored_path = records[0]["properties"]["connection"]["path"]
-    assert Path(stored_path).is_absolute()
-    assert Path(stored_path) == f.resolve()
-
-
-async def test_add_source_explicit_name_with_slash_is_sanitized(manager: UserDataManager, tmp_path: Path) -> None:
+async def test_add_source_with_slashy_name_creates_no_registry_record(manager: UserDataManager, tmp_path: Path) -> None:
     f = tmp_path / "resume.txt"
     f.write_text("Python\n")
     await manager.add_source(f, name="folder/resume")
 
-    records = _added_records(manager)
-    assert records[0]["name"] == "folder__SEP__resume"
+    assert _added_records(manager) == []
 
-
-# ── add_source ingests via DocumentDataSource (issue #90) ─────────────────────
 
 async def test_add_source_ingests_into_external_documents_source(manager: UserDataManager, tmp_path: Path) -> None:
     f = tmp_path / "resume.txt"
     f.write_text("Python\nSQL\nMachine learning\n")
     await manager.add_source(f)
 
-    records = _added_records(manager)
-    assert len(records) == 1
-    props = records[0]["properties"]
-    assert props["_class"] == "blue_data_doc_source.source.document.document_source.DocumentDataSource"
-    assert props["document_source"] == "external_documents"
-    assert len(props["document_ids"]) == 1
+    doc_source = manager.ensure_external_documents_source()
+    results = doc_source.execute_query({"op": "DOCUMENT.SEARCH", "query": "machine learning", "k": 5})
+    assert len(results) > 0
 
 
 async def test_add_source_ingests_even_without_queries(manager: UserDataManager, tmp_path: Path) -> None:

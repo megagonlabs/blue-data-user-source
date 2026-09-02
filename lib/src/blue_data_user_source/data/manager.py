@@ -23,7 +23,6 @@ CLS_KB_FILE     = "blue_data_kb_source.file_kb_source.FileKBSource"
 CLS_KB_NEO4J    = "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource"
 CLS_VECTOR_MEMORY = "blue_data.source.vector.memory_vector_source.MemoryVectorSource"
 CLS_VECTOR_FILE   = "blue_data.source.vector.file_vector_source.FileVectorSource"
-CLS_DOCUMENT_DATA_SOURCE = "blue_data_doc_source.source.document.document_source.DocumentDataSource"
 
 # Legacy mapping — kept for backward compatibility when reading stored configs
 # that pre-date the _class / connection property format.
@@ -428,6 +427,13 @@ class UserDataManager:
         "external_documents" DocumentDataSource (parsed, chunked, embedded —
         see :meth:`ensure_external_documents_source`), and optionally also
         extracting facts into the KB for each of *queries* (Type 2 import).
+
+        Deliberately does NOT create a per-file record in the outer
+        DataRegistry — only the shared "external_documents" source is
+        registered there. Individual documents are tracked solely by that
+        DocumentDataSource (KB SOURCE-node provenance is unaffected). See #95:
+        once documents are properly tracked (#89), per-file discoverability
+        (listing / removal) should be revisited.
         """
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
@@ -441,23 +447,6 @@ class UserDataManager:
             "path": location,
             "collection": doc_source.name,
         })
-        document_ids = sorted({chunk["document_id"] for chunk in chunks})
-
-        registry_name = sanitize_registry_name(name or location)
-        src_conn = getattr(source, "properties", {}).get("connection") or {"path": str(Path(location).resolve())}
-        self._registry.register_record(
-            name=registry_name,
-            type="source",
-            scope="/",
-            description=description or "",
-            properties={
-                "_class": CLS_DOCUMENT_DATA_SOURCE,
-                "connection": src_conn,
-                "source_id": source_id,
-                "document_source": doc_source.name,
-                "document_ids": document_ids,
-            },
-        )
 
         if queries:
             text = "\n".join(chunk["text"] for chunk in chunks)
