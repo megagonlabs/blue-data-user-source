@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -270,6 +271,11 @@ class UserDataManager:
                 if "path" in conn:
                     Path(conn["path"]).unlink(missing_ok=True)
 
+        # Session content — vector store + raw transcripts directory, if file-backed
+        session_content_dir = self._session_vector_directory()
+        if session_content_dir is not None and session_content_dir.exists():
+            shutil.rmtree(session_content_dir)
+
         # Per-user registry file
         reg_conn = self._registry_props.get("connection", self._registry_props)
         if "path" in reg_conn:
@@ -531,6 +537,7 @@ class UserDataManager:
 
     def clear_sessions(self) -> None:
         self._ensure_session_source().set("sessions", {})
+        self._clear_session_content()
 
     def get_session_source(self) -> Any:
         return self._ensure_session_source()
@@ -538,6 +545,17 @@ class UserDataManager:
     # ------------------------------------------------------------------ #
     # Session document source (per-session interaction transcripts)       #
     # ------------------------------------------------------------------ #
+
+    def _session_vector_directory(self) -> Path | None:
+        """Directory backing the session_content doc source's vector store, or ``None``.
+
+        ``None`` when ``doc_source_props`` points the vector store at the
+        in-memory backend (the default) — there's nothing durable to locate.
+        """
+        vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
+        vector_enriched = _enrich_props(vector_props, "vector")
+        directory = vector_enriched.get("connection", {}).get("directory")
+        return Path(directory) if directory is not None else None
 
     def _session_transcripts_dir(self, session_id: str) -> Path | None:
         """Directory for raw interaction-transcript ``.txt`` files, or ``None``.
@@ -549,14 +567,30 @@ class UserDataManager:
         in-memory (the default), there's nothing durable to write to, so this
         returns ``None`` and callers should skip persisting the raw file.
         """
-        vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
-        vector_enriched = _enrich_props(vector_props, "vector")
-        directory = vector_enriched.get("connection", {}).get("directory")
+        directory = self._session_vector_directory()
         if directory is None:
             return None
-        path = Path(directory) / "transcripts" / session_id
+        path = directory / "transcripts" / session_id
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    def _clear_session_content(self) -> None:
+        """Remove persisted session_content vector data and raw transcript files.
+
+        The vector store's file backend (e.g. ``documents.json``) and the
+        ``transcripts/`` directory live outside the per-user registry, so
+        clearing the "sessions" JSON record alone leaves them behind. No-op
+        when the vector backend is in-memory — see :meth:`_session_vector_directory`.
+        """
+        directory = self._session_vector_directory()
+        if directory is None or not directory.exists():
+            return
+        transcripts_dir = directory / "transcripts"
+        if transcripts_dir.exists():
+            shutil.rmtree(transcripts_dir)
+        for path in directory.glob("*.json"):
+            path.unlink(missing_ok=True)
+        self._session_doc_source = None
 
     def save_session_transcript(self, session_id: str, file_name: str, text: str) -> Path | None:
         """Persist raw interaction-transcript text as a ``.txt`` file on disk.

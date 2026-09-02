@@ -1,9 +1,39 @@
 """Tests for UserDataManager metadata and contact storage operations."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from blue_data_user_source.data.manager import UserDataManager
+from blue_data_user_source.data.manager import (
+    CLS_JSON_MEMORY,
+    CLS_KB_MEMORY,
+    UserDataManager,
+)
+
+_SCHEMA = str(Path(__file__).parent.parent.parent.parent / "src" / "blue_data_user_source" / "data" / "schema.json")
+_MEM_JSON = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
+_MEM_KB = {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}}
+
+
+async def _build_file_backed_manager(tmp_path: Path, user_id: str, directory: Path) -> UserDataManager:
+    mgr = UserDataManager(
+        user_id, _MEM_JSON,
+        doc_source_props={
+            "embedding_model": "dummy",
+            "vector_source": {"backend": "file", "directory": str(directory)},
+        },
+    )
+    await mgr.build(
+        schema_path=_SCHEMA,
+        kb_source_props=_MEM_KB,
+        metadata_schema_path=None,
+        metadata_source_props=_MEM_JSON,
+        contact_schema_path=None,
+        contact_source_props=_MEM_JSON,
+        session_source_props=_MEM_JSON,
+    )
+    return mgr
 
 
 # ── metadata ──────────────────────────────────────────────────────────────────
@@ -70,3 +100,44 @@ async def test_get_contacts_returns_all_protocols(manager: UserDataManager) -> N
     # contact schema seeds top-level protocol buckets
     assert isinstance(contacts, dict)
     assert "email" in contacts
+
+
+# ── session content cleanup (regression test for #93) ─────────────────────────
+
+async def test_reset_removes_session_transcripts_and_vector_store(
+    tmp_path: Path, user_id: str,
+) -> None:
+    directory = tmp_path / "sessions"
+    mgr = await _build_file_backed_manager(tmp_path, user_id, directory)
+
+    session_id = "session-1"
+    mgr.save_session_transcript(session_id, "q1-i1.txt", "sure, blue")
+    mgr.ensure_session_doc_source(session_id).ingest_text("sure, blue", file_name="q1-i1.txt")
+
+    transcript_path = directory / "transcripts" / session_id / "q1-i1.txt"
+    documents_path = directory / "documents.json"
+    assert transcript_path.is_file()
+    assert documents_path.is_file()
+
+    await mgr.reset(sources={"sessions"})
+
+    assert not transcript_path.exists()
+    assert not (directory / "transcripts").exists()
+    assert not documents_path.exists()
+
+
+async def test_destroy_removes_session_content_directory(
+    tmp_path: Path, user_id: str,
+) -> None:
+    directory = tmp_path / "sessions"
+    mgr = await _build_file_backed_manager(tmp_path, user_id, directory)
+
+    session_id = "session-1"
+    mgr.save_session_transcript(session_id, "q1-i1.txt", "sure, blue")
+    mgr.ensure_session_doc_source(session_id).ingest_text("sure, blue", file_name="q1-i1.txt")
+
+    assert directory.exists()
+
+    mgr.destroy()
+
+    assert not directory.exists()
