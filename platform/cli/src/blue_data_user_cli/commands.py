@@ -10,7 +10,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from blue_data_user_source import FileSource, FileUserSource, UDbError
+from blue_data_user_source import FileSource, FileUserSource, UDbError, sanitize_registry_name
 from blue_data_user_source.data.manager import (
     CLS_JSON_FILE,
     CLS_JSON_MEMORY,
@@ -1107,7 +1107,7 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    label = name or str(file)
+    label = sanitize_registry_name(name or str(file))
     if queries:
         n = len(queries)
         console.print(f"Added source: [bold]{label}[/bold] ({n} {'query' if n == 1 else 'queries'})")

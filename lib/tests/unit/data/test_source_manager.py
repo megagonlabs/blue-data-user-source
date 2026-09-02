@@ -9,7 +9,10 @@ from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
     CLS_KB_MEMORY,
     UserDataManager,
+    sanitize_registry_name
 )
+
+from blue_data_user_source.sources.file import FileSource
 
 _SCHEMA = str(Path(__file__).parent.parent.parent.parent / "src" / "blue_data_user_source" / "data" / "schema.json")
 _MEM_JSON = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
@@ -34,6 +37,9 @@ async def _build_file_backed_manager(tmp_path: Path, user_id: str, directory: Pa
         session_source_props=_MEM_JSON,
     )
     return mgr
+
+
+
 
 
 # ── metadata ──────────────────────────────────────────────────────────────────
@@ -141,3 +147,51 @@ async def test_destroy_removes_session_content_directory(
     mgr.destroy()
 
     assert not directory.exists()
+# ── add_source (issue #94: names must not contain "/" or ".") ─────────────────
+
+def test_sanitize_registry_name_strips_slash_and_dot() -> None:
+    assert sanitize_registry_name("data/resume.txt") == "data__SEP__resume__SEP__txt"
+
+
+def test_sanitize_registry_name_leaves_plain_names_untouched() -> None:
+    assert sanitize_registry_name("resume") == "resume"
+
+
+def _added_records(manager: UserDataManager) -> list[dict]:
+    records = manager._registry.list_records(record_type="source", scope="/")
+    return [r for r in records if r["name"] not in {"kb", "metadata", "contacts", "sessions"}]
+
+
+async def test_add_source_default_name_has_no_slash(manager: UserDataManager, tmp_path: Path) -> None:
+    f = tmp_path / "data" / "resume.txt"
+    f.parent.mkdir()
+    f.write_text("Python\n")
+    await manager.add_source(FileSource(f))
+
+    records = _added_records(manager)
+    assert len(records) == 1
+    assert "/" not in records[0]["name"]
+    assert "." not in records[0]["name"]
+
+
+async def test_add_source_registers_absolute_path(manager: UserDataManager, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    f = tmp_path / "data" / "resume.txt"
+    f.parent.mkdir()
+    f.write_text("Python\n")
+    await manager.add_source(FileSource(Path("data/resume.txt")))
+
+    records = _added_records(manager)
+    assert len(records) == 1
+    stored_path = records[0]["properties"]["connection"]["path"]
+    assert Path(stored_path).is_absolute()
+    assert Path(stored_path) == f.resolve()
+
+
+async def test_add_source_explicit_name_with_slash_is_sanitized(manager: UserDataManager, tmp_path: Path) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Python\n")
+    await manager.add_source(FileSource(f), name="folder/resume")
+
+    records = _added_records(manager)
+    assert records[0]["name"] == "folder__SEP__resume"

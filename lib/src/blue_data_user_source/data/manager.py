@@ -52,6 +52,26 @@ DEFAULT_DOC_SOURCE_PROPS: dict = {
     "vector_source": {"backend": "memory"},
 }
 
+# Registry record names are embedded verbatim in the record's storage key
+# (Registry._record_key: f"{scope}/{type}/{name}"), and that key is then
+# interpreted by the underlying JSON store as a *dot-notation* path
+# (json_query_set / _path_parts splits on "."). So a name containing "."
+# (e.g. a file's extension, as in "resume.txt") silently nests the record
+# under a bogus intermediate key instead of storing it flat — and a name
+# containing "/" produces a name that reads like a nested path even though
+# it happens not to corrupt the key. Strip both so registered names are
+# always safe, flat, single-segment keys.
+_NAME_SEPARATOR_REPLACEMENT = "__SEP__"
+_UNSAFE_NAME_CHARS = ("/", "\\", ".")
+
+
+def sanitize_registry_name(name: str) -> str:
+    """Replace path- and dot-notation-unsafe characters so *name* is safe as a registry record name."""
+    sanitized = name
+    for ch in _UNSAFE_NAME_CHARS:
+        sanitized = sanitized.replace(ch, _NAME_SEPARATOR_REPLACEMENT)
+    return sanitized
+
 
 def _enrich_props(props: dict, kind: str) -> dict:
     """Normalise *props* to ``{"_class": "...", "connection": {...}}``.
@@ -402,9 +422,9 @@ class UserDataManager:
             self._database, location, name=name, description=description, original=original
         )
 
-        registry_name = name or location
+        registry_name = sanitize_registry_name(name or location)
         src_cls = type(source)
-        src_conn = getattr(source, "properties", {}).get("connection") or {"path": str(location)}
+        src_conn = getattr(source, "properties", {}).get("connection") or {"path": str(Path(location).resolve())}
         self._registry.register_record(
             name=registry_name,
             type="source",
