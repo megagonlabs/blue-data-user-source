@@ -12,8 +12,6 @@ from blue_data_user_source.data.manager import (
     sanitize_registry_name
 )
 
-from blue_data_user_source.sources.file import FileSource
-
 _SCHEMA = str(Path(__file__).parent.parent.parent.parent / "src" / "blue_data_user_source" / "data" / "schema.json")
 _MEM_JSON = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
 _MEM_KB = {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}}
@@ -157,16 +155,19 @@ def test_sanitize_registry_name_leaves_plain_names_untouched() -> None:
     assert sanitize_registry_name("resume") == "resume"
 
 
+_BUILTIN_SOURCE_NAMES = {"kb", "metadata", "contacts", "sessions", "session_content", "external_documents"}
+
+
 def _added_records(manager: UserDataManager) -> list[dict]:
     records = manager._registry.list_records(record_type="source", scope="/")
-    return [r for r in records if r["name"] not in {"kb", "metadata", "contacts", "sessions"}]
+    return [r for r in records if r["name"] not in _BUILTIN_SOURCE_NAMES]
 
 
 async def test_add_source_default_name_has_no_slash(manager: UserDataManager, tmp_path: Path) -> None:
     f = tmp_path / "data" / "resume.txt"
     f.parent.mkdir()
     f.write_text("Python\n")
-    await manager.add_source(FileSource(f))
+    await manager.add_source(f)
 
     records = _added_records(manager)
     assert len(records) == 1
@@ -179,7 +180,7 @@ async def test_add_source_registers_absolute_path(manager: UserDataManager, tmp_
     f = tmp_path / "data" / "resume.txt"
     f.parent.mkdir()
     f.write_text("Python\n")
-    await manager.add_source(FileSource(Path("data/resume.txt")))
+    await manager.add_source(Path("data/resume.txt"))
 
     records = _added_records(manager)
     assert len(records) == 1
@@ -191,7 +192,44 @@ async def test_add_source_registers_absolute_path(manager: UserDataManager, tmp_
 async def test_add_source_explicit_name_with_slash_is_sanitized(manager: UserDataManager, tmp_path: Path) -> None:
     f = tmp_path / "resume.txt"
     f.write_text("Python\n")
-    await manager.add_source(FileSource(f), name="folder/resume")
+    await manager.add_source(f, name="folder/resume")
 
     records = _added_records(manager)
     assert records[0]["name"] == "folder__SEP__resume"
+
+
+# ── add_source ingests via DocumentDataSource (issue #90) ─────────────────────
+
+async def test_add_source_ingests_into_external_documents_source(manager: UserDataManager, tmp_path: Path) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Python\nSQL\nMachine learning\n")
+    await manager.add_source(f)
+
+    records = _added_records(manager)
+    assert len(records) == 1
+    props = records[0]["properties"]
+    assert props["_class"] == "blue_data_doc_source.source.document.document_source.DocumentDataSource"
+    assert props["document_source"] == "external_documents"
+    assert len(props["document_ids"]) == 1
+
+
+async def test_add_source_ingests_even_without_queries(manager: UserDataManager, tmp_path: Path) -> None:
+    """Ingestion into external_documents is unconditional — unlike the old
+    FileSource path, which only ever read the file when --query was given."""
+    f = tmp_path / "resume.txt"
+    f.write_text("Python\nSQL\n")
+    await manager.add_source(f)
+
+    doc_source = manager.ensure_external_documents_source()
+    results = doc_source.execute_query({"op": "DOCUMENT.SEARCH", "query": "Python", "k": 5})
+    assert len(results) > 0
+
+
+async def test_add_source_with_queries_still_imports_into_kb(manager: UserDataManager, tmp_path: Path) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Alice knows Python.\n")
+    await manager.add_source(f, queries=["what skills does alice have"])
+
+    kb = manager._ensure_kb_source()
+    data = await kb.fetch_database_data(manager._database, compact=True)
+    assert data

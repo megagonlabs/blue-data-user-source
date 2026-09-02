@@ -2,7 +2,7 @@
 
 Python library for UDb — a multi-user knowledge base with natural language querying, LLM-based extraction, and interactive data quality assurance.
 
-Backed by [blue-data](../blue-data), [blue-data-kb-source](../blue-data-kb-source), and [blue-data-doc-source](../blue-data-doc-source) (per-session interaction transcripts).
+Backed by [blue-data](../blue-data), [blue-data-kb-source](../blue-data-kb-source), and [blue-data-doc-source](../blue-data-doc-source) (per-session interaction transcripts, and files registered via `add_source`).
 
 ## Requirements
 
@@ -39,7 +39,7 @@ pip install -e ".[dev]"
 
 ```python
 import asyncio
-from blue_data_user_source import UserSource, FileSource
+from blue_data_user_source import UserSource
 
 # File-backed (survives process restarts)
 us = UserSource("user_source", {
@@ -134,12 +134,13 @@ async def main() -> None:
         },
     )
 
-    # Type 1 — register a file as a queryable source (no extraction)
-    await us.add_source(FileSource("resume.txt"), database="alice")
+    # Type 1 — register a file (.txt/.pdf/.docx); always parsed, chunked, and
+    # embedded into the shared "external_documents" DocumentDataSource
+    await us.add_source("resume.txt", database="alice")
 
-    # Type 2 — register source + extract specific knowledge via LLM
+    # Type 2 — same ingestion, plus extract specific knowledge via LLM into the KG
     await us.add_source(
-        FileSource("resume.txt"),
+        "resume.txt",
         database="alice",
         optional_properties={"queries": ["What skills does the user have?"]},
     )
@@ -561,8 +562,6 @@ lib/
 │       ├── __init__.py
 │       ├── source.py              # UserSource — multi-database entry point
 │       ├── types.py               # QueryResult, UDbError hierarchy
-│       ├── sources/
-│       │   └── file.py            # FileSource
 │       ├── reasoning/
 │       │   ├── metric.py          # CompletenessMetric, FreshnessMetric, PrivacyMetric
 │       │   └── reasoner.py        # UserQueryReasoner

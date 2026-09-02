@@ -23,6 +23,7 @@ CLS_KB_FILE     = "blue_data_kb_source.file_kb_source.FileKBSource"
 CLS_KB_NEO4J    = "blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource"
 CLS_VECTOR_MEMORY = "blue_data.source.vector.memory_vector_source.MemoryVectorSource"
 CLS_VECTOR_FILE   = "blue_data.source.vector.file_vector_source.FileVectorSource"
+CLS_DOCUMENT_DATA_SOURCE = "blue_data_doc_source.source.document.document_source.DocumentDataSource"
 
 # Legacy mapping — kept for backward compatibility when reading stored configs
 # that pre-date the _class / connection property format.
@@ -138,7 +139,13 @@ class UserDataManager:
       ``connect_source`` path — its embedding model is a live object that can't
       round-trip through ``_class``/``connection`` reflection, so this manager
       rebuilds and caches it itself from ``doc_source_props``.
-    - Additional sources added at runtime via :meth:`add_source`.
+    - ``"external_documents"`` (DocumentDataSource) — shared across all files
+      registered via :meth:`add_source` (e.g. ``udb data source add``); every
+      file is parsed, chunked, and embedded into this source so it can later
+      be searched or used to answer queries. Created on demand via
+      :meth:`ensure_external_documents_source`; same non-reconnected caching
+      as ``session_content``, but kept in a separate collection so the two
+      don't mix.
 
     All source instantiation goes through ``DataSource.instantiate`` using
     the ``_class`` stored in each source's registry record.  :meth:`connect`
@@ -168,6 +175,7 @@ class UserDataManager:
         self._contact_source: Any = None
         self._session_source: Any = None
         self._session_doc_source: Any = None
+        self._external_doc_source: Any = None
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -265,8 +273,9 @@ class UserDataManager:
             self.clear_sessions()
 
         # Deregister any additional imported sources from the registry, including
-        # the shared "session_content" doc source created via ensure_session_doc_source.
+        # the shared "session_content" and "external_documents" doc sources.
         self._session_doc_source = None
+        self._external_doc_source = None
         source_records = self._registry.list_records(record_type="source", scope="/")
         for record in source_records:
             if record["name"] not in ("kb", "metadata", "contacts", "sessions"):
@@ -415,15 +424,26 @@ class UserDataManager:
         description: str | None = None,
         original: str | None = None,
     ) -> None:
-        """Register a source in the KB and registry, then optionally ingest content."""
+        """Register a file as a source, always ingesting it into the shared
+        "external_documents" DocumentDataSource (parsed, chunked, embedded —
+        see :meth:`ensure_external_documents_source`), and optionally also
+        extracting facts into the KB for each of *queries* (Type 2 import).
+        """
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
         source_id = await kb.add_source(
             self._database, location, name=name, description=description, original=original
         )
 
+        doc_source = self.ensure_external_documents_source()
+        chunks = doc_source.execute_query({
+            "op": "DOCUMENT.INGEST",
+            "path": location,
+            "collection": doc_source.name,
+        })
+        document_ids = sorted({chunk["document_id"] for chunk in chunks})
+
         registry_name = sanitize_registry_name(name or location)
-        src_cls = type(source)
         src_conn = getattr(source, "properties", {}).get("connection") or {"path": str(Path(location).resolve())}
         self._registry.register_record(
             name=registry_name,
@@ -431,16 +451,17 @@ class UserDataManager:
             scope="/",
             description=description or "",
             properties={
-                "_class": f"{src_cls.__module__}.{src_cls.__qualname__}",
+                "_class": CLS_DOCUMENT_DATA_SOURCE,
                 "connection": src_conn,
                 "source_id": source_id,
+                "document_source": doc_source.name,
+                "document_ids": document_ids,
             },
         )
 
         if queries:
+            text = "\n".join(chunk["text"] for chunk in chunks)
             for query in queries:
-                raw = await source.query(query)
-                text = "\n".join(str(r) for r in raw)
                 await kb.import_text(self._database, text, queries=[query], source_id=source_id)
 
     def remove_source(self, source_name: str) -> None:
@@ -660,4 +681,51 @@ class UserDataManager:
         )
         self._registry.register_source(doc_source)
         self._session_doc_source = doc_source
+        return doc_source
+
+    def ensure_external_documents_source(self) -> Any:
+        """Return the shared "external_documents" DocumentDataSource, built + registered on first use.
+
+        Every file registered via :meth:`add_source` (``udb data source add``)
+        is parsed, chunked, and embedded into this single DocumentDataSource,
+        making it searchable and available for future query-answering —
+        replacing the old FileSource, which only ever read raw lines.
+
+        Uses the same ``doc_source_props`` (embedding model + vector backend)
+        as :meth:`ensure_session_doc_source`, but writes to its own
+        "external_documents" collection so the two never mix.
+
+        Not reconnected via DataRegistry.connect_source — see class docstring.
+        Cached per-process in self._external_doc_source; a fresh process
+        rebuilds it (with a fresh, empty vector backend unless
+        doc_source_props points at a persistent one, e.g. the "file" vector
+        backend).
+        """
+        if self._external_doc_source is not None:
+            return self._external_doc_source
+        if self._registry is None:
+            raise ValueError("Registry not ready — call build() or connect() first.")
+
+        from blue_data_doc_source import DocumentDataSource
+
+        name = "external_documents"
+        embedding_model = _build_embedding_model(self._doc_source_props.get("embedding_model"))
+        vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
+        vector_enriched = _enrich_props(vector_props, "vector")
+        vector_conn = vector_enriched.get("connection", {})
+        if "directory" in vector_conn:
+            Path(vector_conn["directory"]).mkdir(parents=True, exist_ok=True)
+        vector_source = DataSource.instantiate(
+            vector_enriched["_class"], f"{name}-vectors", properties={"connection": vector_conn},
+        )
+        doc_source = DocumentDataSource(
+            name=name, embedding_model=embedding_model, vector_source=vector_source,
+            default_collection=name,
+        )
+        # DOCUMENT.SEARCH's vector/hybrid modes look up the vector store's
+        # index by name and return nothing if it was never created — ingest()
+        # doesn't create it, so it must happen explicitly, once, up front.
+        doc_source.execute_query({"op": "DOCUMENT.ENSURE_INDEX", "collection": name})
+        self._registry.register_source(doc_source)
+        self._external_doc_source = doc_source
         return doc_source

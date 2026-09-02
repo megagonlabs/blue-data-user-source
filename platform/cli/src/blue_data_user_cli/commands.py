@@ -10,7 +10,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from blue_data_user_source import FileSource, FileUserSource, UDbError, sanitize_registry_name
+from blue_data_user_source import FileUserSource, UDbError, sanitize_registry_name
 from blue_data_user_source.data.manager import (
     CLS_JSON_FILE,
     CLS_JSON_MEMORY,
@@ -1083,14 +1083,19 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
 @click.option(
     "--query", "queries",
     multiple=True,
-    help="Query to run over the file (Type 2 import). May be repeated.",
+    help="Query to additionally extract facts for into the KB (Type 2 import). May be repeated.",
 )
 @click.option("--name", default=None, help="Human-readable label (defaults to source value).")
 @click.option("--description", default=None, help="Optional description.")
 @click.option("--original", default=None, help="Original date of the source (e.g. when it was published).")
 @click.pass_obj
 def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None) -> None:
-    """Register a file as a data source and optionally ingest its content."""
+    """Register a file (.txt/.pdf/.docx) as a data source.
+
+    The file is always parsed, chunked, and embedded into the shared
+    "external_documents" DocumentDataSource, making it searchable. Pass
+    --query to additionally extract facts from it into the KB.
+    """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     props: dict[str, Any] = {}
@@ -1103,16 +1108,16 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
     if original:
         props["original"] = original
     try:
-        asyncio.run(source.add_source(FileSource(file), database=db, optional_properties=props or None))
+        asyncio.run(source.add_source(file, database=db, optional_properties=props or None))
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     label = sanitize_registry_name(name or str(file))
     if queries:
         n = len(queries)
-        console.print(f"Added source: [bold]{label}[/bold] ({n} {'query' if n == 1 else 'queries'})")
+        console.print(f"Ingested source: [bold]{label}[/bold] ({n} {'query' if n == 1 else 'queries'} extracted to KB)")
     else:
-        console.print(f"Registered source: [bold]{label}[/bold]")
+        console.print(f"Ingested source: [bold]{label}[/bold]")
 
 
 @source_group.command("remove")

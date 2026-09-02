@@ -229,23 +229,23 @@ Manage data sources associated with the active database.
 | Command | Description |
 |---|---|
 | `udb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
-| `udb data source add FILE` | Register a file as a source and optionally ingest its content |
+| `udb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
 | `udb data source remove NAME` | Remove a source from the registry (KG data is preserved) |
 
-**Type 1 — register source only**
+**Type 1 — register + ingest for later search**
 
 ```bash
 udb data source add resume.txt
-# Registered source: resume.txt
+# Ingested source: resume.txt
 ```
 
-**Type 2 — extract and store attributes**
+**Type 2 — also extract and store attributes in the KG**
 
 ```bash
 udb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "Does the user prefer remote work?"
-# Added source: resume.txt (2 queries)
+# Ingested source: resume.txt (2 queries extracted to KB)
 ```
 
 **Listing sources**
