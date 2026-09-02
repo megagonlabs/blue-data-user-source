@@ -304,6 +304,11 @@ class UserDataManager:
         if session_content_dir is not None and session_content_dir.exists():
             shutil.rmtree(session_content_dir)
 
+        # External documents — sibling vector store directory, if file-backed
+        external_documents_dir = self._external_documents_directory()
+        if external_documents_dir is not None and external_documents_dir.exists():
+            shutil.rmtree(external_documents_dir)
+
         # Per-user registry file
         reg_conn = self._registry_props.get("connection", self._registry_props)
         if "path" in reg_conn:
@@ -442,11 +447,10 @@ class UserDataManager:
         )
 
         doc_source = self.ensure_external_documents_source()
-        chunks = doc_source.execute_query({
-            "op": "DOCUMENT.INGEST",
-            "path": location,
-            "collection": doc_source.name,
-        })
+        # No "collection" override — falls through to the pipeline's own
+        # default_collection ("documents"), matching the index created by
+        # ensure_external_documents_source().
+        chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": location})
 
         if queries:
             text = "\n".join(chunk["text"] for chunk in chunks)
@@ -587,6 +591,19 @@ class UserDataManager:
         directory = vector_enriched.get("connection", {}).get("directory")
         return Path(directory) if directory is not None else None
 
+    def _external_documents_directory(self) -> Path | None:
+        """Directory backing the external_documents doc source's vector store, or ``None``.
+
+        A sibling of the session vector directory (e.g.
+        ``.../sources/alice/external_documents`` next to ``.../sessions``) —
+        see :meth:`ensure_external_documents_source`. ``None`` under the
+        in-memory backend, same as :meth:`_session_vector_directory`.
+        """
+        session_directory = self._session_vector_directory()
+        if session_directory is None:
+            return None
+        return session_directory.parent / "external_documents"
+
     def _session_transcripts_dir(self, session_id: str) -> Path | None:
         """Directory for raw interaction-transcript ``.txt`` files, or ``None``.
 
@@ -681,8 +698,10 @@ class UserDataManager:
         replacing the old FileSource, which only ever read raw lines.
 
         Uses the same ``doc_source_props`` (embedding model + vector backend)
-        as :meth:`ensure_session_doc_source`, but writes to its own
-        "external_documents" collection so the two never mix.
+        as :meth:`ensure_session_doc_source`, but — when file-backed — writes
+        under its own sibling ``external_documents/`` directory (as
+        ``documents.json`` + ``_indices.json``) rather than inside the
+        "sessions" directory, which is reserved for session transcripts.
 
         Not reconnected via DataRegistry.connect_source — see class docstring.
         Cached per-process in self._external_doc_source; a fresh process
@@ -698,23 +717,29 @@ class UserDataManager:
         from blue_data_doc_source import DocumentDataSource
 
         name = "external_documents"
+        collection = "documents"
         embedding_model = _build_embedding_model(self._doc_source_props.get("embedding_model"))
         vector_props = self._doc_source_props.get("vector_source") or {"backend": "memory"}
         vector_enriched = _enrich_props(vector_props, "vector")
         vector_conn = vector_enriched.get("connection", {})
         if "directory" in vector_conn:
-            Path(vector_conn["directory"]).mkdir(parents=True, exist_ok=True)
+            # The configured directory names the *sessions* vector store —
+            # external_documents gets its own sibling directory instead of
+            # sharing that one (see _external_documents_directory).
+            directory = self._external_documents_directory()
+            vector_conn = {**vector_conn, "directory": str(directory)}
+            directory.mkdir(parents=True, exist_ok=True)
         vector_source = DataSource.instantiate(
             vector_enriched["_class"], f"{name}-vectors", properties={"connection": vector_conn},
         )
         doc_source = DocumentDataSource(
             name=name, embedding_model=embedding_model, vector_source=vector_source,
-            default_collection=name,
+            default_collection=collection,
         )
         # DOCUMENT.SEARCH's vector/hybrid modes look up the vector store's
         # index by name and return nothing if it was never created — ingest()
         # doesn't create it, so it must happen explicitly, once, up front.
-        doc_source.execute_query({"op": "DOCUMENT.ENSURE_INDEX", "collection": name})
+        doc_source.execute_query({"op": "DOCUMENT.ENSURE_INDEX", "collection": collection})
         self._registry.register_source(doc_source)
         self._external_doc_source = doc_source
         return doc_source
