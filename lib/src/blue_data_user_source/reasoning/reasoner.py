@@ -18,6 +18,27 @@ if TYPE_CHECKING:
     from blue_data_user_source.types import QueryResult
 
 
+def _summarize_schema_facets(schema: dict) -> str:
+    """Render a KB schema export as a compact list of queryable facets.
+
+    Used to ground sub-question generation in what the data store can actually
+    answer: per-entity attributes (e.g. PERSON's AGE, NATIONALITY) and
+    relations between entities (e.g. PERSON --HAS_SKILL--> SKILL), excluding
+    structural IS_SUBCLASS_OF edges.
+    """
+    lines: list[str] = []
+    for name, entity in schema.get("entities", {}).items():
+        attrs = list((entity.get("contents") or {}).get("attributes") or {})
+        if attrs:
+            lines.append(f"{name} attributes: {', '.join(attrs)}")
+    for rel in schema.get("relations", {}).values():
+        if rel.get("name") == "IS_SUBCLASS_OF":
+            continue
+        desc = f" ({rel['description']})" if rel.get("description") else ""
+        lines.append(f"{rel.get('source')} --{rel.get('name')}--> {rel.get('target')}{desc}")
+    return "\n".join(lines)
+
+
 def _strip_json_fences(text: str) -> str:
     """Remove markdown ```json … ``` fences that models sometimes add."""
     text = text.strip()
@@ -110,15 +131,47 @@ class UserQueryReasoner:
         return result or query
 
     async def expand_query(self, query: str) -> list[str]:
+        user_name = "the user"
+        schema_summary = ""
+        if self._manager is not None:
+            user_name = self._manager.get_metadata("identity.name") or self._manager._database
+            try:
+                schema = await self._manager._ensure_kb_source().export_database_schema(
+                    self._manager._database
+                )
+                schema_summary = _summarize_schema_facets(schema)
+            except Exception:
+                schema_summary = ""
+
+        schema_block = (
+            f"Facets the data store can actually answer about {user_name}:\n{schema_summary}\n\n"
+            if schema_summary else ""
+        )
+
         prompt = (
-            f"Given this query about a user's personal data: \"{query}\"\n"
-            "List 3-5 specific supplemental questions that would help answer the original query. "
-            "If the original query is already specific, return it as the only item. "
-            'Return a JSON object: {"questions": ["<question>", ...]}'
+            f"The following is a query about {user_name}'s personal data, to be answered by "
+            f"searching a personal data store:\n\"{query}\"\n\n"
+            f"{schema_block}"
+            "Decompose the query into standalone supplemental sub-questions that, together, "
+            "would help answer it. Requirements for each sub-question:\n"
+            f"- It is a well-formed, third-person factual lookup about {user_name} (e.g. "
+            f"\"What is {user_name}'s ...\"), phrased for searching the data store directly — "
+            "never a question addressed to the user for clarification (no \"do you\", "
+            "\"would you\", \"are you interested in\", and never ask the user to choose between "
+            "options).\n"
+            "- If facets are listed above, only use ones relevant to the query; ignore the "
+            "irrelevant ones.\n"
+            "- It targets a distinct facet — do not repeat or merely rephrase the original "
+            "query or another sub-question.\n\n"
+            "Scale the number of sub-questions to the query's complexity: a query that is "
+            "already a single, specific, directly-answerable lookup needs none at all — return "
+            "an empty list rather than inventing filler. A broad query spanning many facets may "
+            "need up to 5. Never pad the list just to reach a quota.\n\n"
+            'Return a JSON object: {"questions": ["<question>", ...]} (the list may be empty).'
         )
         result = await _llm_complete(prompt, properties={"response_format": "json_object"})
         questions = result.get("questions", []) if isinstance(result, dict) else []
-        return questions if questions else [query]
+        return questions[:5] if isinstance(questions, list) else []
 
     async def assess_query_results(
         self,

@@ -38,16 +38,37 @@ async def test_expand_query_returns_questions_from_json(reasoner: UserQueryReaso
     assert result == questions
 
 
-async def test_expand_query_falls_back_to_original_on_empty_questions(reasoner: UserQueryReasoner) -> None:
+async def test_expand_query_returns_empty_when_no_expansion_needed(reasoner: UserQueryReasoner) -> None:
+    """A narrow, already-specific query legitimately expands to no sub-questions."""
     with patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value={"questions": []})):
         result = await reasoner.expand_query("my query")
-    assert result == ["my query"]
+    assert result == []
 
 
-async def test_expand_query_falls_back_on_non_dict_response(reasoner: UserQueryReasoner) -> None:
+async def test_expand_query_returns_empty_on_non_dict_response(reasoner: UserQueryReasoner) -> None:
     with patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value="not a dict")):
         result = await reasoner.expand_query("my query")
-    assert result == ["my query"]
+    assert result == []
+
+
+async def test_expand_query_caps_at_five(reasoner: UserQueryReasoner) -> None:
+    questions = [f"question {i}" for i in range(8)]
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value={"questions": questions})):
+        result = await reasoner.expand_query("my query")
+    assert result == questions[:5]
+
+
+async def test_expand_query_includes_schema_facets_in_prompt(reasoner: UserQueryReasoner) -> None:
+    captured: dict = {}
+
+    async def fake_llm_complete(prompt: str, **kwargs):
+        captured["prompt"] = prompt
+        return {"questions": []}
+
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", fake_llm_complete):
+        await reasoner.expand_query("what are my skills?")
+
+    assert "HAS_SKILL" in captured["prompt"]
 
 
 # ── assess_user_interaction ───────────────────────────────────────────────────
