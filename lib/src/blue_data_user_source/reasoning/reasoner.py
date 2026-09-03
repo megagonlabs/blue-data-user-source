@@ -87,9 +87,24 @@ class UserQueryReasoner:
             self._metrics.append(PrivacyMetric(manager=manager))
 
     async def contextualize_query(self, query: str) -> str:
+        user_name = "the user"
+        if self._manager is not None:
+            user_name = self._manager.get_metadata("identity.name") or self._manager._database
+
         prompt = (
-            "Rewrite the following user query to be more precise for searching "
-            f"a personal user data store. Return only the rewritten query.\n\nQuery: {query}"
+            "Rewrite the following query about a user's personal data so that it is a "
+            "clear, well-formed question, and so that every reference to the user is "
+            f"replaced by the user's name, \"{user_name}\".\n\n"
+            "Replace references such as \"you\", \"your\", \"the user\", \"he\", \"she\", "
+            "\"his\", \"her\", the user's own name, or any other identity reference that "
+            f"points to the user — with \"{user_name}\" (or the possessive "
+            f"\"{user_name}'s\" where appropriate). Only rewrite references to the user "
+            "themself; leave references to other people unchanged.\n\n"
+            "Example (user's name is \"Alice\"): \"what is your age\", \"What is the "
+            "user's age\", \"what is her age\", and \"you age?\" all become "
+            "\"what is Alice's age\".\n\n"
+            "Return only the rewritten query, with no explanation.\n\n"
+            f"Query: {query}"
         )
         result = await _llm_complete(prompt)
         return result or query
