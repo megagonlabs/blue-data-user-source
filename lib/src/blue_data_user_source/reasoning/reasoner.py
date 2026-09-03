@@ -214,6 +214,32 @@ class UserQueryReasoner:
         )
         return await _llm_complete(prompt)
 
+    async def synthesize_results_json(
+        self, original_query: str, results: list[QueryResult]
+    ) -> list[dict[str, Any]]:
+        """Aggregate results from all expanded sub-questions into a single JSON table.
+
+        Unlike ``synthesize_results_nl``, which produces prose, this returns a
+        flat JSON array of rows sharing a schema derived from the original
+        query — e.g. for "what are alice's skills and their proficiency?" each
+        row would be ``{"skill": ..., "proficiency": ...}``.
+        """
+        pairs = "\n".join(
+            f"Q: {r.query}\nA: {json.dumps(r.results, default=str)}" for r in results
+        )
+        prompt = (
+            f"The user asked: \"{original_query}\"\n\n"
+            f"The following sub-questions were answered:\n{pairs}\n\n"
+            "Aggregate the information above into a single table that directly answers the "
+            "user's original question. Every row must use the same set of keys, chosen to fit "
+            "the original question. Do not include sub-questions, duplicates, or rows unrelated "
+            "to the original question.\n"
+            'Return only a JSON object of the form: {"rows": [{...}, ...]}'
+        )
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        rows = result.get("rows", []) if isinstance(result, dict) else []
+        return rows if isinstance(rows, list) else []
+
     async def synthesize_data_nl(self, entries: list[dict]) -> str:
         lines = []
         for e in entries:

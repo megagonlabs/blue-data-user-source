@@ -171,6 +171,7 @@ async def query(
     question: str,
     output_form: str = "json",
     session: Optional[str] = None,
+    include_expanded: bool = False,
 ) -> str:
     """Answer a natural-language question using the user's knowledge graph.
 
@@ -180,15 +181,20 @@ async def query(
     configured contact method.
 
     Args:
-        user:        User name (database to query).
-        question:    Natural-language question.
-        output_form: 'json' (default — structured rows) or 'nl' (prose answer).
-        session:     Optional session id for query context continuity.
+        user:             User name (database to query).
+        question:         Natural-language question.
+        output_form:      'json' (default — a single aggregated table of rows) or
+                          'nl' (prose answer).
+        session:          Optional session id for query context continuity.
+        include_expanded: If True, also return the per-sub-question queries and
+                          their raw results alongside the synthesized answer.
     """
     try:
         optional: dict[str, Any] = {"output_form": output_form}
         if session:
             optional["session"] = session
+        if include_expanded:
+            optional["include_expanded"] = True
         result, session_id = await get_source().async_execute_query(
             question, database=user, optional_properties=optional
         )

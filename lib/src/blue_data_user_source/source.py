@@ -416,9 +416,20 @@ class UserSource(DataSource):
         optional_properties, this query is appended to that existing session
         (raises QueryError if it doesn't exist or has ended); otherwise a new
         single-query session is created automatically. Returns (results, session_id).
+
+        ``output_form`` ("json", default, or "nl") controls the format of the
+        synthesized answer: "json" returns a single aggregated table (a list of
+        dicts sharing a schema derived from the query); "nl" returns prose.
+
+        ``include_expanded`` (default False) is orthogonal to ``output_form``:
+        when True, the per-sub-question queries and their raw results are also
+        returned alongside the synthesized answer, in the same output_form
+        (a list of ``{"query", "results"}`` dicts for "json", or a "Q: ... A: ..."
+        text block for "nl").
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
+        include_expanded = bool(props.get("include_expanded", False))
 
         manager = self._get_manager(database)
         session_manager = self._session_manager(database)
@@ -482,8 +493,19 @@ class UserSource(DataSource):
                 results.append(QueryResult(query=query, results=new_items))
 
         if output_form == "nl":
-            return await reasoner.synthesize_results_nl(query, results), session_id
-        return results, session_id
+            answer: Any = await reasoner.synthesize_results_nl(query, results)
+        else:
+            answer = await reasoner.synthesize_results_json(query, results)
+
+        if not include_expanded:
+            return answer, session_id
+
+        if output_form == "nl":
+            expanded: Any = "\n\n".join(f"Q: {r.query}\nA: {r.results}" for r in results)
+        else:
+            expanded = [{"query": r.query, "results": r.results} for r in results]
+
+        return {"result": answer, "expanded": expanded}, session_id
 
     def _get_manager(self, name: str) -> UserDataManager:
         if name not in self._managers:

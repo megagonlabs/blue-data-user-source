@@ -760,12 +760,16 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
     show_default=True,
 )
 @click.option("--top-k", "top_k", default=10, type=int, show_default=True)
+@click.option(
+    "--include-expanded", "include_expanded", is_flag=True, default=False,
+    help="Also return the per-sub-question queries and their raw results.",
+)
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
 @click.option("--log-limit", "log_limit", default=80, type=int, show_default=True, help="Truncation limit for logged values.")
 @click.pass_obj
 def data_query(
-    obj: dict, text: str, session: str | None, fmt: str, top_k: int,
+    obj: dict, text: str, session: str | None, fmt: str, top_k: int, include_expanded: bool,
     verbose: bool, log: bool, log_limit: int,
 ) -> None:
     """Execute a natural-language query against the database."""
@@ -777,6 +781,8 @@ def data_query(
         props["session"] = resolved_session
     if fmt == "nl":
         props["output_form"] = "nl"
+    if include_expanded:
+        props["include_expanded"] = True
     try:
         with console.status("Querying…") as status:
             on_tool_call, on_tool_result = _status_tool_callbacks(
@@ -792,21 +798,37 @@ def data_query(
         # Auto-select-after-auto-create: continue this session on the next query
         # without requiring an explicit 'udb session select'.
         _selected_session_path(obj["data_dir"]).write_text(session_id)
+    answer = results["result"] if isinstance(results, dict) else results
+    expanded = results.get("expanded") if isinstance(results, dict) else None
+
     if fmt == "nl":
-        click.echo(results)
+        click.echo(answer)
+        if expanded is not None:
+            console.print("\n[bold]Expanded:[/bold]")
+            console.print(expanded)
         return
     if fmt == "json":
-        click.echo(json.dumps(
-            [{"query": r.query, "results": r.results} for r in results],  # type: ignore[union-attr]
-            indent=2,
-        ))
+        click.echo(json.dumps(results, indent=2, default=str))
         return
-    t = Table(show_header=True, header_style="bold")
-    t.add_column("Query", style="cyan")
-    t.add_column("Results")
-    for r in results:  # type: ignore[union-attr]
-        t.add_row(r.query, ", ".join(str(x) for x in r.results))
-    console.print(t)
+    rows: list[dict] = answer  # type: ignore[assignment]
+    if not rows:
+        console.print("[dim](no results)[/dim]")
+    else:
+        columns = sorted({k for row in rows for k in row})
+        t = Table(show_header=True, header_style="bold")
+        for col in columns:
+            t.add_column(col)
+        for row in rows:
+            t.add_row(*[str(row.get(col, "")) for col in columns])
+        console.print(t)
+    if expanded is not None:
+        console.print("\n[bold]Expanded:[/bold]")
+        et = Table(show_header=True, header_style="bold")
+        et.add_column("Query", style="cyan")
+        et.add_column("Results")
+        for e in expanded:
+            et.add_row(e["query"], ", ".join(str(x) for x in e["results"]))
+        console.print(et)
 
 
 @data_group.command("search")
