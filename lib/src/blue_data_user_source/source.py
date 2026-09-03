@@ -445,9 +445,11 @@ class UserSource(DataSource):
         on_tool_call = props.get("on_tool_call")
         on_tool_result = props.get("on_tool_result")
 
-        # Phase 2: all KB queries in parallel
+        # Phase 2: all queries in parallel (kb + session_content + external_documents)
         raw_results: list[tuple[list, dict]] = list(await asyncio.gather(*[
-            manager.execute_query(q, on_tool_call=on_tool_call, on_tool_result=on_tool_result)
+            manager.execute_query(
+                q, on_tool_call=on_tool_call, on_tool_result=on_tool_result, session_id=session_id,
+            )
             for q in questions
         ]))
 

@@ -258,7 +258,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | `execute_query(query, database, optional_properties)` | Execute a natural language query; returns `(list[QueryResult], session_id)` or `(str, session_id)` |
 | `execute_query_nl(query, database, optional_properties)` | Alias — same behaviour |
 
-`execute_query` contextualises and expands the query via LLM, retrieves data from the KB, assesses completeness, freshness, and privacy, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB *and* recorded in the session (see [Sessions](#sessions)).
+`execute_query` contextualises and expands the query via LLM, then retrieves data for each expanded sub-question from the KB *and* the `session_content`/`external_documents` document sources (top-`k` `DOCUMENT.SEARCH` chunks, each tagged `"source"`), assesses completeness, freshness, and privacy across the combined results, and prompts the user for clarification when quality checks fail. Interaction responses are stored back into the KB *and* recorded in the session (see [Sessions](#sessions)).
 
 | optional_property | Type | Description |
 |---|---|---|

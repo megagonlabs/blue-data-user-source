@@ -370,6 +370,8 @@ Executes plans produced by the Query Planner.
 (source, evidence, timestamp, confidence)
 ```
 
+**Current implementation** — `UserDataManager.execute_query` is the concrete Query Executor for one sub-question: it calls `KBSource.answer()` against `kb`, then runs `DOCUMENT.SEARCH` against `session_content` and `external_documents`, merging all three into one `(data, metadata)` result (each document hit tagged `"source": "session_content" | "external_documents"`). See ADR-019 in [13-decision-log.md](13-decision-log.md). Aggregation across heterogeneous sources happens here, per sub-question — not, as §2's Context Expansion Sources list still describes, at Query Rewriter time; that use of `session_content` is not yet implemented.
+
 ### Source Manager
 
 Maintains the registry of all data sources available for a user. Serves as the UDb-specific data registry (referred to as "Registry" in the High Level Architecture).

@@ -52,6 +52,10 @@ DEFAULT_DOC_SOURCE_PROPS: dict = {
     "vector_source": {"backend": "memory"},
 }
 
+# Max chunks retrieved per non-KB source (session_content, external_documents)
+# for each execute_query call.
+DOC_SEARCH_TOP_K = 5
+
 # Registry record names are embedded verbatim in the record's storage key
 # (Registry._record_key: f"{scope}/{type}/{name}"), and that key is then
 # interpreted by the underlying JSON store as a *dot-notation* path
@@ -145,6 +149,11 @@ class UserDataManager:
       :meth:`ensure_external_documents_source`; same non-reconnected caching
       as ``session_content``, but kept in a separate collection so the two
       don't mix.
+
+    :meth:`execute_query` answers against ``"kb"`` and augments the result
+    with the top matching chunks from ``"session_content"`` and
+    ``"external_documents"`` (via ``DOCUMENT.SEARCH``), each tagged with a
+    ``"source"`` field so callers can tell provenance apart.
 
     All source instantiation goes through ``DataSource.instantiate`` using
     the ``_class`` stored in each source's registry record.  :meth:`connect`
@@ -397,7 +406,9 @@ class UserDataManager:
         query: str,
         on_tool_call=None,
         on_tool_result=None,
+        session_id: str | None = None,
     ) -> tuple[list[Any], dict[str, Any]]:
+        """Answer *query* against the KB, session_content, and external_documents combined."""
         result, metadata = await self._ensure_kb_source().answer(
             self._database, query,
             include_metadata=True,
@@ -405,8 +416,37 @@ class UserDataManager:
             on_tool_result=on_tool_result,
         )
         data = result if isinstance(result, list) else ([{"answer": result}] if result else [])
+        metadata = metadata if isinstance(metadata, dict) else {}
+
+        session_doc_source = self.ensure_session_doc_source(session_id or "")
+        data.extend(
+            self._search_doc_source(session_doc_source, query, "session_content", metadata)
+        )
+
+        external_doc_source = self.ensure_external_documents_source()
+        data.extend(
+            self._search_doc_source(external_doc_source, query, "external_documents", metadata)
+        )
+
         print(f"Query executed: {query}")
         return data, metadata
+
+    def _search_doc_source(
+        self, doc_source: Any, query: str, source_name: str, metadata: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Run DOCUMENT.SEARCH against *doc_source*, tagging each hit with *source_name*."""
+        request = {"op": "DOCUMENT.SEARCH", "query": query, "k": DOC_SEARCH_TOP_K}
+        chunks = doc_source.execute_query(request)
+        entries: list[dict[str, Any]] = []
+        for chunk in chunks:
+            entries.append({
+                "text": chunk.get("text"),
+                "source": source_name,
+                "file_name": chunk.get("file_name"),
+                "score": chunk.get("score"),
+            })
+            metadata[chunk["chunk_id"]] = {"source": source_name, "extraction": chunk.get("text")}
+        return entries
 
     async def import_data(
         self,
@@ -685,6 +725,11 @@ class UserDataManager:
         doc_source = DocumentDataSource(
             name=name, embedding_model=embedding_model, vector_source=vector_source,
         )
+        # DOCUMENT.SEARCH's vector/hybrid modes look up the vector store's
+        # index by name and find nothing if it was never created — ingest_text()
+        # doesn't create it, so it must happen explicitly, once, up front (see
+        # the matching comment in ensure_external_documents_source).
+        doc_source.execute_query({"op": "DOCUMENT.ENSURE_INDEX"})
         self._registry.register_source(doc_source)
         self._session_doc_source = doc_source
         return doc_source

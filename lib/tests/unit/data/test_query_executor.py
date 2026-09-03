@@ -71,3 +71,42 @@ async def test_execute_query_empty_metadata_when_kb_returns_none(manager: UserDa
     manager._kb_source = mock_kb
     _, metadata = await manager.execute_query("q")
     assert metadata == {}
+
+
+async def test_execute_query_includes_session_content_matches(
+    manager_with_mock_kb: UserDataManager,
+) -> None:
+    doc_source = manager_with_mock_kb.ensure_session_doc_source("s1")
+    doc_source.ingest_text("Alice prefers remote work.", file_name="q1-i1.txt")
+
+    data, metadata = await manager_with_mock_kb.execute_query("remote work")
+
+    session_entries = [
+        d for d in data if isinstance(d, dict) and d.get("source") == "session_content"
+    ]
+    assert session_entries
+    assert any("remote work" in e["text"] for e in session_entries)
+    assert any(m.get("source") == "session_content" for m in metadata.values())
+
+
+async def test_execute_query_includes_external_document_matches(
+    manager_with_mock_kb: UserDataManager, tmp_path,
+) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Alice knows Python and SQL.\n")
+    await manager_with_mock_kb.add_source(f)
+
+    data, metadata = await manager_with_mock_kb.execute_query("Python")
+
+    external_entries = [
+        d for d in data if isinstance(d, dict) and d.get("source") == "external_documents"
+    ]
+    assert external_entries
+    assert any(m.get("source") == "external_documents" for m in metadata.values())
+
+
+async def test_execute_query_still_returns_kb_result_alongside_doc_matches(
+    manager_with_mock_kb: UserDataManager,
+) -> None:
+    data, _ = await manager_with_mock_kb.execute_query("q")
+    assert "result" in data
