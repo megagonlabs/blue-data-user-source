@@ -424,8 +424,8 @@ class UserSource(DataSource):
         ``include_expanded`` (default False) is orthogonal to ``output_form``:
         when True, the per-sub-question queries and their raw results are also
         returned alongside the synthesized answer, in the same output_form
-        (a list of ``{"query", "results"}`` dicts for "json", or a "Q: ... A: ..."
-        text block for "nl").
+        (a list of ``{"query", "results"}`` dicts for "json", or a short prose
+        summary organized by topic for "nl").
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
@@ -501,7 +501,7 @@ class UserSource(DataSource):
             return answer, session_id
 
         if output_form == "nl":
-            expanded: Any = "\n\n".join(f"Q: {r.query}\nA: {r.results}" for r in results)
+            expanded: Any = await reasoner.synthesize_expanded_nl(results)
         else:
             expanded = [{"query": r.query, "results": r.results} for r in results]
 

@@ -214,6 +214,26 @@ class UserQueryReasoner:
         )
         return await _llm_complete(prompt)
 
+    async def synthesize_expanded_nl(self, results: list[QueryResult]) -> str:
+        """Summarize the per-sub-question queries and raw results as prose.
+
+        Used for the "expanded"/supplemental section when ``output_form`` is
+        "nl" — a few flowing paragraphs organized by topic, not a Q/A
+        transcript and not raw JSON.
+        """
+        pairs = "\n".join(
+            f"Q: {r.query}\nA: {json.dumps(r.results, default=str)}" for r in results
+        )
+        prompt = (
+            "While answering a user's question, the following sub-questions were "
+            f"explored, along with their raw results:\n{pairs}\n\n"
+            "Write a few short paragraphs of natural language, organized by topic, "
+            "summarizing this supplemental information for the user. Do not use a "
+            "Q: / A: transcript format, and do not include raw JSON or data "
+            "structures — write flowing prose."
+        )
+        return await _llm_complete(prompt)
+
     async def synthesize_results_json(
         self, original_query: str, results: list[QueryResult]
     ) -> list[dict[str, Any]]:
