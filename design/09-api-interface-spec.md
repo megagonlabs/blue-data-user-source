@@ -156,6 +156,8 @@ results, session_id = us.execute_query(
 |-----|------|--------|-------------|
 | `"session"` | `str` | `execute_query` | Session ID to append this query to (reused). Raises `QueryError` if unknown or already ended. Omit to auto-create a new single-query session — reuse-or-create, see Session Manager (§04-detailed-architecture.md) |
 | `"output_form"` | `"json"` \| `"nl"` | `execute_query` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized string |
+| `"include_expanded"` | `bool` | `execute_query` | When `True` (default `False`), also returns the per-sub-question queries and raw results alongside the synthesized answer, in the same `output_form`; the return shape becomes `{"result": ..., "expanded": ...}` |
+| `"max_interaction_rounds"` | `int` | `execute_query` | Max clarification rounds when quality metrics fail (default: 3); the loop stops early once all metrics pass |
 | `"top_k"` | `int` | `execute_query` | Max KB results per sub-query (default: 10) |
 | `"queries"` | `list[str]` | `add_source` | Extraction queries — drives Type 2 ingestion (one `import_text` call each) |
 

@@ -122,6 +122,8 @@ Expanded question set Q:
 - Organizational knowledge
 - Domain templates
 
+**Current implementation** — `UserQueryReasoner.contextualize_query` rewrites the query into a well-formed question with every self-reference to the user (`"you"`, `"your"`, `"the user"`, pronouns, the user's own name, …) replaced by the user's actual name from `identity.name`, so the KB agent sees an unambiguous third-person question. `expand_query` then decomposes the rewritten query into standalone, third-person sub-questions grounded in the facets the KB schema can actually answer (entity attributes and relations, exported via `KBSource.export_database_schema`) — it never invents clarification-style questions ("do you...", "would you..."), never repeats the original query or another sub-question, and returns an empty list (not the original query) when the query is already a single specific lookup, capped at 5 sub-questions otherwise. Of the sources listed above, only the KB schema itself is currently wired in as expansion context; session history, prior interactions, historical preferences, organizational knowledge, and domain templates remain aspirational.
+
 ### Processing Flow
 
 For each question qi in Q:
@@ -178,6 +180,8 @@ For `"Suitable jobs for me"`:
 
 Completeness is below threshold → interaction required.
 
+**Current implementation** — each `UserDataMetric` compares its score against `_threshold()`, which defaults to the class-level `THRESHOLD` (0.6). `PrivacyMetric` overrides `_threshold()` to move the bar with the user's `privacy.consent_level`: `minimal` consent raises it to 0.8 (stricter — less tolerance for privacy risk), `full` consent lowers it to 0.4, `standard` (or an unset/unrecognized level) keeps the default 0.6.
+
 **Satisfaction Evaluation**
 
 The Reasoning Layer determines:
@@ -188,6 +192,8 @@ The Reasoning Layer determines:
 
 If satisfactory: aggregate and return final evidence-backed results.
 Otherwise: forward unresolved (qi, di, Mi) to the Interaction Layer.
+
+**Current implementation** — the assess-then-interact cycle described above (steps 3-5 of the Query Path, and this section's Processing Flow) is owned end-to-end by `UserQueryReasoner.resolve_via_interaction`, called once by `UserSource._run_query` after aggregating results across all sub-questions (not per sub-question): it evaluates metrics, and while any fail, calls `request_user_interaction` and re-evaluates the augmented result, up to `max_interaction_rounds` (default 3, an `optional_properties` key on `execute_query`) — stopping as soon as every metric passes. Only the user's newly-collected responses (one per round) are surfaced back as a `QueryResult`, not the full augmented data list.
 
 ---
 
@@ -244,6 +250,8 @@ Session tracking itself — which sessions are active, what they contain — is 
 
 If user is currently active → use active chat session.
 Otherwise → send email or asynchronous notification.
+
+**Current implementation** — `ContactManager.identify_contact_method` returns the sole contact method directly when only one is registered; otherwise `_choose_contact_method` asks an LLM to pick among the options, giving it each method's stated `preference`, whether it is asynchronous (`ContactMethod.is_async` — true for `email`/`webhook`/`notification`), the user's stated `preferred_channel` and `working_hours` (`availability.*`), the current time localized to `identity.timezone`, whether that time falls within the stated working hours (best-effort parse of free-text windows like `"09:00-17:00 Mon-Fri"`), and whether the user is currently `out_of_office`. The LLM is instructed to prefer an asynchronous method when the user is out of office or outside working hours; if the call fails or returns an unrecognized choice, the fallback is the lowest-`preference` method — restricted to asynchronous methods when `out_of_office` is true and at least one exists. An optional `topic` argument looks up `availability.by_topic.<topic>` overrides (`working_hours`, `preferred_channel`, `out_of_office`) layered on top of the general `availability.*` settings, so different projects/topics can have different reachability rules.
 
 ### Interaction Manager
 

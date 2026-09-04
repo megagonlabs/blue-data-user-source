@@ -248,3 +248,55 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Rationale:** `session_content` and `external_documents` were being ingested into (transcripts, added files) but never queried — the DML's "aggregate evidence across heterogeneous data sources" responsibility (§4) wasn't implemented for them. `KBSource.answer()` has no hook to inject extra context into its own agent loop (verified: no parameter anywhere in the `blue-data-kb-source` answer chain accepts additional documents), so the two document sources are queried independently, in parallel with the KB call already happening once per sub-question, rather than folded into the KB agent's reasoning.
 
 **Consequences:** Fixed a latent bug found while wiring this up: `ensure_session_doc_source` never called `DOCUMENT.ENSURE_INDEX` (unlike `ensure_external_documents_source`, which always has), so `session_content`'s vector index was never created and `DOCUMENT.SEARCH` against it silently returned nothing even after transcripts were ingested — it now calls `ENSURE_INDEX` at construction, matching `external_documents`. `execute_query` gained an optional `session_id: str | None = None` parameter (threaded through from `UserSource._run_query`, which already tracks it) so it can pass a real id to `ensure_session_doc_source`; the parameter is currently vestigial there (session_content is one shared source across all sessions — see ADR-016's now-superseded per-session framing, still reflected in the class docstring) but keeps the call honest rather than passing a placeholder. This is a different integration point than §2's "Context Expansion Sources" (Query Rewriter-time contextualization) still describes — that use of `session_content` remains unimplemented; this ADR covers per-sub-question retrieval only.
+
+---
+
+## ADR-020 — Query Rewrite Substitutes the User's Name for Self-References
+
+**Date:** 2026-09-03
+**Status:** Accepted
+
+**Decision:** `UserQueryReasoner.contextualize_query` now instructs the LLM to replace every self-reference to the user — `"you"`/`"your"`, `"the user"`, third-person pronouns, or the user's own name — with the user's actual name (`identity.name`, falling back to the database id), including the possessive form, while leaving references to other people untouched.
+
+**Rationale:** A rewritten query like `"What is the user's age?"` is ambiguous once it reaches sub-question generation and metric evaluation — nothing distinguishes "the user" from a third party the query might also mention. Substituting the concrete name removes that ambiguity at the earliest point in the pipeline, so every downstream stage (`expand_query`, metrics, interaction prompts) already operates on an unambiguous reference.
+
+**Consequences:** `contextualize_query` depends on `identity.name` being set for best results; it still falls back to the database id when absent. Prompts throughout the reasoning pipeline that previously said "the user" now consistently use the resolved name.
+
+---
+
+## ADR-021 — Query Expansion Grounded in KB Schema Facets, Zero-or-More Sub-Questions
+
+**Date:** 2026-09-03
+**Status:** Accepted
+
+**Decision:** `UserQueryReasoner.expand_query` now exports the KB schema (`KBSource.export_database_schema`) and summarizes it into a compact list of queryable facets (entity attributes and non-structural relations) to ground sub-question generation. Each sub-question must be a well-formed, third-person factual lookup — never a clarification question addressed to the user — and must target a distinct facet. The LLM may return an empty list when the query is already a single specific lookup; results are capped at 5.
+
+**Rationale:** Without grounding, the LLM would invent sub-questions the data store has no way to answer, and the prior "always return at least the original query" fallback padded simple queries with filler sub-questions that added LLM cost without adding coverage.
+
+**Consequences:** `expand_query` now needs a `manager` (to reach `KBSource.export_database_schema`) to get schema grounding; without one it falls back to ungrounded expansion. Callers must handle an empty list from `expand_query` — `UserSource._run_query` already does, appending the rewritten query itself to the (possibly empty) expansion list rather than relying on `expand_query` to include it.
+
+---
+
+## ADR-022 — `resolve_via_interaction` Owns the Assess-Interact-Reassess Loop
+
+**Date:** 2026-09-04
+**Status:** Accepted
+
+**Decision:** `UserQueryReasoner.resolve_via_interaction(query, assessment_query, data, metadata, max_rounds=3, topic=None)` consolidates what was previously three separate calls inlined in `UserSource._run_query` (`assess_query_results` → `assess_user_interaction` → `request_user_interaction`, run once) into a single method that loops: assess, and while any metric fails, interact and reassess, up to `max_rounds` times, stopping as soon as every metric passes.
+
+**Rationale:** The single-shot version could only ever ask the user once per query, even if their answer still left metrics failing. Owning the full loop in the reasoner (rather than in `UserSource`) also keeps `_run_query` a thin orchestrator and makes the loop unit-testable independent of the query pipeline.
+
+**Consequences:** `UserSource._run_query` gained the `max_interaction_rounds` optional property (default 3) and now surfaces only the newly-collected user responses (one per round) as a single `QueryResult`, rather than the previous single-round augmented-data slice. `resolve_via_interaction` accepts an optional `topic`, threaded through to `request_user_interaction` → `ContactManager.identify_contact_method` — see ADR-023's `availability.by_topic` addition.
+
+---
+
+## ADR-023 — Metadata Schema Trimmed to Identity/Preferences/Availability/Privacy; Availability Gains Out-of-Office and Per-Topic Overrides
+
+**Date:** 2026-09-04
+**Status:** Accepted
+
+**Decision:** `data/metadata_schema.json` drops the `policy`, `credentials`, `skills`, and `instructions` categories (and `identity.role`, `preferences.output_format`, `availability.response_sla`), none of which were read anywhere in the codebase. `availability` gains `out_of_office` (bool) and `by_topic` (dict of per-topic overrides for `working_hours`/`preferred_channel`/`out_of_office`). `ContactManager._choose_contact_method` now uses `identity.timezone` to localize `availability.working_hours` and compute whether the current time falls within it, and prefers an asynchronous contact method (`email`, `webhook`, `notification` — `ContactMethod.is_async`) when `out_of_office` is true or the current time is outside working hours.
+
+**Rationale:** An unused, speculative schema (agent permissions, credential storage, skills, standing instructions) added surface area — seeded keys, CLI/MCP examples, tests — with no corresponding logic reading them, while `identity.timezone` and `identity.pronouns` (already present) were unused by the reasoning/interaction code that could most benefit from them. Trimming to only what's read, and wiring `timezone`/`pronouns`/the new availability fields into the contact-selection and interaction-phrasing logic that already existed, keeps the schema honest about what the system actually does.
+
+**Consequences:** Existing user databases seeded from the old schema retain the removed keys until reset; `UserDataManager` does not migrate them. CLI (`udb metadata get/set/delete`) and MCP (`set_metadata`) docstrings/examples were updated to reference the new keys. `request_user_interaction`'s clarification-question prompt now includes `identity.pronouns` when set, for correct third-person phrasing. `synthesize_results_nl`/`synthesize_expanded_nl` now append a locale-formatting instruction (dates/numbers/currency) when `identity.locale` is set (`UserQueryReasoner._locale_instruction`).

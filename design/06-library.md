@@ -127,26 +127,26 @@ Instantiates with a set of `UserDataMetric` instances.
 
 #### `contextualize_query(query)`
 
-Rewrites the query to be more suitable for user data retrieval.
+Rewrites the query into a clear, well-formed question and replaces every self-reference to the user (`"you"`, `"your"`, `"the user"`, pronouns, the user's own name, …) with the user's actual name from `identity.name`, so the rewritten query is unambiguous when read out of context. References to other people are left unchanged.
 
-**Example:** `"jobs suitable for me"` → `"What jobs are suitable for this user?"`
+**Example (user's name is "Alice"):** `"what is your age"` → `"What is Alice's age"`
 
 #### `expand_query(query)`
 
-Returns a list of complementary questions providing context for the original query. May draw on existing user data.
+Returns a list of standalone, third-person sub-questions that together help answer the original query — never clarification questions addressed to the user. Grounded in the facets the KB schema can actually answer (entity attributes and relations, exported via `KBSource.export_database_schema`) when a data manager is available. Scales to the query's complexity: an already-specific query may expand to an **empty list** rather than padding with filler; a broad query may expand to up to 5 sub-questions.
 
 **Example**
 
-Input: `"jobs suitable for me"`
+Input: `"jobs suitable for me"` (rewritten to `"What jobs are suitable for Alice?"` by `contextualize_query`)
 
 Output:
 ```python
 [
-    "What skills does the user have?",
-    "What titles is the user interested in?",
-    "Does the user have location constraints?",
-    "What is the user's expected compensation?",
-    "Does the user prefer remote work?"
+    "What skills does Alice have?",
+    "What titles is Alice interested in?",
+    "Does Alice have location constraints?",
+    "What is Alice's expected compensation?",
+    "Does Alice prefer remote work?"
 ]
 ```
 
@@ -271,9 +271,9 @@ Loads contact methods from user metadata via `UserDataManager`.
 
 ### Methods
 
-#### `identify_contact_method(query)`
+#### `identify_contact_method(topic=None)`
 
-Returns the `ContactMethod` most suitable for the given interaction context (e.g. active session if user is present, email otherwise).
+Returns the `ContactMethod` most suitable right now: the sole registered method if there's only one, otherwise an LLM choice weighing each method's `preference`, whether it's asynchronous, the user's stated `preferred_channel`/`working_hours`/`out_of_office` (`availability.*`, localized to `identity.timezone`), preferring an asynchronous method when the user is out of office or outside working hours. Falls back to the lowest-`preference` method (asynchronous-only, if any, when out of office) on LLM failure. `topic`, if given, layers `availability.by_topic.<topic>` overrides on top of the general `availability.*` settings.
 
 #### `get_contact_methods(name=None, protocol=None)`
 
