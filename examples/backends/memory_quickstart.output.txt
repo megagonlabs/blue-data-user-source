@@ -1,0 +1,6 @@
+Query executed: What does Alice do for work?
+Query executed: What skills does Alice possess?
+Query executed: Where has Alice worked?
+Query executed: What degrees does Alice have?
+Session: 4b1b9d46-9f97-400b-b14d-ace7ae187f34
+Answer: Alice is a data scientist who has worked at IBM for six years.

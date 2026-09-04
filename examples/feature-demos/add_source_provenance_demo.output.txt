@@ -1,0 +1,23 @@
+------------------------------------------------------------
+1. Type 1 -- provenance-only registration (no `queries`)
+------------------------------------------------------------
+  Sources registered in the KB: ["Alice's résumé"]
+  No `queries` passed -- nothing extracted into the KB graph yet.
+
+------------------------------------------------------------
+2. Type 2 -- registration + LLM extraction (`queries` passed)
+------------------------------------------------------------
+  Sources registered in the KB: ["Alice's résumé", "Alice's bio"]
+
+------------------------------------------------------------
+3. Both files are searchable via execute_query regardless of type
+------------------------------------------------------------
+Query executed: What courses has Alice taken?
+Query executed: What experience does Alice have?
+Query executed: Where has Alice worked?
+Query executed: What institutions has Alice studied at?
+Query executed: What skills does Alice possess?
+Query executed: What degrees has Alice attained?
+  Answer: Alice has 10 years of experience in machine learning and has worked at IBM as a data scientist for six years.
+
+Demo complete.

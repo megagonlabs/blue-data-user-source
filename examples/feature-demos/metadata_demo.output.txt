@@ -1,0 +1,27 @@
+------------------------------------------------------------
+1. Auto-seeded on creation -- every schema key present, null by default
+------------------------------------------------------------
+  identity: {'name': None, 'pronouns': None, 'locale': None, 'timezone': None}
+  preferences: {'communication_style': None, 'verbosity': None, 'language': None}
+  availability: {'working_hours': None, 'preferred_channel': None, 'out_of_office': None, 'by_topic': None}
+  privacy: {'data_sharing_preference': None, 'sensitive_categories': None, 'retention_days': None, 'consent_level': None}
+
+------------------------------------------------------------
+2. set_metadata / get_metadata
+------------------------------------------------------------
+  identity.name: Alice
+  preferences.verbosity: brief
+  identity.pronouns (never set): None
+
+------------------------------------------------------------
+3. delete_metadata
+------------------------------------------------------------
+  preferences.verbosity after delete: None
+
+------------------------------------------------------------
+4. availability.by_topic -- per-project overrides
+------------------------------------------------------------
+  General availability.working_hours: 09:00-17:00 Mon-Fri
+  General availability.preferred_channel: email
+  oncall override: {'working_hours': '00:00-23:59 Mon-Sun', 'preferred_channel': 'webhook'}
+  (no override for an unrelated topic: None )

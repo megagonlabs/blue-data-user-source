@@ -1,0 +1,21 @@
+------------------------------------------------------------
+1. Create user (Redis-backed registry, metadata, contacts, sessions)
+------------------------------------------------------------
+Metadata categories present after seeding: ['identity']
+(only 'identity' -- see the module docstring for why the other three don't land)
+
+------------------------------------------------------------
+2. Set metadata, register a contact method, start a session
+------------------------------------------------------------
+Session created: a9e2a9e8-d89b-40d4-a204-68b1ea486781
+
+------------------------------------------------------------
+3. Persistence -- reopen with a second RedisUserSource instance
+------------------------------------------------------------
+Users visible after reopen: ['alice']
+Metadata survived: {'name': 'Alice', 'timezone': 'America/New_York'}
+Contact methods survived: [('email', 'work')]
+Sessions survived: True
+
+Flushed Redis db=15 (this demo's isolated database)
+Demo complete.

@@ -1,0 +1,70 @@
+------------------------------------------------------------
+1. Create a user (all-in-memory: registry, KB, metadata, contacts, sessions)
+------------------------------------------------------------
+Users: ['carol']
+
+------------------------------------------------------------
+2. Seed metadata and register a contact method
+------------------------------------------------------------
+Metadata set: identity.name, identity.timezone, preferences.verbosity, availability.preferred_channel, privacy.consent_level
+Metadata snapshot: {'identity': {'name': 'Carol', 'pronouns': None, 'locale': None, 'timezone': 'America/Chicago'}, 'preferences': {'communication_style': None, 'verbosity': 'brief', 'language': None}, 'availability': {'working_hours': None, 'preferred_channel': 'email', 'out_of_office': None, 'by_topic': None}, 'privacy': {'data_sharing_preference': None, 'sensitive_categories': None, 'retention_days': None, 'consent_level': 'standard'}}
+
+------------------------------------------------------------
+3. add_source -- extract structured data from a bio into the KB
+------------------------------------------------------------
+list_data('carol') -> 2 row(s)
+list_sources('carol') -> 1 source(s): ['/tmp/udb-full-lifecycle-demo-27npugl9/carol-bio.txt']
+
+------------------------------------------------------------
+4. Run a session of two queries
+------------------------------------------------------------
+Created session df823bab-d9ba-45c3-9a79-52078ad6cc9d
+Query executed: What is Carol's job title and where does Carol work?
+Query executed: What is Carol's role in the organization?
+Query executed: Where did Carol work according to her work history?
+Metric completeness: score=1.0, passes=True, reasoning=The result set provides complete information to answer the query. It clearly states that Carol Diaz is a principal data scientist at Nimbus Analytics, which answers both parts of the query regarding her job title and place of employment. The repeated information across different entries further reinforces the completeness and reliability of the answer.
+Metric freshness: score=0.0, passes=False, reasoning=No provenance timestamps available.
+Metric privacy: score=0.9, passes=True, reasoning=These results provide professional information about Carol Diaz, including her job title and place of employment. The details are typical for publicly shared professional bios and do not include personal data beyond what is commonly found on professional networking sites. Since there is no sensitive or private information disclosed, the privacy concerns are minimal. However, even standard consent levels should ensure that such data was shared or published with Carol's consent. Without information to the contrary, we assume standard professional details do not violate privacy preferences significantly.
+
+────────────────────────────────────────────────────────────
+  To:       carol@example.com
+  From:     agent
+  Subject:  A question for you
+  Reply-To: interaction-be720fe8-79c7-4261-98ea-81d1cd8d6686@localhost
+────────────────────────────────────────────────────────────
+
+Could you provide more up-to-date information on your job title and where you work?
+
+Reply: 
+Q: What is Carol's job title and where does she work?
+A: Carol's job title is Principal Data Scientist, and she works at Nimbus Analytics, based in Austin, Texas.
+Query executed: Where does Carol live?
+Query executed: Where was Carol born?
+Query executed: Where is Carol based?
+Query executed: Where does Carol work?
+Query executed: Where has Carol traveled to recently?
+Metric completeness: score=0.85, passes=True, reasoning=The result set provides a clear and direct answer to the query regarding where Carol is based. Multiple entries confirm that Carol Diaz is a principal data scientist at Nimbus Analytics, located in Austin, Texas. This consistency across the results, combined with the specificity of the information, makes the result set highly reliable. However, because the query does not specify the time frame, there is an implicit assumption that this information remains current. This assumption slightly lowers the completeness score, as the nature of employment details could change over time without being reflected in the data provided.
+Metric freshness: score=0.0, passes=False, reasoning=No provenance timestamps available.
+Metric privacy: score=0.9, passes=True, reasoning=The information provided in the results is related to Carol's professional details, which are typically considered public information in a professional context. The details include her job title, employer, location, and a preference for email communication. As this is likely information that Carol might have shared publicly on professional networks or in professional bios, the privacy concerns are minimal. However, the score is not a perfect 1.0 because there might be minor privacy considerations depending on whether Carol explicitly consented to this data being aggregated and shared in this context.
+
+────────────────────────────────────────────────────────────
+  To:       carol@example.com
+  From:     agent
+  Subject:  A question for you
+  Reply-To: interaction-d09be8c3-a15a-4c90-9b5c-3f92acb6f34a@localhost
+────────────────────────────────────────────────────────────
+
+Could you provide more details on your current location?
+
+Reply: 
+Q: Where is Carol based?
+A: Carol is based in Austin, Texas.
+
+------------------------------------------------------------
+5. Inspect the session record, then end it
+------------------------------------------------------------
+Session df823bab-d9ba-45c3-9a79-52078ad6cc9d has 2 quer(y/ies), status=active
+After end_session: status=ended
+list_sessions('carol') -> 1 session(s) total
+
+Demo complete.

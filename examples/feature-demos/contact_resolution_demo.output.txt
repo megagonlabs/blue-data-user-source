@@ -1,0 +1,20 @@
+------------------------------------------------------------
+1. A single registered method is returned directly (no LLM call)
+------------------------------------------------------------
+  -> stdio/terminal
+
+------------------------------------------------------------
+2. Several methods -- preference + availability decide
+------------------------------------------------------------
+  In office, within working hours -> email/work
+
+------------------------------------------------------------
+3. out_of_office=True -- prefers an asynchronous method
+------------------------------------------------------------
+  Out of office -> email/work (is_async=True)
+
+------------------------------------------------------------
+4. availability.by_topic override
+------------------------------------------------------------
+  No topic (general preferred_channel=webhook) -> webhook/chatbot
+  topic='billing' (overrides to preferred_channel=email, out_of_office=True) -> email/work (is_async=True)

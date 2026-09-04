@@ -1,0 +1,62 @@
+============================================================
+Scenario: resolving missing data through interactive clarification
+============================================================
+
+Problem:  a query needs information the user's data store doesn't have yet.
+          Returning an incomplete answer, or guessing, would be wrong.
+Solution: execute_query's completeness check asks the user directly through
+          their preferred contact method, then re-checks -- see ADR-022.
+
+------------------------------------------------------------
+Step 1 -- create Alice's user database with a partial profile
+------------------------------------------------------------
+Seeded Alice's profile: job title, years of experience -- nothing about compensation
+
+------------------------------------------------------------
+Step 2 -- register Alice's contact method (stdio, for this demo)
+------------------------------------------------------------
+Registered a stdio contact method
+
+------------------------------------------------------------
+Step 3 -- run the query: 'What salary range and notice period should a recruiter expect for Alice?'
+------------------------------------------------------------
+(the KB has nothing about salary or notice period, so the completeness check
+is expected to fail and trigger a clarifying question over stdio)
+Query executed: What salary range and notice period should a recruiter expect for Alice?
+Metric completeness: score=0.2, passes=False, reasoning=The result set provides information about Alice's professional background, including her role, experience, and accomplishments. However, it does not directly address the query regarding salary range and notice period expectations. The information is incomplete for the purpose of predicting or understanding Alice's salary and notice period requirements. Additional data related to compensation benchmarks in her field, as well as standard notice periods for comparable positions, would be necessary to accurately answer the query.
+Metric freshness: score=0.0, passes=False, reasoning=No provenance timestamps available.
+Metric privacy: score=1.0, passes=True, reasoning=The results provided do not include any personally identifiable information about Alice, such as her full name, contact details, or current employer. The information is presented in a professional context, focusing on her role, experience, and contributions, which are typical and expected for assessing a candidate's fit for a position. As such, there are no privacy concerns, aligning with a typical job application scenario.
+
+Could you provide more details about the salary range and notice period that a recruiter should expect from you? Some of the data quality checks, like completeness and freshness, didn't pass, so more information would be helpful.
+> 
+============================================================
+Result
+============================================================
+Session: 4e794983-ef07-4538-ba90-759195284051
+
+Synthesized answer:
+Alice's expected salary range is $150,000 to $170,000 base, plus standard equity. She would need to give her current employer a 4-week notice period.
+
+Expanded (per-sub-question) results -- look for the query answered by Alice herself:
+Alice is a seasoned professional in the field of software engineering, with a wealth of experience accumulated over eight years. Her specialization lies in distributed systems, a complex area that demands a high level of expertise and understanding. Throughout her career, Alice has demonstrated significant leadership skills by spearheading two major platform migrations, a testament to her ability to manage and execute large-scale projects effectively. Additionally, she contributes to the development of her team by mentoring junior engineers, highlighting her commitment to fostering talent and teamwork.
+
+In terms of compensation, Alice is seeking a base salary in the range of $150,000 to $170,000. This figure reflects her considerable experience and the specialized skills she brings to the table. Furthermore, Alice values comprehensive compensation packages that include not just a competitive salary but also standard equity, indicating an interest in having a stake in the company's growth and success.
+
+Regarding her current employment, Alice is required to provide a four-week notice period. This timeline allows her to ensure a smooth transition and fulfill any final responsibilities, which demonstrates her professionalism and dedication to her current role. This notice period should be taken into account by any potential recruiter or employer when considering Alice for a new position.
+
+Session record shows 1 interaction(s) over this query:
+  channel=stdio/default question="Could you provide more details about the salary range and notice period that a recruiter should expect from you? Some of the data quality checks, like completeness and freshness, didn't pass, so more information would be helpful." response="I'm looking for $150,000-$170,000 base plus standard equity, and I'd need to give my current employer 4 weeks notice."
+
+The completeness check failed on the first pass, Alice was asked directly,
+and her answer resolved it -- the caller only ever made one execute_query call.
+
+Gotcha: FreshnessMetric (evaluated alongside CompletenessMetric on every round)
+still fails even after Alice answers -- it scores off `modified`/`created`
+timestamps that only show up in query_results_metadata when the KB answer-agent
+happens to call get_metadata for that lookup, which it doesn't always do. With no
+timestamps at all, freshness scores 0.0 and can never pass, regardless of what the
+user says. In a real deployment with max_interaction_rounds > 1 this can burn every
+remaining round on an unresolvable metric even after the metric that actually
+needed the user's input has already passed.
+
+Demo complete.

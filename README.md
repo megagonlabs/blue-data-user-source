@@ -11,7 +11,7 @@ A per-user personal data store with natural language querying, LLM-based data ex
 - **Interact** via configurable contact channels (stdio, email, SMS, etc.) to verify stale data or fill in missing information, with responses persisted back to the store and to the session's record.
 - **Output** query results as structured JSON, a Rich table, or a synthesized natural language answer.
 
-See [docs/features.md](docs/features.md) for the full list with examples.
+See [docs/features.md](docs/features.md) for the full list with examples, or [examples/](examples/README.md) for runnable scripts.
 
 ## Repository layout
 
