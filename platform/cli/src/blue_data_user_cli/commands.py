@@ -1532,7 +1532,7 @@ def metadata_get(obj: dict, path: tuple[str, ...]) -> None:
 
     \b
       udb metadata get identity name
-      udb metadata get policy auto_approve
+      udb metadata get privacy consent_level
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1562,7 +1562,7 @@ def metadata_set(obj: dict, args: tuple[str, ...]) -> None:
     \b
       udb metadata set identity name "Alice"
       udb metadata set preferences verbosity brief
-      udb metadata set policy auto_approve '["read","draft"]'
+      udb metadata set availability preferred_channel email
     """
     if len(args) < 2:
         err.print("[red]Error:[/red] Provide at least one key segment and a value.")
@@ -1592,7 +1592,6 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
 
     \b
       udb metadata delete identity pronouns
-      udb metadata delete credentials github
     """
     key = ".".join(path)
     if not yes:

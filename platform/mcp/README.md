@@ -222,7 +222,7 @@ Without `queries`, registers the source for provenance only (Type 1). With
 | `value` | `Any` | Value to store (string, number, boolean, list, or dict) |
 
 Common keys: `identity.name`, `identity.email`, `preferences.verbosity`,
-`preferences.language`, `policy.auto_approve`, `skills`, `availability`.
+`preferences.language`, `availability.preferred_channel`, `privacy.consent_level`.
 
 #### `delete_metadata`
 

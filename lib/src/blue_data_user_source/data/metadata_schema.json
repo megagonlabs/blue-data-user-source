@@ -4,41 +4,20 @@
     "name":     { "description": "Full name.",                              "type": "str",  "default": null },
     "pronouns": { "description": "Preferred pronouns (e.g. they/them).",   "type": "str",  "default": null },
     "locale":   { "description": "IETF locale tag (e.g. en-US).",          "type": "str",  "default": null },
-    "timezone": { "description": "IANA timezone (e.g. America/New_York).", "type": "str",  "default": null },
-    "role":     { "description": "Job title or role (e.g. data scientist).", "type": "str", "default": null }
+    "timezone": { "description": "IANA timezone (e.g. America/New_York).", "type": "str",  "default": null }
   },
   "preferences": {
     "__description__": "Agent communication preferences.",
     "communication_style": { "description": "Tone agents should use: formal | casual.",         "type": "str",  "default": null },
     "verbosity":           { "description": "Response length: brief | detailed.",               "type": "str",  "default": null },
-    "output_format":       { "description": "Preferred format: markdown | plain | json.",       "type": "str",  "default": null },
     "language":            { "description": "Response language (e.g. English).",                "type": "str",  "default": null }
-  },
-  "policy": {
-    "__description__": "Permissions and delegation rules for agents.",
-    "auto_approve":         { "description": "Action types agents may take without asking.",        "type": "list", "default": null },
-    "require_confirmation": { "description": "Action types that always need approval.",             "type": "list", "default": null },
-    "trusted_agents":       { "description": "Agent names/IDs allowed to act on your behalf.",     "type": "list", "default": null },
-    "data_scope":           { "description": "Data categories agents may read.",                   "type": "list", "default": null }
-  },
-  "credentials": {
-    "__description__": "Per-service authentication tokens. Add keys as credentials.<service>.token or .api_key.",
-    "__open__": true
-  },
-  "skills": {
-    "__description__": "Domain expertise areas.",
-    "domains": { "description": "List of skill or domain names (e.g. [\"python\", \"data analysis\"]).", "type": "list", "default": null }
   },
   "availability": {
     "__description__": "Working hours and contact preferences.",
-    "working_hours":     { "description": "Working hours (e.g. 09:00-17:00 EST Mon-Fri).", "type": "str",  "default": null },
+    "working_hours":     { "description": "Working hours (e.g. 09:00-17:00 Mon-Fri, localized via identity.timezone).", "type": "str",  "default": null },
     "preferred_channel": { "description": "Preferred contact channel: email | slack | sms.", "type": "str", "default": null },
-    "response_sla":      { "description": "Expected response time (e.g. 1h).",             "type": "str",  "default": null }
-  },
-  "instructions": {
-    "__description__": "Standing instructions agents always follow.",
-    "always": { "description": "List of rules that always apply.",  "type": "list", "default": null },
-    "never":  { "description": "List of actions agents must never take.", "type": "list", "default": null }
+    "out_of_office":     { "description": "Whether the user is currently out of office; when true, contact selection prefers asynchronous methods (e.g. email) over synchronous ones (e.g. sms).", "type": "bool", "default": null },
+    "by_topic":          { "description": "Per-project/topic availability overrides. Add keys as availability.by_topic.<topic>.working_hours / .preferred_channel / .out_of_office to override the settings above for a specific project or topic.", "type": "dict", "default": null }
   },
   "privacy": {
     "__description__": "Data privacy preferences and consent settings.",

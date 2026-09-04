@@ -39,8 +39,7 @@ class UserSource(DataSource):
       extracted from text or imported files. Queried via natural language through
       ``execute_query`` / ``execute_query_nl``.
     - ``"metadata"`` (``JSONSource``) — structured metadata agents use when acting on
-      the user's behalf: identity, preferences, policy (auto-approve/require-confirmation),
-      credentials, skills, availability, and standing instructions. Seeded from
+      the user's behalf: identity, preferences, availability, and privacy. Seeded from
       ``data/metadata_schema.json`` on user creation so all keys are present (null) by
       default.
     - ``"contacts"`` (``JSONSource``) — preferred contact methods (email, Slack, SMS, …)
@@ -92,7 +91,7 @@ class UserSource(DataSource):
                 "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
             },
         })
-        results = us.execute_query("what are alice's skills?", database="alice")
+        results = us.execute_query("what timezone is alice in?", database="alice")
         us.set_metadata("alice", "preferences.verbosity", "brief")
     """
 

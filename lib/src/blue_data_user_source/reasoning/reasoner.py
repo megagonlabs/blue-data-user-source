@@ -202,6 +202,7 @@ class UserQueryReasoner:
         data: list[Any],
         metadata: dict[str, Any],
         metrics: list[MetricEvaluation],
+        topic: str | None = None,
     ) -> tuple[list[Any], dict[str, Any]]:
         from blue_data_user_source.interaction import ContactManager, SessionManager
         from blue_data_user_source.types import InteractionError, QueryError
@@ -221,7 +222,7 @@ class UserQueryReasoner:
         contact_manager = ContactManager(
             database=self._manager._database, data_manager=self._manager
         )
-        channel = await contact_manager.identify_contact_method()
+        channel = await contact_manager.identify_contact_method(topic=topic)
 
         failing_names = [m.name for m in metrics if not m.passes]
         raw_question = (
@@ -231,22 +232,29 @@ class UserQueryReasoner:
         )
 
         user_name = self._manager.get_metadata("identity.name") or self._manager._database
+        pronouns = self._manager.get_metadata("identity.pronouns")
         communication_style = self._manager.get_metadata("preferences.communication_style") or "neutral"
         verbosity = self._manager.get_metadata("preferences.verbosity") or "normal"
         language = self._manager.get_metadata("preferences.language") or "English"
+
+        context_lines = [f"User's name: {user_name}"]
+        if pronouns:
+            context_lines.append(f"User's pronouns: {pronouns}")
+        context_lines += [
+            f"Contact method: {channel.protocol} ({channel.name})",
+            f"Communication style: {communication_style}",
+            f"Verbosity: {verbosity}",
+            f"Language: {language}",
+        ]
 
         prompt = (
             "Rewrite the following question to a user in a more natural way, "
             "addressing them directly (without mentioning their name). "
             "The user's name is provided so you can distinguish questions about them "
             "from questions about other people — do not turn questions about others into 'you' questions. "
+            "If pronouns are provided, use them correctly for any third-person references. "
             "Return only the rewritten question.\n\n"
-            f"Question: {raw_question}\n\n"
-            f"User's name: {user_name}\n"
-            f"Contact method: {channel.protocol} ({channel.name})\n"
-            f"Communication style: {communication_style}\n"
-            f"Verbosity: {verbosity}\n"
-            f"Language: {language}"
+            f"Question: {raw_question}\n\n" + "\n".join(context_lines)
         )
         user_question = await _llm_complete(prompt)
         if not user_question:
@@ -279,6 +287,7 @@ class UserQueryReasoner:
         data: list[Any],
         metadata: dict[str, Any],
         max_rounds: int = 3,
+        topic: str | None = None,
     ) -> list[Any]:
         """Assess result quality and, if needed, resolve it via user interaction.
 
@@ -289,6 +298,8 @@ class UserQueryReasoner:
 
         ``query`` is the original, user-facing query (used to phrase the question);
         ``assessment_query`` is the rewritten query used for metric evaluation.
+        ``topic`` optionally scopes contact-method selection to a project/topic
+        availability override (see ``ContactManager.identify_contact_method``).
 
         Returns only the newly collected user responses, in round order (empty if
         no interaction was needed).
@@ -298,10 +309,19 @@ class UserQueryReasoner:
         for _ in range(max_rounds):
             if not await self.assess_user_interaction(assessment_query, data, metadata, metrics):
                 break
-            data, metadata = await self.request_user_interaction(query, data, metadata, metrics)
+            data, metadata = await self.request_user_interaction(
+                query, data, metadata, metrics, topic=topic
+            )
             new_items.append(data[-1])
             metrics = await self.assess_query_results(assessment_query, data, metadata)
         return new_items
+
+    def _locale_instruction(self) -> str:
+        locale = self._manager.get_metadata("identity.locale") if self._manager is not None else None
+        return (
+            f" Format any dates, numbers, and currency amounts per {locale} locale conventions."
+            if locale else ""
+        )
 
     async def synthesize_results_nl(self, original_query: str, results: list[QueryResult]) -> str:
         pairs = "\n".join(f"Q: {r.query}\nA: {r.results}" for r in results)
@@ -309,7 +329,8 @@ class UserQueryReasoner:
             f"The user asked: \"{original_query}\"\n\n"
             f"The following sub-questions were answered:\n{pairs}\n\n"
             "Write a clear, concise natural language response that directly answers the user's "
-            "original question using only the information above. Do not mention sub-questions."
+            f"original question using only the information above.{self._locale_instruction()} "
+            "Do not mention sub-questions."
         )
         return await _llm_complete(prompt)
 
@@ -327,8 +348,8 @@ class UserQueryReasoner:
             "While answering a user's question, the following sub-questions were "
             f"explored, along with their raw results:\n{pairs}\n\n"
             "Write a few short paragraphs of natural language, organized by topic, "
-            "summarizing this supplemental information for the user. Do not use a "
-            "Q: / A: transcript format, and do not include raw JSON or data "
+            f"summarizing this supplemental information for the user.{self._locale_instruction()} "
+            "Do not use a Q: / A: transcript format, and do not include raw JSON or data "
             "structures — write flowing prose."
         )
         return await _llm_complete(prompt)

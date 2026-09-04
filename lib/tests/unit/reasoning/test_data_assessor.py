@@ -285,6 +285,57 @@ async def test_privacy_handles_llm_error_gracefully() -> None:
     assert ev.passes is False
 
 
+# ── PrivacyMetric consent-level threshold ──────────────────────────────────────
+
+def _manager_with_consent(consent_level: str | None) -> MagicMock:
+    mock_manager = MagicMock()
+    mock_manager.get_metadata = lambda key: (
+        consent_level if key == "privacy.consent_level" else None
+    )
+    return mock_manager
+
+
+async def test_privacy_minimal_consent_raises_threshold_above_default() -> None:
+    # 0.7 passes the default 0.6 threshold but not "minimal" consent's 0.8.
+    mock_llm = AsyncMock(return_value={"score": 0.7, "reasoning": "borderline"})
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", mock_llm):
+        ev = await PrivacyMetric(manager=_manager_with_consent("minimal")).evaluate("q", [], {})
+    assert ev.passes is False
+
+
+async def test_privacy_full_consent_lowers_threshold_below_default() -> None:
+    # 0.5 fails the default 0.6 threshold but passes "full" consent's 0.4.
+    mock_llm = AsyncMock(return_value={"score": 0.5, "reasoning": "acceptable"})
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", mock_llm):
+        ev = await PrivacyMetric(manager=_manager_with_consent("full")).evaluate("q", [], {})
+    assert ev.passes is True
+
+
+async def test_privacy_standard_consent_matches_default_threshold() -> None:
+    mock_llm = AsyncMock(return_value={"score": 0.6, "reasoning": "ok"})
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", mock_llm):
+        ev = await PrivacyMetric(manager=_manager_with_consent("standard")).evaluate("q", [], {})
+    assert ev.passes is True
+
+
+async def test_privacy_unrecognized_consent_level_falls_back_to_default_threshold() -> None:
+    mock_llm = AsyncMock(return_value={"score": 0.6, "reasoning": "ok"})
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", mock_llm):
+        ev = await PrivacyMetric(manager=_manager_with_consent("unspecified-level")).evaluate("q", [], {})
+    assert ev.passes is True
+
+
+async def test_privacy_no_manager_uses_default_threshold() -> None:
+    mock_llm = AsyncMock(return_value={"score": 0.6, "reasoning": "ok"})
+    with patch("blue_data_user_source.reasoning.reasoner._llm_complete", mock_llm):
+        ev = await PrivacyMetric().evaluate("q", [], {})
+    assert ev.passes is True
+
+
+def test_base_metric_threshold_defaults_to_class_threshold() -> None:
+    assert UserDataMetric()._threshold() == UserDataMetric.THRESHOLD
+
+
 # ── MetricEvaluation / UserDataMetric base ────────────────────────────────────
 
 def test_metric_evaluation_dataclass_fields() -> None:

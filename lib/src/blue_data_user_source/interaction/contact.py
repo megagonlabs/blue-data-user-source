@@ -1,14 +1,61 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
 from blue_data_user_source.types import InteractionError
+
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_WORKING_HOURS_RE = re.compile(
+    r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2}).*?"
+    r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*\s*-\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*",
+    re.IGNORECASE,
+)
+
+
+def _is_within_working_hours(
+    working_hours: str | None, tz_name: str | None, now_utc: datetime
+) -> bool | None:
+    """Best-effort check of whether ``now_utc`` falls within a free-text working-hours
+    window such as "09:00-17:00 Mon-Fri", localized to ``tz_name`` if given.
+
+    Returns ``None`` (unknown) when the inputs are missing or don't match the
+    supported "<start>-<end> ... <DayStart>-<DayEnd>" shape — callers should
+    treat ``None`` as "don't know", not as "outside hours".
+    """
+    if not working_hours:
+        return None
+    match = _WORKING_HOURS_RE.search(working_hours)
+    if not match:
+        return None
+    start_s, end_s, day_start, day_end = match.groups()
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    except Exception:
+        tz = timezone.utc
+    local_now = now_utc.astimezone(tz)
+    start_h, start_m = (int(p) for p in start_s.split(":"))
+    end_h, end_m = (int(p) for p in end_s.split(":"))
+    start_minutes, end_minutes = start_h * 60 + start_m, end_h * 60 + end_m
+    now_minutes = local_now.hour * 60 + local_now.minute
+    try:
+        day_start_idx = _WEEKDAYS.index(day_start[:3].title())
+        day_end_idx = _WEEKDAYS.index(day_end[:3].title())
+    except ValueError:
+        return None
+    weekday = local_now.weekday()
+    if day_start_idx <= day_end_idx:
+        day_ok = day_start_idx <= weekday <= day_end_idx
+    else:
+        day_ok = weekday >= day_start_idx or weekday <= day_end_idx
+    return day_ok and start_minutes <= now_minutes <= end_minutes
 
 
 class ContactMethod:
@@ -17,6 +64,10 @@ class ContactMethod:
     SUPPORTED_PROTOCOLS = frozenset(
         {"session", "email", "sms", "stdio", "messaging", "enterprise", "notification", "webhook"}
     )
+
+    # Protocols that don't expect an immediate reply — favored when the user
+    # is out of office or outside their stated working hours.
+    ASYNC_PROTOCOLS = frozenset({"email", "webhook", "notification"})
 
     def __init__(self, protocol: str, name: str, details: dict[str, Any]) -> None:
         if protocol not in self.SUPPORTED_PROTOCOLS:
@@ -28,6 +79,10 @@ class ContactMethod:
     @property
     def preference(self) -> int:
         return int(self.details.get("preference", 0))
+
+    @property
+    def is_async(self) -> bool:
+        return self.protocol in self.ASYNC_PROTOCOLS
 
     def interact(self, interaction_id: str | None = None) -> InteractionManager:
         """Build an InteractionManager for this contact method.
@@ -339,31 +394,74 @@ class ContactManager:
     # Preferred channel                                                    #
     # ------------------------------------------------------------------ #
 
-    async def identify_contact_method(self) -> ContactMethod:
+    async def identify_contact_method(self, topic: str | None = None) -> ContactMethod:
+        """Pick a contact method, optionally scoped to a project/topic.
+
+        ``topic`` looks up ``availability.by_topic.<topic>`` overrides
+        (``working_hours``, ``preferred_channel``, ``out_of_office``) layered
+        on top of the general ``availability.*`` settings.
+        """
         methods = await self.list_contact_methods()
         if not methods:
             return ContactMethod(protocol="stdio", name="default", details={})
         if len(methods) == 1:
             return methods[0]
-        return await self._choose_contact_method(methods)
+        return await self._choose_contact_method(methods, topic=topic)
 
-    async def _choose_contact_method(self, methods: list[ContactMethod]) -> ContactMethod:
+    def _resolve_availability(self, topic: str | None) -> dict[str, Any]:
+        """Merge general ``availability.*`` metadata with a topic override, if any."""
+        availability = {
+            "preferred_channel": self._data_manager.get_metadata("availability.preferred_channel"),
+            "working_hours": self._data_manager.get_metadata("availability.working_hours"),
+            "out_of_office": bool(self._data_manager.get_metadata("availability.out_of_office")),
+        }
+        if topic:
+            override = self._data_manager.get_metadata(f"availability.by_topic.{topic}")
+            if isinstance(override, dict):
+                for key in ("preferred_channel", "working_hours"):
+                    if override.get(key) is not None:
+                        availability[key] = override[key]
+                if override.get("out_of_office") is not None:
+                    availability["out_of_office"] = bool(override["out_of_office"])
+        return availability
+
+    async def _choose_contact_method(
+        self, methods: list[ContactMethod], topic: str | None = None
+    ) -> ContactMethod:
         """Ask an LLM to pick among several available contact methods.
 
-        Falls back to the lowest-``preference`` method if the LLM call fails
-        or returns a choice that isn't one of the options.
+        Falls back to the lowest-``preference`` method (restricted to
+        asynchronous protocols when the user is out of office, if any such
+        method is available) if the LLM call fails or returns a choice that
+        isn't one of the options.
         """
         from blue_data_user_source.reasoning.reasoner import _llm_complete
 
-        fallback = min(methods, key=lambda m: m.preference)
+        availability = self._resolve_availability(topic)
+        preferred_channel = availability["preferred_channel"]
+        working_hours = availability["working_hours"]
+        out_of_office = availability["out_of_office"]
 
-        preferred_channel = self._data_manager.get_metadata("availability.preferred_channel")
-        working_hours = self._data_manager.get_metadata("availability.working_hours")
+        tz_name = self._data_manager.get_metadata("identity.timezone")
         now = datetime.now(timezone.utc)
+        within_hours = _is_within_working_hours(working_hours, tz_name, now)
+
+        fallback = min(methods, key=lambda m: m.preference)
+        if out_of_office:
+            async_methods = [m for m in methods if m.is_async]
+            if async_methods:
+                fallback = min(async_methods, key=lambda m: m.preference)
+
+        try:
+            local_time_str = now.astimezone(ZoneInfo(tz_name)).strftime("%A, %Y-%m-%d %H:%M %Z") \
+                if tz_name else f"{now.strftime('%A, %Y-%m-%d %H:%M')} UTC"
+        except Exception:
+            local_time_str = f"{now.strftime('%A, %Y-%m-%d %H:%M')} UTC"
+        within_hours_str = {True: "yes", False: "no", None: "unknown"}[within_hours]
 
         options = "\n".join(
-            f"- protocol={m.protocol!r}, name={m.name!r}, preference={m.preference} "
-            "(lower preference = more favored)"
+            f"- protocol={m.protocol!r}, name={m.name!r}, preference={m.preference}, "
+            f"asynchronous={'yes' if m.is_async else 'no'} (lower preference = more favored)"
             for m in methods
         )
         prompt = (
@@ -372,9 +470,14 @@ class ContactManager:
             f"User's stated preferred channel (free text, may be empty or not match any option): "
             f"{preferred_channel or 'not specified'}\n"
             f"User's working hours (free text): {working_hours or 'not specified'}\n"
-            f"Current time (UTC): {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n"
-            "Weigh the stated preferred channel and working hours alongside each method's "
-            "preference ranking. Pick exactly one method from the list above. "
+            f"Current time in the user's timezone: {local_time_str}\n"
+            f"Currently within stated working hours: {within_hours_str}\n"
+            f"User is currently out of office: {'yes' if out_of_office else 'no'}\n\n"
+            "Weigh the stated preferred channel, working hours, and out-of-office status "
+            "alongside each method's preference ranking. If the user is out of office or it "
+            "is currently outside working hours, prefer an asynchronous method over a "
+            "synchronous one when a reasonable asynchronous option exists. Pick exactly one "
+            "method from the list above. "
             'Return only a JSON object: {"protocol": "<protocol>", "name": "<name>"}'
         )
         result = await _llm_complete(prompt, properties={"response_format": "json_object"})

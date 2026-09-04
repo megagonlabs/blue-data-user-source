@@ -57,7 +57,7 @@ async def test_delete_metadata(manager: UserDataManager) -> None:
 
 async def test_list_metadata_contains_all_schema_categories(manager: UserDataManager) -> None:
     meta = manager.list_metadata()
-    for category in ("identity", "preferences", "policy", "credentials", "skills", "availability", "instructions"):
+    for category in ("identity", "preferences", "availability", "privacy"):
         assert category in meta
 
 

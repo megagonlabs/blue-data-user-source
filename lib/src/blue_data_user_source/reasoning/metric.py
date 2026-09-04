@@ -40,6 +40,15 @@ class UserDataMetric:
     ) -> bool:
         return True
 
+    def _threshold(self) -> float:
+        """Score cutoff for ``passes`` (score >= threshold).
+
+        Defaults to the class-level ``THRESHOLD``. Subclasses that want their
+        pass bar to move with user metadata (e.g. stricter privacy scrutiny
+        for a lower consent level) override this — see ``PrivacyMetric``.
+        """
+        return self.THRESHOLD
+
 
 class CompletenessMetric(UserDataMetric):
     """Measures whether enough information is available to answer the query."""
@@ -74,7 +83,7 @@ class CompletenessMetric(UserDataMetric):
             name="completeness",
             score=score,
             reasoning=reasoning,
-            passes=score >= self.THRESHOLD,
+            passes=score >= self._threshold(),
         )
 
 
@@ -128,12 +137,20 @@ class FreshnessMetric(UserDataMetric):
             name="freshness",
             score=score,
             reasoning=reasoning,
-            passes=score >= self.THRESHOLD,
+            passes=score >= self._threshold(),
         )
 
 
 class PrivacyMetric(UserDataMetric):
     """Measures whether query results comply with the user's privacy preferences."""
+
+    # privacy.consent_level -> pass threshold. Lower consent means less tolerance
+    # for privacy risk, so the score must be higher to pass.
+    _CONSENT_LEVEL_THRESHOLDS: dict[str, float] = {
+        "minimal": 0.8,
+        "standard": 0.6,
+        "full": 0.4,
+    }
 
     def __init__(
         self,
@@ -142,6 +159,13 @@ class PrivacyMetric(UserDataMetric):
     ) -> None:
         super().__init__(properties)
         self._manager = manager
+
+    def _threshold(self) -> float:
+        if self._manager is not None:
+            consent_level = self._manager.get_metadata("privacy.consent_level")
+            if consent_level in self._CONSENT_LEVEL_THRESHOLDS:
+                return self._CONSENT_LEVEL_THRESHOLDS[consent_level]
+        return self.THRESHOLD
 
     async def evaluate(
         self,
@@ -179,5 +203,5 @@ class PrivacyMetric(UserDataMetric):
             name="privacy",
             score=score,
             reasoning=reasoning,
-            passes=score >= self.THRESHOLD,
+            passes=score >= self._threshold(),
         )
