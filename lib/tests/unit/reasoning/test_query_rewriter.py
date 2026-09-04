@@ -189,3 +189,87 @@ async def test_request_user_interaction_message_mentions_failing_metrics(reasone
         await reasoner.request_user_interaction("query?", [], {}, failing)
 
     assert len(sent) == 1
+
+
+# ── resolve_via_interaction ─────────────────────────────────────────────────────
+
+def _mock_contact_manager(responses: list[str]) -> AsyncMock:
+    mock_interaction = AsyncMock()
+    mock_interaction.send = AsyncMock(side_effect=list(responses))
+
+    mock_method = MagicMock()
+    mock_method.protocol = "stdio"
+    mock_method.name = "default"
+    mock_method.interact.return_value = mock_interaction
+
+    mock_cm = AsyncMock()
+    mock_cm.identify_contact_method = AsyncMock(return_value=mock_method)
+    return mock_cm
+
+
+async def test_resolve_via_interaction_stops_once_metrics_pass(reasoner: UserQueryReasoner) -> None:
+    failing = [MetricEvaluation(name="completeness", score=0.1, reasoning="", passes=False)]
+    passing = [MetricEvaluation(name="completeness", score=0.9, reasoning="", passes=True)]
+
+    # 1st call: initial assessment (fails). 2nd call: re-assessment after the
+    # user's response (passes), which should stop the loop after one round.
+    reasoner.assess_query_results = AsyncMock(side_effect=[failing, passing])  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "blue_data_user_source.interaction.ContactManager",
+            return_value=_mock_contact_manager(["remote"]),
+        ),
+        patch.object(reasoner._manager, "store_data", AsyncMock()),
+        patch(
+            "blue_data_user_source.reasoning.reasoner._llm_complete",
+            AsyncMock(return_value="Could you share more?"),
+        ),
+    ):
+        new_items = await reasoner.resolve_via_interaction(
+            "location?", "location?", ["existing"], {}, max_rounds=3
+        )
+
+    assert new_items == ["remote"]
+    assert reasoner.assess_query_results.await_count == 2
+
+
+async def test_resolve_via_interaction_stops_at_max_rounds(reasoner: UserQueryReasoner) -> None:
+    failing = [MetricEvaluation(name="completeness", score=0.1, reasoning="", passes=False)]
+
+    # Never passes, so the loop should run exactly max_rounds times.
+    reasoner.assess_query_results = AsyncMock(return_value=failing)  # type: ignore[method-assign]
+
+    with (
+        patch(
+            "blue_data_user_source.interaction.ContactManager",
+            return_value=_mock_contact_manager(["a", "b"]),
+        ),
+        patch.object(reasoner._manager, "store_data", AsyncMock()),
+        patch(
+            "blue_data_user_source.reasoning.reasoner._llm_complete",
+            AsyncMock(return_value="Could you share more?"),
+        ),
+    ):
+        new_items = await reasoner.resolve_via_interaction(
+            "location?", "location?", ["existing"], {}, max_rounds=2
+        )
+
+    assert new_items == ["a", "b"]
+    # initial assessment + one re-assessment per round
+    assert reasoner.assess_query_results.await_count == 3
+
+
+async def test_resolve_via_interaction_no_rounds_when_metrics_already_pass(
+    reasoner: UserQueryReasoner,
+) -> None:
+    passing = [MetricEvaluation(name="completeness", score=0.9, reasoning="", passes=True)]
+    reasoner.assess_query_results = AsyncMock(return_value=passing)  # type: ignore[method-assign]
+
+    with patch("blue_data_user_source.interaction.ContactManager") as mock_cm_cls:
+        new_items = await reasoner.resolve_via_interaction(
+            "location?", "location?", ["existing"], {}, max_rounds=3
+        )
+
+    assert new_items == []
+    mock_cm_cls.assert_not_called()

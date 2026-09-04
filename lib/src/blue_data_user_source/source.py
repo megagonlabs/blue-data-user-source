@@ -426,6 +426,10 @@ class UserSource(DataSource):
         returned alongside the synthesized answer, in the same output_form
         (a list of ``{"query", "results"}`` dicts for "json", or a short prose
         summary organized by topic for "nl").
+
+        ``max_interaction_rounds`` (default 3) bounds how many times the user is
+        asked for clarification when quality metrics fail; the loop stops early
+        once all metrics pass.
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
@@ -470,27 +474,19 @@ class UserSource(DataSource):
         for _, meta in raw_results:
             all_metadata.update(meta)
 
-        # Phase 3: assess aggregate quality — metrics run in parallel
-        metrics = await reasoner.assess_query_results(rewritten, all_data, all_metadata)
-
-        # Phase 4: single interaction decision on aggregate results
-        needs_interaction = await reasoner.assess_user_interaction(
-            rewritten, all_data, all_metadata, metrics
-        )
-
         results: list[QueryResult] = [
             QueryResult(query=q, results=data)
             for q, (data, _) in zip(questions, raw_results)
         ]
 
-        if needs_interaction:
-            augmented, _ = await reasoner.request_user_interaction(
-                query, all_data, all_metadata, metrics
-            )
-            # Surface only the newly collected items (user response) as a separate result
-            new_items = augmented[len(all_data):]
-            if new_items:
-                results.append(QueryResult(query=query, results=new_items))
+        # Phase 3: assess aggregate quality, resolving via user interaction if needed
+        max_rounds = int(props.get("max_interaction_rounds", 3))
+        new_items = await reasoner.resolve_via_interaction(
+            query, rewritten, all_data, all_metadata, max_rounds=max_rounds
+        )
+        # Surface the user's responses (one per round) as a separate result
+        if new_items:
+            results.append(QueryResult(query=query, results=new_items))
 
         if output_form == "nl":
             answer: Any = await reasoner.synthesize_results_nl(query, results)

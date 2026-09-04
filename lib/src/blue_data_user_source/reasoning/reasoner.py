@@ -272,6 +272,37 @@ class UserQueryReasoner:
 
         return list(data) + [response], metadata
 
+    async def resolve_via_interaction(
+        self,
+        query: str,
+        assessment_query: str,
+        data: list[Any],
+        metadata: dict[str, Any],
+        max_rounds: int = 3,
+    ) -> list[Any]:
+        """Assess result quality and, if needed, resolve it via user interaction.
+
+        Owns the full assess-then-interact cycle: evaluates quality metrics on
+        ``data``/``metadata``, and while they don't all pass, asks the user for
+        clarification and re-assesses the augmented result — up to ``max_rounds``
+        times, stopping as soon as every metric passes.
+
+        ``query`` is the original, user-facing query (used to phrase the question);
+        ``assessment_query`` is the rewritten query used for metric evaluation.
+
+        Returns only the newly collected user responses, in round order (empty if
+        no interaction was needed).
+        """
+        new_items: list[Any] = []
+        metrics = await self.assess_query_results(assessment_query, data, metadata)
+        for _ in range(max_rounds):
+            if not await self.assess_user_interaction(assessment_query, data, metadata, metrics):
+                break
+            data, metadata = await self.request_user_interaction(query, data, metadata, metrics)
+            new_items.append(data[-1])
+            metrics = await self.assess_query_results(assessment_query, data, metadata)
+        return new_items
+
     async def synthesize_results_nl(self, original_query: str, results: list[QueryResult]) -> str:
         pairs = "\n".join(f"Q: {r.query}\nA: {r.results}" for r in results)
         prompt = (
