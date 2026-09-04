@@ -2,12 +2,16 @@
 
 A per-user personal data store with natural language querying, LLM-based data extraction, and interactive data quality assurance.
 
+→ **[Full documentation](docs/README.md)** · **[Quick start](docs/quickstart.md)** · **[Installation](docs/installation.md)**
+
 ## What it does
 
 - **Import** documents and extract structured data from them using LLM-based extraction keyed by schema-style attribute names.
 - **Query** the store in natural language; results are assessed for completeness and freshness and the user is prompted for clarification when needed. Queries and their clarification interactions are grouped into sessions.
 - **Interact** via configurable contact channels (stdio, email, SMS, etc.) to verify stale data or fill in missing information, with responses persisted back to the store and to the session's record.
 - **Output** query results as structured JSON, a Rich table, or a synthesized natural language answer.
+
+See [docs/features.md](docs/features.md) for the full list with examples.
 
 ## Repository layout
 
@@ -31,7 +35,8 @@ blue-data-user-source/
 │   └── api/                    # REST API (udb-api)
 │       ├── src/blue_data_user_api/
 │       └── tests/
-└── docs/design/                # Architecture and design documents
+├── docs/                       # User-facing documentation (start at docs/README.md)
+└── design/                     # Architecture and design-process documents
 ```
 
 ## Requirements

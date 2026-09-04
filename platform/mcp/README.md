@@ -8,6 +8,8 @@ run natural-language queries against per-user knowledge graphs, group queries an
 clarification interactions into sessions, read and write metadata, and manage
 contact methods.
 
+See [docs/mcp.md](../../docs/mcp.md) for the complete tool reference. This README covers installation, running the server, and Claude Desktop integration.
+
 ---
 
 ## Installation
@@ -146,6 +148,7 @@ Returns registry properties for the user (storage paths, class, schema paths).
 | `question` | `str` | Natural-language question |
 | `output_form` | `str` | `"json"` (default — structured rows) or `"nl"` (prose) |
 | `session` | `str \| None` | Session id to append this query to (reused). Omit to auto-create a new single-query session — **reuse-or-create** |
+| `include_expanded` | `bool` | If `True` (default `False`), also return the per-sub-question queries and their raw results alongside the synthesized answer |
 
 Runs a multi-step agent: contextualises and expands the question, queries the
 KB in parallel across sub-questions, assesses result quality, and optionally
@@ -169,7 +172,7 @@ Returns `{"user": "...", "session_id": "...", "ended": true}`.
 
 #### `get_session`
 
-`user`, `session_id` — returns the session's record: `{"session_id": "...", "created_at": ..., "ended_at": ..., "status": ..., "doc_source_name": ..., "queries": {...}}`. See [10-data-model.md](../../docs/design/10-data-model.md) §6 for the full query/interaction schema.
+`user`, `session_id` — returns the session's record: `{"session_id": "...", "created_at": ..., "ended_at": ..., "status": ..., "doc_source_name": ..., "queries": {...}}`. See [10-data-model.md](../../design/10-data-model.md) §6 for the full query/interaction schema.
 
 #### `list_sessions`
 
@@ -221,8 +224,13 @@ Without `queries`, registers the source for provenance only (Type 1). With
 | `key` | `str` | Dot-separated key, e.g. `"preferences.verbosity"` |
 | `value` | `Any` | Value to store (string, number, boolean, list, or dict) |
 
-Common keys: `identity.name`, `identity.email`, `preferences.verbosity`,
-`preferences.language`, `availability.preferred_channel`, `privacy.consent_level`.
+Common keys: `identity.name`, `identity.pronouns`, `identity.timezone`,
+`preferences.verbosity`, `preferences.language`, `availability.preferred_channel`,
+`availability.out_of_office`, `privacy.consent_level`. See
+[data/metadata_schema.json](../../lib/src/blue_data_user_source/data/metadata_schema.json)
+for the full seeded schema (identity, preferences, availability, privacy) — arbitrary
+keys can still be set, but only these are seeded with defaults and read by the
+reasoning/interaction logic.
 
 #### `delete_metadata`
 
@@ -249,7 +257,7 @@ Common keys: `identity.name`, `identity.email`, `preferences.verbosity`,
 | Parameter | Type | Description |
 |---|---|---|
 | `user` | `str` | User name |
-| `protocol` | `str` | `"email"`, `"slack"`, `"sms"`, or `"webhook"` |
+| `protocol` | `str` | `"stdio"`, `"email"`, or `"webhook"` (interaction handlers exist for these three). `"sms"`, `"session"`, `"messaging"`, `"enterprise"`, and `"notification"` can also be registered but have no interaction handler wired up yet — using one to actually contact a user raises an error |
 | `name` | `str` | Human-readable label |
 | `details` | `dict` | Protocol-specific details (see below) |
 | `preference` | `int` | Ordering priority — lower = higher priority (default 0) |
@@ -257,7 +265,7 @@ Common keys: `identity.name`, `identity.email`, `preferences.verbosity`,
 Details by protocol:
 
 ```
-slack   → {"channel": "#alice", "token": "xoxb-..."}
+stdio   → {} (no details needed — prints to stdout, reads from stdin)
 webhook → {"url": "https://hooks.example.com/incoming",
            "response_base_url": "http://localhost:8000",
            "timeout": 300}
@@ -330,7 +338,7 @@ create_database("alice")
 # 2. Add metadata
 set_metadata("alice", "identity.name", "Alice Smith")
 set_metadata("alice", "preferences.verbosity", "brief")
-set_metadata("alice", "skills", ["python", "data science"])
+set_metadata("alice", "availability.preferred_channel", "email")
 
 # 3. Add a contact method (email via Mailgun inbound)
 add_contact("alice", "email", "work", {

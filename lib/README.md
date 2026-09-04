@@ -4,6 +4,8 @@ Python library for UDb — a multi-user knowledge base with natural language que
 
 Backed by [blue-data](../blue-data), [blue-data-kb-source](../blue-data-kb-source), and [blue-data-doc-source](../blue-data-doc-source) (per-session interaction transcripts, and files registered via `add_source`).
 
+See [docs/](../docs/README.md) for the full documentation set — [guide.md](../docs/guide.md) for a task-oriented walkthrough and [api-reference.md](../docs/api-reference.md) for the complete method-by-method reference. This README covers installation, a quick usage sample, and running this package's tests.
+
 ## Requirements
 
 - Python 3.10+
@@ -264,6 +266,8 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 |---|---|---|
 | `session` | `str` | Session ID to append this query to (reused). Raises `QueryError` if unknown or already ended. Omit to auto-create a new single-query session — **reuse-or-create** |
 | `output_form` | `"json"` \| `"nl"` | `"json"` returns `list[QueryResult]`; `"nl"` returns a synthesized natural language string |
+| `include_expanded` | `bool` | When `True` (default `False`), also returns the per-sub-question queries and raw results alongside the synthesized answer; the return shape becomes `{"result": ..., "expanded": ...}` |
+| `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default: 3); stops early once all metrics pass |
 | `top_k` | `int` | Max KB results per sub-query (default: 10) |
 
 ### Data access
@@ -429,7 +433,7 @@ The JSON file is consumed by `KBSource.import_database_schema` (entity and relat
 
 ## CLI
 
-The `udb` CLI exposes all library operations. See [platform/cli/README.md](../platform/cli/README.md) for full details.
+The `udb` CLI exposes all library operations. See [platform/cli/README.md](../platform/cli/README.md) to install it and [docs/cli.md](../docs/cli.md) for the full command reference (including the `metadata` and `contact` groups omitted from the summary below).
 
 ```
 udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND

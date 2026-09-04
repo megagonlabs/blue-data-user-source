@@ -2,6 +2,8 @@
 
 Command-line interface for the user database — a per-user knowledge store with natural language querying.
 
+See [docs/cli.md](../../docs/cli.md) for the complete command reference, including the `metadata` and `contact` groups not covered below. This README covers installation, a quick start, and running this package's tests.
+
 ## Installation
 
 The library is not yet published to PyPI. Install both packages from source:
@@ -168,6 +170,7 @@ Execute a natural-language query against the database's knowledge graph.
 
 ```
 udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N]
+                     [--include-expanded] [--verbose] [--log] [--log-limit N]
 ```
 
 | Option | Description |
@@ -175,6 +178,10 @@ udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N
 | `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`udb session select`/`start`), then auto-creates one if neither is set — see [`udb session`](#udb-session) |
 | `--format` | `table` (default) · `json` · `nl` |
 | `--top-k N` | Maximum results (default: 10) |
+| `--include-expanded` | Also print the per-sub-question queries and their raw results, below the main answer |
+| `--verbose`, `-v` | Show tool call arguments in the status line while the query runs |
+| `--log`, `-l` | Log each tool call and result on its own line |
+| `--log-limit N` | Truncation limit for logged values (default: 80) |
 
 ```bash
 udb --database alice data query "What skills does this user have?"

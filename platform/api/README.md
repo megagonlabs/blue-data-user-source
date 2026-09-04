@@ -2,6 +2,8 @@
 
 REST API for the user database — manage users, query their knowledge graphs, and handle webhook interactions over HTTP via FastAPI.
 
+See [docs/api.md](../../docs/api.md) for the complete endpoint reference. This README covers installation, a quick start, and running this package's tests.
+
 ## Installation
 
 The library is not yet published to PyPI. Install both packages from source:
@@ -126,11 +128,12 @@ Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE
 {
   "query": "What skills does alice have?",
   "output_form": "json",
-  "session": "optional-session-id"
+  "session": "optional-session-id",
+  "include_expanded": false
 }
 ```
 
-`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused); omit it to auto-create a new single-query session — **reuse-or-create**.
+`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused); omit it to auto-create a new single-query session — **reuse-or-create**. `include_expanded` (default `false`) also returns the per-sub-question queries and their raw results alongside the synthesized answer.
 
 **Response:**
 
@@ -143,7 +146,7 @@ Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE
 }
 ```
 
-`session_id` is always present — the session that was reused, or the one just auto-created.
+`session_id` is always present — the session that was reused, or the one just auto-created. When `include_expanded` is `true`, `results` becomes `{"result": ..., "expanded": [...]}` instead of the plain answer.
 
 ### Sessions
 
@@ -166,7 +169,7 @@ curl http://localhost:8000/alice/sessions/$SID
 curl -X POST http://localhost:8000/alice/sessions/$SID/end
 ```
 
-`GET /{name}/sessions/{session_id}` returns `404` if unknown. `POST .../end` returns `404` if unknown; ending an already-ended session is idempotent (`200`). See [10-data-model.md](../../docs/design/10-data-model.md) §6 for the full record schema.
+`GET /{name}/sessions/{session_id}` returns `404` if unknown. `POST .../end` returns `404` if unknown; ending an already-ended session is idempotent (`200`). See [10-data-model.md](../../design/10-data-model.md) §6 for the full record schema.
 
 ### Data
 
