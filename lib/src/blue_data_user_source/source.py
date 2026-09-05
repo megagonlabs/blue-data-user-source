@@ -153,6 +153,7 @@ class UserSource(DataSource):
             contact_source_props=p["contact_source"],
             session_source_props=p["session_source"],
             doc_source_props=p.get("doc_source"),
+            onboard=p.get("onboard", True),
         ))
         return {}
 
@@ -236,8 +237,14 @@ class UserSource(DataSource):
         contact_source_props: dict,
         session_source_props: dict,
         doc_source_props: dict | None = None,
+        onboard: bool = True,
     ) -> None:
-        """Build a fresh per-user registry + all sources, seed schema, register the user."""
+        """Build a fresh per-user registry + all sources, seed schema, register the user.
+
+        When ``onboard`` is True (the default), also runs :meth:`onboard_user`
+        immediately afterward to ask the new user a few questions to seed
+        their data and metadata.
+        """
         manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
         await manager.build(
             schema_path=self._registry.get_source_property(self.name, "schema"),
@@ -258,6 +265,21 @@ class UserSource(DataSource):
             }
         )
         self._managers[name] = manager
+        if onboard:
+            await self.onboard_user(name)
+
+    async def onboard_user(self, name: str) -> None:
+        """Ask a user a few onboarding questions to seed their KB data and metadata.
+
+        Called automatically by :meth:`create_user` (unless ``onboard=False``
+        was passed), and can also be re-run later for an existing user —
+        metadata questions are only generated for keys still unset.
+        """
+        manager = self._get_manager(name)
+        reasoner = UserQueryReasoner(source=self, manager=manager)
+        await reasoner.onboard(
+            metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema")
+        )
 
     def list_users(self) -> list[str]:
         return [r["name"] for r in (self._registry.list_source_databases(self.name) or [])]

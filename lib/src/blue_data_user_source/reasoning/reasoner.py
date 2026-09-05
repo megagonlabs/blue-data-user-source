@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from blue_data_user_source.reasoning.metric import (
@@ -14,6 +15,7 @@ from blue_data_user_source.reasoning.metric import (
 
 if TYPE_CHECKING:
     from blue_data_user_source.data.manager import UserDataManager
+    from blue_data_user_source.interaction.contact import ContactMethod
     from blue_data_user_source.source import UserSource
     from blue_data_user_source.types import QueryResult
 
@@ -315,6 +317,155 @@ class UserQueryReasoner:
             new_items.append(data[-1])
             metrics = await self.assess_query_results(assessment_query, data, metadata)
         return new_items
+
+    async def onboard(self, metadata_schema_path: str | None = None) -> None:
+        """Ask a new user a small set of questions to seed their KB data and metadata.
+
+        Generates two batches of questions — free-form KB facts (from the KB
+        schema's PERSON attributes) and structured metadata fields (from
+        ``metadata_schema_path``, one per not-yet-set key) — then asks each
+        via the user's identified contact method. KB answers are stored
+        verbatim via ``store_data``; metadata answers are reduced to a typed
+        value via an LLM extraction step and stored via ``set_metadata``.
+
+        Safe to call more than once: metadata questions are only generated
+        for keys that are still unset, and KB answers are simply appended as
+        additional facts.
+        """
+        from blue_data_user_source.interaction import ContactManager, SessionManager
+        from blue_data_user_source.types import QueryError
+
+        if self._manager is None:
+            raise QueryError("No data manager available for onboarding")
+
+        kb_questions = await self._generate_kb_onboarding_questions()
+        metadata_questions = await self._generate_metadata_onboarding_questions(metadata_schema_path)
+        if not kb_questions and not metadata_questions:
+            return
+
+        session_manager = SessionManager(database=self._manager._database, data_manager=self._manager)
+        session_id = self._session_id or await session_manager.create_session()
+
+        contact_manager = ContactManager(database=self._manager._database, data_manager=self._manager)
+        channel = await contact_manager.identify_contact_method(topic="onboarding")
+
+        for question in kb_questions:
+            response = await self._ask_onboarding_question(session_manager, session_id, channel, question)
+            if response:
+                await self._manager.store_data(
+                    f"Question: {question}\nUser Response: {response}", queries=[question]
+                )
+
+        for item in metadata_questions:
+            response = await self._ask_onboarding_question(
+                session_manager, session_id, channel, item["question"]
+            )
+            if not response:
+                continue
+            value = await self._extract_metadata_value(item, response)
+            if value is not None:
+                self._manager.set_metadata(item["key"], value)
+
+    async def _ask_onboarding_question(
+        self, session_manager: Any, session_id: str, channel: ContactMethod, question: str
+    ) -> str:
+        from blue_data_user_source.types import InteractionError
+
+        query_id = await session_manager.create_query(session_id, question)
+        interaction_id = await session_manager.create_interaction(
+            session_id, query_id, question, channel.protocol, channel.name
+        )
+        interaction = channel.interact(interaction_id=interaction_id)
+        await interaction.start()
+        try:
+            response = await interaction.send(question)
+        except InteractionError:
+            await session_manager.mark_interaction_timeout(session_id, query_id, interaction_id)
+            return ""
+        await interaction.stop()
+        await session_manager.resolve_interaction(session_id, query_id, interaction_id, response)
+        return response
+
+    async def _generate_kb_onboarding_questions(self) -> list[str]:
+        """Generate onboarding questions from the KB schema's PERSON attributes."""
+        if self._manager is None:
+            return []
+        try:
+            schema = await self._manager._ensure_kb_source().export_database_schema(
+                self._manager._database
+            )
+        except Exception:
+            return []
+        person = schema.get("entities", {}).get("PERSON") or {}
+        attrs = list((person.get("contents") or {}).get("attributes") or {})
+        if not attrs:
+            return []
+
+        prompt = (
+            "Generate a concise set of conversational questions to collect information "
+            f"about a new user, covering only the following attributes: {', '.join(attrs)}.\n\n"
+            "Each question should be clear, friendly, and cover a distinct attribute. "
+            "Do not ask about anything other than the listed attributes. "
+            "Do not ask more than 5 questions.\n\n"
+            'Return a JSON object: {"questions": ["<question>", ...]}'
+        )
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        questions = result.get("questions", []) if isinstance(result, dict) else []
+        return questions[:5] if isinstance(questions, list) else []
+
+    async def _generate_metadata_onboarding_questions(
+        self, metadata_schema_path: str | None
+    ) -> list[dict[str, str]]:
+        """Generate one onboarding question per not-yet-set metadata key.
+
+        Returns a list of ``{"key": "<category.key>", "question": "<text>", "type": "<type>"}``.
+        """
+        if not metadata_schema_path or self._manager is None:
+            return []
+        schema = json.loads(Path(metadata_schema_path).read_text())
+
+        specs: dict[str, dict[str, str]] = {}
+        for category, entries in schema.items():
+            if not isinstance(entries, dict) or entries.get("__open__"):
+                continue
+            for key, spec in entries.items():
+                if key.startswith("__"):
+                    continue
+                dotted = f"{category}.{key}"
+                if self._manager.get_metadata(dotted) is not None:
+                    continue
+                specs[dotted] = spec
+        if not specs:
+            return []
+
+        facets = "\n".join(
+            f"- {key}: {spec.get('description', '')}" for key, spec in specs.items()
+        )
+        prompt = (
+            "Generate a concise, friendly conversational question for each of the following "
+            f"user profile fields:\n{facets}\n\n"
+            "Each question should be clear and cover exactly one field.\n\n"
+            'Return a JSON object: {"questions": [{"key": "<field>", "question": "<question>"}, ...]}'
+        )
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        items = result.get("questions", []) if isinstance(result, dict) else []
+        if not isinstance(items, list):
+            return []
+        return [
+            {"key": item["key"], "question": item["question"], "type": specs[item["key"]].get("type", "str")}
+            for item in items
+            if isinstance(item, dict) and item.get("key") in specs and item.get("question")
+        ]
+
+    async def _extract_metadata_value(self, item: dict[str, str], response: str) -> Any:
+        """Reduce a free-text answer to a typed value for ``item["key"]`` via the LLM."""
+        prompt = (
+            f"Extract the value of \"{item['key']}\" (type: {item['type']}) from the "
+            f"following user response.\n\nResponse: {response}\n\n"
+            'Return a JSON object: {"value": <value>}, using null if it cannot be determined.'
+        )
+        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        return result.get("value") if isinstance(result, dict) else None
 
     def _locale_instruction(self) -> str:
         locale = self._manager.get_metadata("identity.locale") if self._manager is not None else None

@@ -294,6 +294,12 @@ def database_list(obj: dict, fmt: str) -> None:
     show_default=True,
     help="Vector backend for per-session interaction-transcript storage.",
 )
+@click.option(
+    "--onboard/--no-onboard",
+    default=True,
+    show_default=True,
+    help="Ask the new user a few onboarding questions to seed their data and metadata.",
+)
 @click.pass_obj
 def database_create(
     obj: dict,
@@ -304,6 +310,7 @@ def database_create(
     neo4j_user: str,
     neo4j_password: str | None,
     doc_backend: str,
+    onboard: bool,
 ) -> None:
     """Create a new user database."""
     data_dir: Path = obj["data_dir"]
@@ -335,12 +342,27 @@ def database_create(
             _user_contact_props(data_dir, name),
             _user_session_props(data_dir, name),
             _user_doc_source_props(data_dir, name, doc_backend),
+            onboard=onboard,
         ))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     _selected_db_path(data_dir).write_text(name)
     console.print(f"Created database: [bold]{name}[/bold] (selected)")
+
+
+@database_group.command("onboard")
+@click.pass_obj
+def database_onboard(obj: dict) -> None:
+    """Ask the active database's user onboarding questions to seed data and metadata."""
+    db = _get_db(obj)
+    source = _make_source(obj["data_dir"], obj.get("schema_path"))
+    try:
+        asyncio.run(source.onboard_user(db))
+    except UDbError as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    console.print(f"Onboarded database: [bold]{db}[/bold]")
 
 
 @database_group.command("delete")
