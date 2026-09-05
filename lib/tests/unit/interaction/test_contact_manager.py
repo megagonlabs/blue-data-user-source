@@ -135,7 +135,12 @@ async def test_identify_returns_stdio_when_no_methods(contact_manager: ContactMa
 async def test_identify_picks_lowest_preference(contact_manager: ContactManager) -> None:
     await contact_manager.create_contact_method("email", "work", {}, preference=5)
     await contact_manager.create_contact_method("sms", "mobile", {}, preference=1)
-    method = await contact_manager.identify_contact_method()
+    # Simulate an LLM failure (real code returns {} on error) so the deterministic
+    # lowest-preference fallback is what's under test, not a live model call.
+    with patch(
+        "blue_data_user_source.reasoning.reasoner._llm_complete", new=AsyncMock(return_value={})
+    ):
+        method = await contact_manager.identify_contact_method()
     assert method.protocol == "sms"
     assert method.preference == 1
 

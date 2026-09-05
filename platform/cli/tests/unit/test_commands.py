@@ -1,14 +1,23 @@
+"""Tests for the `udb` CLI.
+
+Every test patches ``blue_data_user_cli.commands._make_source`` with a mock
+UserSource so no real registry/KB/LLM calls happen, and always passes an
+isolated ``--data-dir`` (a pytest tmp_path) since ``_get_db``/selection files
+touch the real filesystem regardless of the source mock.
+"""
+from __future__ import annotations
+
 import json
-import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from blue_data_user_source.types import QueryError
 from click.testing import CliRunner
 
 from blue_data_user_cli.commands import cli
-from blue_data_user_source.types import QueryError, QueryResult
 
 
 @pytest.fixture
@@ -17,357 +26,702 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture
-def txt_file(tmp_path: Path) -> Path:
-    f = tmp_path / "resume.txt"
-    f.write_text("Python\nSQL\n")
-    return f
+def data_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "udb"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
-def _mock_source(results: list[QueryResult] | None = None) -> Any:
-    instance = AsyncMock()
-    instance.execute_query = AsyncMock(return_value=results or [])
-    instance.import_source = AsyncMock(return_value=None)
-    instance.create_database = AsyncMock(return_value=None)
-    instance.list_data = AsyncMock(return_value=[])
-    instance.list_metadata = AsyncMock(return_value=[])
-    instance.describe_data = AsyncMock(return_value="")
-    instance.describe_metadata = AsyncMock(return_value="")
-    return instance
+def _invoke(runner: CliRunner, data_dir: Path, args: list[str], database: str | None = None):
+    base = ["--data-dir", str(data_dir)]
+    if database:
+        base += ["--database", database]
+    return runner.invoke(cli, base + args)
 
 
-# ── query command ─────────────────────────────────────────────────────────────
-
-def test_query_table_output_contains_result_query(runner: CliRunner) -> None:
-    mock = _mock_source([QueryResult(query="What skills?", results=["Python"])])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "db", "query", "skills?"])
-    assert result.exit_code == 0
-    assert "What skills?" in result.output
+def _select_database(data_dir: Path, name: str) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / ".selected.database").write_text(name)
 
 
-def test_query_json_format_outputs_valid_json(runner: CliRunner) -> None:
-    mock = _mock_source([QueryResult(query="q", results=["x"])])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "db", "query", "q", "--format", "json"])
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed[0]["query"] == "q"
-    assert parsed[0]["results"] == ["x"]
+def _kb_source(**async_methods: Any) -> MagicMock:
+    """MagicMock KB source with the given methods configured as AsyncMock(return_value=...)."""
+    kb = MagicMock()
+    for name, value in async_methods.items():
+        setattr(kb, name, AsyncMock(return_value=value))
+    return kb
 
 
-def test_query_passes_session_to_execute_query(runner: CliRunner) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "db", "query", "q", "--session", "sess-1"])
-    mock.execute_query.assert_awaited_once_with(
-        "q", optional_properties={"session": "sess-1"}
-    )
+def _manager_with_kb(kb: MagicMock) -> MagicMock:
+    manager = MagicMock()
+    manager._ensure_kb_source.return_value = kb
+    return manager
 
 
-def test_query_no_session_passes_none_props(runner: CliRunner) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "db", "query", "q"])
-    mock.execute_query.assert_awaited_once_with("q", optional_properties=None)
+def _source_with_manager(manager: MagicMock) -> MagicMock:
+    source = MagicMock()
+    source._get_manager.return_value = manager
+    return source
 
 
-def test_query_top_k_is_forwarded(runner: CliRunner) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "db", "query", "q", "--top-k", "5"])
-    mock.execute_query.assert_awaited_once_with("q", optional_properties={"top_k": 5})
+def _patched(mock: Any):
+    return patch("blue_data_user_cli.commands._make_source", return_value=mock)
 
 
-def test_query_threshold_is_forwarded(runner: CliRunner) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "db", "query", "q", "--threshold", "0.2"])
-    mock.execute_query.assert_awaited_once_with("q", optional_properties={"threshold": 0.2})
+# ── global: database resolution ───────────────────────────────────────────────
 
-
-def test_query_top_k_and_threshold_together(runner: CliRunner) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "db", "query", "q", "--top-k", "3", "--threshold", "0.15"])
-    mock.execute_query.assert_awaited_once_with(
-        "q", optional_properties={"top_k": 3, "threshold": 0.15}
-    )
-
-
-def test_query_error_exits_with_code_1(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.execute_query = AsyncMock(side_effect=QueryError("no db"))
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["query", "q"])
+def test_no_database_selected_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "list"])
     assert result.exit_code == 1
+    assert "No database selected" in result.output
 
 
-# ── import command ────────────────────────────────────────────────────────────
-
-def test_import_type1_prints_registered(runner: CliRunner, txt_file: Path) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "db", "import", str(txt_file)])
+def test_database_flag_overrides_selection_file(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "ignored-selected-db")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "list"], database="from-flag")
     assert result.exit_code == 0
-    assert "Registered" in result.output
-    mock.import_source.assert_awaited_once()
+    mock.list_metadata.assert_called_once_with("from-flag")
 
 
-def test_import_type2_prints_imported_with_query_count(
-    runner: CliRunner, txt_file: Path
-) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(
-            cli,
-            [
-                "--user", "db",
-                "import", str(txt_file),
-                "--query", "What skills?",
-                "--query", "Remote?",
-            ],
-        )
-    assert result.exit_code == 0
-    assert "2" in result.output and "queries" in result.output
+# ── database group ────────────────────────────────────────────────────────────
 
-
-def test_import_type2_passes_queries_to_import_source(
-    runner: CliRunner, txt_file: Path
-) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(
-            cli,
-            ["--user", "db", "import", str(txt_file), "--query", "Skills?"],
-        )
-    _call = mock.import_source.await_args
-    assert _call is not None
-    props = _call.kwargs.get("optional_properties") or _call.args[1]
-    assert "Skills?" in props["queries"]
-
-
-def test_import_missing_file_exits_with_code_2(runner: CliRunner) -> None:
-    result = runner.invoke(cli, ["--user", "db", "import", "/no/such/file.txt"])
-    assert result.exit_code == 2
-
-
-# ── user create command ───────────────────────────────────────────────────────
-
-def test_user_create_prints_created(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["user", "create", "my-db"])
-    assert result.exit_code == 0
-    assert "my-db" in result.output
-
-
-def test_user_create_calls_create_database(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["user", "create", "my-db"])
-    mock.create_database.assert_awaited_once_with("my-db")
-
-
-def test_user_create_error_exits_with_code_1(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.create_database = AsyncMock(side_effect=QueryError("fail"))
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["user", "create", "x"])
-    assert result.exit_code == 1
-
-
-# ── user show data command ────────────────────────────────────────────────────
-
-_DATA_ENTRY = {
-    "key": "skills",
-    "value": ["Python", "SQL"],
-    "metadata": {"date": "2024-01-01T00:00:00+00:00", "agent": "v1", "source_id": "src-1"},
-}
-
-
-def test_show_data_displays_entries(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
-    assert result.exit_code == 0
-    assert "skills" in result.output
-    assert "Python" in result.output
-
-
-def test_show_data_passes_key_filter(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "alice", "user", "show", "data", "skills"])
-    mock.list_data.assert_awaited_once_with(key="skills")
-
-
-def test_show_data_no_key_passes_none(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
-    mock.list_data.assert_awaited_once_with(key=None)
-
-
-def test_show_data_empty_produces_no_output(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "alice", "user", "show", "data"])
-    assert result.exit_code == 0
-    assert result.output.strip() == ""
-
-
-def test_show_data_no_user_exits_with_code_1(runner: CliRunner) -> None:
-    result = runner.invoke(cli, ["user", "show", "data"])
-    assert result.exit_code == 1
-
-
-def test_show_data_json_format_outputs_valid_json(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(
-            cli, ["--user", "alice", "user", "show", "data", "--format", "json"]
-        )
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed[0]["key"] == "skills"
-    assert "Python" in parsed[0]["value"]
-
-
-def test_show_data_nl_format_calls_describe_data(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_data = AsyncMock(return_value=[_DATA_ENTRY])
-    mock.describe_data = AsyncMock(return_value="Alice knows Python and SQL.")
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(
-            cli, ["--user", "alice", "user", "show", "data", "--format", "nl"]
-        )
-    assert result.exit_code == 0
-    assert "Alice knows Python and SQL." in result.output
-    mock.describe_data.assert_awaited_once_with(key=None)
-
-
-# ── user show metadata command ────────────────────────────────────────────────
-
-_META_ENTRY = {
-    "source_id": "src-1",
-    "source_type": "file",
-    "location": "/data/resume.txt",
-    "registered_at": "2024-01-01T00:00:00+00:00",
-    "queries": ["What skills?"],
-}
-
-
-def test_show_metadata_displays_entries(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
-    assert result.exit_code == 0
-    assert "src-1" in result.output
-    assert "/data/resume.txt" in result.output
-
-
-def test_show_metadata_passes_source_id_filter(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "alice", "user", "show", "metadata", "src-1"])
-    mock.list_metadata.assert_awaited_once_with(source_id="src-1")
-
-
-def test_show_metadata_no_filter_passes_none(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
-    mock.list_metadata.assert_awaited_once_with(source_id=None)
-
-
-def test_show_metadata_empty_produces_no_output(runner: CliRunner) -> None:
-    mock = _mock_source()
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(cli, ["--user", "alice", "user", "show", "metadata"])
-    assert result.exit_code == 0
-    assert result.output.strip() == ""
-
-
-def test_show_metadata_no_user_exits_with_code_1(runner: CliRunner) -> None:
-    result = runner.invoke(cli, ["user", "show", "metadata"])
-    assert result.exit_code == 1
-
-
-def test_show_metadata_json_format_outputs_valid_json(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(
-            cli, ["--user", "alice", "user", "show", "metadata", "--format", "json"]
-        )
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed[0]["source_id"] == "src-1"
-    assert parsed[0]["location"] == "/data/resume.txt"
-
-
-def test_show_metadata_nl_format_calls_describe_metadata(runner: CliRunner) -> None:
-    mock = _mock_source()
-    mock.list_metadata = AsyncMock(return_value=[_META_ENTRY])
-    mock.describe_metadata = AsyncMock(return_value="One file source: resume.txt, registered 2024-01-01.")
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock):
-        result = runner.invoke(
-            cli, ["--user", "alice", "user", "show", "metadata", "--format", "nl"]
-        )
-    assert result.exit_code == 0
-    assert "resume.txt" in result.output
-    mock.describe_metadata.assert_awaited_once_with(source_id=None)
-
-
-# ── user ls command ───────────────────────────────────────────────────────────
-
-def test_user_ls_lists_database_directories(runner: CliRunner, tmp_path: Path) -> None:
-    (tmp_path / "alice").mkdir()
-    (tmp_path / "bob").mkdir()
-    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+def test_database_list_shows_registered_names(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = ["alice", "bob"]
+    mock.get_user.return_value = {"registry": {"connection": {"protocol": "json/memory"}}}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "list"])
     assert result.exit_code == 0
     assert "alice" in result.output
     assert "bob" in result.output
 
 
-def test_user_ls_empty_data_dir_produces_no_output(runner: CliRunner, tmp_path: Path) -> None:
-    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+def test_database_list_empty_produces_placeholder(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "list"])
     assert result.exit_code == 0
-    assert result.output.strip() == ""
+    assert "no databases" in result.output
 
 
-def test_user_ls_missing_data_dir_produces_no_output(runner: CliRunner, tmp_path: Path) -> None:
-    absent = tmp_path / "no-such-dir"
-    result = runner.invoke(cli, ["--data-dir", str(absent), "user", "ls"])
-    assert result.exit_code == 0
-    assert result.output.strip() == ""
-
-
-def test_user_ls_ignores_files(runner: CliRunner, tmp_path: Path) -> None:
-    (tmp_path / "alice").mkdir()
-    (tmp_path / "stray.json").write_text("{}")
-    result = runner.invoke(cli, ["--data-dir", str(tmp_path), "user", "ls"])
+def test_database_create_onboards_by_default(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])
     assert result.exit_code == 0
     assert "alice" in result.output
-    assert "stray.json" not in result.output
+    assert mock.create_user.await_args.kwargs["onboard"] is True
 
 
-# ── _make_source / global --user and --data-dir flags ────────────────────────
+def test_database_create_no_onboard_flag_disables_onboarding(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-onboard"])
+    assert result.exit_code == 0
+    assert mock.create_user.await_args.kwargs["onboard"] is False
 
-def test_user_flag_is_passed_to_source_factory(runner: CliRunner, tmp_path: Path) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock) as factory:
-        runner.invoke(cli, ["--user", "target-db", "--data-dir", str(tmp_path), "query", "q"])
-    factory.assert_called_once_with("target-db", tmp_path, None)
+
+def test_database_create_already_exists_exits_with_code_1(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = ["alice"]
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])
+    assert result.exit_code == 1
+    assert "already exists" in result.output
 
 
-def test_no_user_flag_passes_none_to_factory(runner: CliRunner, tmp_path: Path) -> None:
-    mock = _mock_source([])
-    with patch("blue_data_user_cli.commands._make_source", return_value=mock) as factory:
-        runner.invoke(cli, ["--data-dir", str(tmp_path), "query", "q"])
-    factory.assert_called_once_with(None, tmp_path, None)
+def test_database_create_neo4j_without_password_exits_with_code_1(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir, ["database", "create", "alice", "--kb-backend", "neo4j"]
+        )
+    assert result.exit_code == 1
+    assert "neo4j-password" in result.output
+
+
+def test_database_create_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(side_effect=QueryError("boom"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])
+    assert result.exit_code == 1
+
+
+def test_database_onboard_calls_onboard_user(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.onboard_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "onboard"])
+    assert result.exit_code == 0
+    assert "alice" in result.output
+    mock.onboard_user.assert_awaited_once_with("alice")
+
+
+def test_database_onboard_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.onboard_user = AsyncMock(side_effect=QueryError("no contact method"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "onboard"])
+    assert result.exit_code == 1
+
+
+def test_database_delete_removes_and_prints(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.delete_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "delete", "alice", "--yes"])
+    assert result.exit_code == 0
+    assert "Deleted" in result.output
+    mock.delete_user.assert_awaited_once_with("alice")
+
+
+def test_database_delete_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.delete_user = AsyncMock(side_effect=QueryError("not found"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "delete", "alice", "--yes"])
+    assert result.exit_code == 1
+
+
+def test_database_select_writes_selection(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = ["alice"]
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "select", "alice"])
+    assert result.exit_code == 0
+    assert (data_dir / ".selected.database").read_text() == "alice"
+
+
+def test_database_select_unknown_name_exits_with_code_1(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "select", "ghost"])
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
+def test_database_search_filters_by_keyword(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = ["alice", "bob", "alicia"]
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "search", "ali"])
+    assert result.exit_code == 0
+    assert "alice" in result.output
+    assert "alicia" in result.output
+    assert "bob" not in result.output
+
+
+def test_database_reset_confirmed_calls_reset_user(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.reset_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "reset", "--yes"])
+    assert result.exit_code == 0
+    mock.reset_user.assert_awaited_once_with("alice")
+
+
+def test_database_config_show_displays_properties(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_user.return_value = {"registry": {"connection": {"protocol": "json/file"}}}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "config", "show"])
+    assert result.exit_code == 0
+    assert "json/file" in result.output
+
+
+# ── session group ──────────────────────────────────────────────────────────────
+
+def test_session_start_creates_and_selects_session(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.create_session = AsyncMock(return_value="sess-1")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "start"])
+    assert result.exit_code == 0
+    assert "sess-1" in result.output
+    assert (data_dir / ".selected.session").read_text() == "sess-1"
+
+
+def test_session_select_unknown_id_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_session = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "select", "sess-x"])
+    assert result.exit_code == 1
+
+
+def test_session_end_clears_matching_selection(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session").write_text("sess-1")
+    mock = MagicMock()
+    mock.end_session = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "end", "sess-1"])
+    assert result.exit_code == 0
+    assert not (data_dir / ".selected.session").exists()
+
+
+def test_session_list_shows_sessions(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sessions = AsyncMock(return_value={
+        "sess-1": {"status": "active", "queries": {}, "created_at": None},
+    })
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "list"])
+    assert result.exit_code == 0
+    assert "sess-1" in result.output
+
+
+def test_session_show_not_found_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_session = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "show", "sess-x"])
+    assert result.exit_code == 1
+
+
+# ── data group ─────────────────────────────────────────────────────────────────
+
+def test_data_query_table_output_contains_result(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([{"skill": "Python"}], "sess-1")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "query", "skills?"])
+    assert result.exit_code == 0
+    assert "Python" in result.output
+
+
+def test_data_query_json_format_outputs_valid_json(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([{"skill": "Python"}], "sess-1")
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir, ["data", "query", "skills?", "--format", "json"]
+        )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed == [{"skill": "Python"}]
+
+
+def test_data_query_nl_format_echoes_answer(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ("Alice knows Python.", "sess-1")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "query", "skills?", "--format", "nl"])
+    assert result.exit_code == 0
+    assert "Alice knows Python." in result.output
+
+
+def test_data_query_selects_new_session_when_none_given(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-new")
+    with _patched(mock):
+        _invoke(runner, data_dir, ["data", "query", "q"])
+    assert (data_dir / ".selected.session").read_text() == "sess-new"
+
+
+def test_data_query_top_k_is_forwarded(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        _invoke(runner, data_dir, ["data", "query", "q", "--top-k", "5"])
+    props = mock.execute_query.call_args.kwargs["optional_properties"]
+    assert props["top_k"] == 5
+
+
+def test_data_query_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.side_effect = QueryError("no db")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "query", "q"])
+    assert result.exit_code == 1
+
+
+def test_data_search_returns_entities(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    result_row = SimpleNamespace(
+        id="e1", type="ENTITY", name="Alice", description="a person",
+        class_name="PERSON", head_name=None, relation_name=None, tail_name=None,
+    )
+    kb = _kb_source(search_data=[result_row])
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "search", "alice"])
+    assert result.exit_code == 0
+    assert "Alice" in result.output
+
+
+def test_data_search_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    kb = MagicMock()
+    kb.search_data = AsyncMock(side_effect=Exception("boom"))
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "search", "alice"])
+    assert result.exit_code == 1
+
+
+def test_data_import_reports_success(runner: CliRunner, data_dir: Path, tmp_path: Path) -> None:
+    _select_database(data_dir, "alice")
+    input_file = tmp_path / "data.json"
+    input_file.write_text(json.dumps({"nodes": []}))
+    kb = _kb_source(import_database_data=None)
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "import", str(input_file)])
+    assert result.exit_code == 0
+    assert "Imported" in result.output
+
+
+def test_data_import_invalid_json_exits_with_code_1(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    input_file = tmp_path / "bad.json"
+    input_file.write_text("{not json")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "import", str(input_file)])
+    assert result.exit_code == 1
+    assert "Invalid JSON" in result.output
+
+
+def test_data_export_writes_json_to_stdout(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    kb = _kb_source(export_database_data={"nodes": []})
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "export"])
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {"nodes": []}
+
+
+def test_data_extract_reports_completion(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    kb = _kb_source(import_text=None)
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "extract", "Alice knows Python."])
+    assert result.exit_code == 0
+    assert "Extraction complete" in result.output
+
+
+# ── data source group ──────────────────────────────────────────────────────────
+
+def test_source_add_ingests_file(runner: CliRunner, data_dir: Path, tmp_path: Path) -> None:
+    _select_database(data_dir, "alice")
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Python\nSQL\n")
+    mock = MagicMock()
+    mock.add_source = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "add", str(resume)])
+    assert result.exit_code == 0
+    assert "Ingested source" in result.output
+
+
+def test_source_add_with_queries_reports_extraction_count(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Python\nSQL\n")
+    mock = MagicMock()
+    mock.add_source = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir,
+            ["data", "source", "add", str(resume), "--query", "Skills?", "--query", "Remote?"],
+        )
+    assert result.exit_code == 0
+    assert "2" in result.output and "queries" in result.output
+    props = mock.add_source.await_args.kwargs["optional_properties"]
+    assert props["queries"] == ["Skills?", "Remote?"]
+
+
+def test_source_add_missing_file_exits_with_code_2(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "add", "/no/such/file.txt"])
+    assert result.exit_code == 2
+
+
+def test_source_remove_deregisters(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "remove", "resume.txt", "--yes"])
+    assert result.exit_code == 0
+    mock.remove_source.assert_called_once_with("alice", "resume.txt")
+
+
+# ── schema group ───────────────────────────────────────────────────────────────
+
+class _FakeSchema:
+    def __init__(self, entities: dict | None = None, relations: dict | None = None) -> None:
+        self.entities = entities or {}
+        self.relations = relations or {}
+
+    def to_json(self) -> dict:
+        return {"entities": self.entities, "relations": self.relations}
+
+
+def test_schema_list_shows_classes(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    schema = _FakeSchema(
+        entities={"PERSON": {"name": "PERSON", "description": "A person", "contents": {}}}
+    )
+    kb = _kb_source(fetch_database_schema=schema)
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "list"])
+    assert result.exit_code == 0
+    assert "PERSON" in result.output
+
+
+def test_schema_list_empty_shows_placeholder(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    kb = _kb_source(fetch_database_schema=_FakeSchema())
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "list"])
+    assert result.exit_code == 0
+    assert "no schema declared" in result.output
+
+
+def test_schema_import_reports_success(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    schema_file = tmp_path / "schema.json"
+    schema_file.write_text(json.dumps({"entities": {}, "relations": {}}))
+    kb = _kb_source(import_database_schema=None)
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "import", str(schema_file)])
+    assert result.exit_code == 0
+    assert "Imported schema" in result.output
+
+
+def test_schema_export_writes_json(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    kb = _kb_source(export_database_schema={"entities": {}, "relations": {}})
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "export"])
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {"entities": {}, "relations": {}}
+
+
+def test_schema_search_returns_matches(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    hit = SimpleNamespace(id="c1", type="CLASS", name="PERSON", description="A person")
+    kb = _kb_source(search_schema=[hit])
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "search", "person"])
+    assert result.exit_code == 0
+    assert "PERSON" in result.output
+
+
+# ── metadata group ─────────────────────────────────────────────────────────────
+
+def test_metadata_list_shows_categories(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {"identity": {"name": "Alice"}}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "list"])
+    assert result.exit_code == 0
+    assert "identity" in result.output
+
+
+def test_metadata_list_recursive_flattens_keys(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {"identity": {"name": "Alice"}}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "list", "--recursive"])
+    assert result.exit_code == 0
+    assert "identity.name" in result.output
+    assert "Alice" in result.output
+
+
+def test_metadata_get_prints_value(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_metadata.return_value = "Alice"
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "get", "identity", "name"])
+    assert result.exit_code == 0
+    assert "Alice" in result.output
+    mock.get_metadata.assert_called_once_with("alice", "identity.name")
+
+
+def test_metadata_get_unset_key_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_metadata.return_value = None
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "get", "identity", "name"])
+    assert result.exit_code == 1
+    assert "Not set" in result.output
+
+
+def test_metadata_set_string_value(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "set", "identity", "name", "Alice"])
+    assert result.exit_code == 0
+    mock.set_metadata.assert_called_once_with("alice", "identity.name", "Alice")
+
+
+def test_metadata_set_parses_json_value(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir,
+            ["metadata", "set", "privacy", "sensitive_categories", '["health", "financial"]'],
+        )
+    assert result.exit_code == 0
+    mock.set_metadata.assert_called_once_with(
+        "alice", "privacy.sensitive_categories", ["health", "financial"]
+    )
+
+
+def test_metadata_delete_confirmed(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "delete", "identity", "pronouns", "--yes"])
+    assert result.exit_code == 0
+    mock.delete_metadata.assert_called_once_with("alice", "identity.pronouns")
+
+
+# ── contact group ──────────────────────────────────────────────────────────────
+
+def test_contact_list_shows_protocols_with_entries(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    manager.get_contacts.return_value = {"email": {"work": {"address": "a@example.com"}}}
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "list"])
+    assert result.exit_code == 0
+    assert "email" in result.output
+
+
+def test_contact_get_returns_field_value(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    manager.get_contact.return_value = {"address": "a@example.com"}
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "get", "email", "work", "address"])
+    assert result.exit_code == 0
+    assert "a@example.com" in result.output
+
+
+def test_contact_get_requires_protocol_and_name(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "get", "email"])
+    assert result.exit_code == 1
+    assert "protocol and name" in result.output
+
+
+def test_contact_set_updates_field(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir,
+            ["contact", "set", "sms", "primary", "phone", "+15550123"],
+        )
+    assert result.exit_code == 0
+    manager.set_contact_field.assert_called_once_with("sms", "primary", "phone", "+15550123")
+
+
+def test_contact_add_creates_entry(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    manager.get_contact.return_value = None
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "add", "sms", "primary"])
+    assert result.exit_code == 0
+    assert "Added" in result.output
+
+
+def test_contact_add_duplicate_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    manager.get_contact.return_value = {"preference": 0}
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "add", "sms", "primary"])
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+
+
+def test_contact_add_unknown_protocol_exits_with_code_1(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "add", "carrier_pigeon", "primary"])
+    assert result.exit_code == 1
+    assert "Unknown protocol" in result.output
+
+
+def test_contact_remove_confirmed(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    manager = MagicMock()
+    mock = _source_with_manager(manager)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["contact", "remove", "sms", "primary", "--yes"])
+    assert result.exit_code == 0
+    manager.delete_contact.assert_called_once_with("sms", "primary")
