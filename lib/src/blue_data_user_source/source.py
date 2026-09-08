@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,21 @@ from blue_data_user_source.types import QueryError, QueryResult
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
 _DEFAULT_CONTACT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "contact_schema.json")
+
+# Built-in per-user collections that carry stats; anything else (e.g. a
+# user-added file source) has no stats concept and yields None.
+_STATS_COLLECTIONS = ("kb", "metadata", "contacts", "sessions")
+
+
+def _count_set_leaves(d: dict) -> int:
+    """Count non-null leaf values in a nested dict (e.g. metadata's category.key tree)."""
+    count = 0
+    for v in d.values():
+        if isinstance(v, dict):
+            count += _count_set_leaves(v)
+        elif v is not None:
+            count += 1
+    return count
 
 
 class UserSource(DataSource):
@@ -169,6 +185,48 @@ class UserSource(DataSource):
         return self._get_manager(database)._registry.get_source_properties(collection) or {}
 
     # ------------------------------------------------------------------ #
+    # DataSource: schema / entity / relation introspection                 #
+    # ------------------------------------------------------------------ #
+
+    def fetch_metadata(self) -> dict:
+        """Source-level metadata: user count and the schema paths new users are seeded from."""
+        return {
+            "name": self.name,
+            "user_count": len(self.list_users()),
+            "schema": self._registry.get_source_property(self.name, "schema"),
+            "metadata_schema": self._registry.get_source_property(self.name, "metadata_schema"),
+            "contact_schema": self._registry.get_source_property(self.name, "contact_schema"),
+        }
+
+    def fetch_schema(self) -> dict:
+        """The template KB schema every new user's ``kb`` collection is seeded from.
+
+        This is the declared schema (``data/schema.json`` by default), not any
+        one user's live schema — see :meth:`fetch_database_schema` for that.
+        """
+        schema_path = self._registry.get_source_property(self.name, "schema") or _DEFAULT_SCHEMA_PATH
+        return json.loads(Path(schema_path).read_text())
+
+    def fetch_database_schema(self, database: str) -> dict:
+        """A user's live KB schema — ``{"entities", "relations", "subclasses"}`` —
+        including any expansion (new classes/properties) since onboarding."""
+        manager = self._get_manager(database)
+        return asyncio.run(manager._ensure_kb_source().export_database_schema(manager._database))
+
+    def fetch_database_collection_entities(self, database: str, collection: str) -> dict:
+        """Entity type definitions for ``collection``. Only ``"kb"`` has entities —
+        the JSON-backed collections (metadata/contacts/sessions) have none."""
+        if collection != "kb":
+            return {}
+        return self.fetch_database_schema(database).get("entities", {})
+
+    def fetch_database_collection_relations(self, database: str, collection: str) -> dict:
+        """Relation type definitions for ``collection``. Only ``"kb"`` has relations."""
+        if collection != "kb":
+            return {}
+        return self.fetch_database_schema(database).get("relations", {})
+
+    # ------------------------------------------------------------------ #
     # DataSource: query                                                    #
     # ------------------------------------------------------------------ #
 
@@ -223,6 +281,222 @@ class UserSource(DataSource):
         return asyncio.run(
             self._get_manager(database).import_data(source, collection, entity, mode, options)
         )
+
+    # ------------------------------------------------------------------ #
+    # DataSource: stats                                                    #
+    # ------------------------------------------------------------------ #
+
+    def fetch_source_stats(self) -> dict | None:
+        return {"user_count": len(self.list_users())}
+
+    def fetch_database_stats(self, database: str) -> dict | None:
+        if database not in self.list_users():
+            return None
+        collections = self.fetch_database_collections(database)
+        stats: dict[str, Any] = {"collections": collections}
+        for c in collections:
+            if c in _STATS_COLLECTIONS:
+                stats[c] = self.fetch_collection_stats(database, c)
+        return stats
+
+    def fetch_collection_stats(
+        self,
+        database: str,
+        collection: str,
+        entities: list | None = None,
+        relations: list | None = None,
+        sample_limit: int | None = None,
+    ) -> dict | None:
+        manager = self._get_manager(database)
+        if collection == "kb":
+            return self._fetch_kb_collection_stats(manager, entities, relations, sample_limit)
+        if collection == "metadata":
+            return {"keys_set": _count_set_leaves(manager.list_metadata())}
+        if collection == "contacts":
+            contacts = manager.get_contacts()
+            return {"methods": sum(len(names) for names in contacts.values())}
+        if collection == "sessions":
+            sessions = asyncio.run(self._session_manager(database).list_sessions())
+            return {"sessions": len(sessions)}
+        return None
+
+    def _fetch_kb_collection_stats(
+        self,
+        manager: UserDataManager,
+        entities: list | None,
+        relations: list | None,
+        sample_limit: int | None,
+    ) -> dict:
+        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        by_class: dict[str, int] = {}
+        sample_entities: list[str] = []
+        for r in rows:
+            if r.get("relation_type") != "IS_INSTANCE_OF":
+                continue
+            cls = r.get("class_name")
+            if entities is not None and cls not in entities:
+                continue
+            by_class[cls] = by_class.get(cls, 0) + 1
+            if sample_limit and len(sample_entities) < sample_limit:
+                sample_entities.append(r.get("entity_name"))
+        by_relation: dict[str, int] = {}
+        for r in rows:
+            if r.get("relation_type") != "REPRESENTS":
+                continue
+            rel = r.get("relation_name")
+            if relations is not None and rel not in relations:
+                continue
+            by_relation[rel] = by_relation.get(rel, 0) + 1
+        result: dict[str, Any] = {
+            "entity_count": sum(by_class.values()),
+            "entities_by_class": by_class,
+            "fact_count": sum(by_relation.values()),
+            "facts_by_relation": by_relation,
+        }
+        if sample_limit:
+            result["sample_entities"] = sample_entities
+        return result
+
+    def fetch_entity_stats(
+        self,
+        database: str,
+        collection: str,
+        entity: str,
+        sample_limit: int | None = None,
+    ) -> dict | None:
+        """Instance count and per-property fill counts for the ``entity`` class in ``"kb"``.
+
+        ``sample_limit`` is an extension over the ``DataSource`` base signature
+        (an optional widening, not a breaking change) — it caps the number of
+        instance names returned under ``"sample"``, used by the ``get_sample``
+        NL tool.
+        """
+        if collection != "kb":
+            return None
+        manager = self._get_manager(database)
+        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        instance_names = {
+            r["entity_name"] for r in rows
+            if r.get("relation_type") == "IS_INSTANCE_OF" and r.get("class_name") == entity
+        }
+        prop_counts: dict[str, int] = {}
+        for r in rows:
+            if (
+                r.get("relation_type") == "IS_VALUE_OF"
+                and r.get("owner_label") == "ENTITY"
+                and r.get("entity_name") in instance_names
+            ):
+                prop = r.get("property_name")
+                prop_counts[prop] = prop_counts.get(prop, 0) + 1
+        result: dict[str, Any] = {
+            "entity": entity, "count": len(instance_names), "properties": prop_counts,
+        }
+        if sample_limit:
+            result["sample"] = sorted(instance_names)[:sample_limit]
+        return result
+
+    def fetch_property_stats(
+        self,
+        database: str,
+        collection: str,
+        entity: str,
+        property_name: str,
+        sample_limit: int | None = None,
+    ) -> dict | None:
+        """Value/null/distinct counts (and a sample of distinct values) for one
+        property across all instances of ``entity`` in ``"kb"``."""
+        if collection != "kb":
+            return None
+        manager = self._get_manager(database)
+        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        instance_names = {
+            r["entity_name"] for r in rows
+            if r.get("relation_type") == "IS_INSTANCE_OF" and r.get("class_name") == entity
+        }
+        values = [
+            r["property_value"] for r in rows
+            if r.get("relation_type") == "IS_VALUE_OF"
+            and r.get("owner_label") == "ENTITY"
+            and r.get("entity_name") in instance_names
+            and r.get("property_name") == property_name
+        ]
+        distinct = sorted({v for v in values}, key=str)
+        result: dict[str, Any] = {
+            "entity": entity,
+            "property": property_name,
+            "count": len(values),
+            "distinct_count": len(distinct),
+            "null_count": len(instance_names) - len(values),
+        }
+        if sample_limit:
+            result["sample_values"] = distinct[:sample_limit]
+        return result
+
+    # ------------------------------------------------------------------ #
+    # DataSource: generic NL2Q tools                                       #
+    # ------------------------------------------------------------------ #
+
+    def get_nl_tools(self, database: str | None = None, collection: str | None = None) -> list[dict]:
+        """Base tool set, with ``execute_query`` reworded: UserSource has no
+        separate native query language — it takes natural language directly."""
+        tools = super().get_nl_tools(database=database, collection=collection)
+        for tool in tools:
+            if tool["name"] == "execute_query":
+                tool["description"] = (
+                    "Answer a natural language question about the user's personal data. "
+                    "There is no separate native query language — pass plain text."
+                )
+                tool["input_schema"]["properties"]["query"]["description"] = (
+                    "Natural language question, e.g. \"what timezone is the user in?\""
+                )
+        return tools
+
+    def execute_nl_tool(
+        self,
+        name: str,
+        tool_input: dict,
+        database: str | None = None,
+        collection: str | None = None,
+        optional_properties: dict | None = None,
+    ):
+        """Dispatch a single NL-tool call (see ``DataSource.get_nl_tools``).
+
+        Overridden rather than inherited because ``execute_query`` here takes
+        natural language directly (no native-query stage) and returns a
+        ``(results, session_id)`` tuple — the tool loop only wants ``results``
+        — and because ``get_sample`` needs to pass the requested sample size
+        through to :meth:`fetch_entity_stats`.
+        """
+        db = tool_input.get("database", database)
+        coll = tool_input.get("collection", collection)
+
+        if name == "list_databases":
+            return self.fetch_databases()
+        if name == "list_collections":
+            return self.fetch_database_collections(db)
+        if name == "get_schema":
+            return {
+                "entities": self.fetch_database_collection_entities(db, coll),
+                "relations": self.fetch_database_collection_relations(db, coll),
+            }
+        if name == "get_metadata":
+            return self.fetch_database_collection_metadata(db, coll)
+        if name == "execute_query":
+            results, _session_id = self.execute_query(
+                tool_input["query"], database=db, collection=coll,
+                optional_properties=optional_properties,
+            )
+            return results
+        if name == "get_sample":
+            return self.fetch_entity_stats(
+                db, coll, tool_input["entity"],
+                sample_limit=tool_input.get("sample_size", 10),
+            )
+        if name == "get_column_stats":
+            return self.fetch_property_stats(db, coll, tool_input["entity"], tool_input["column"])
+        if name == "get_relations":
+            return self.fetch_database_collection_relations(db, coll)
+        raise ValueError(f"Unknown tool: {name!r}")
 
     # ------------------------------------------------------------------ #
     # User management (UserSource-specific API)                            #
