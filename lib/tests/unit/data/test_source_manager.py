@@ -214,3 +214,63 @@ async def test_add_source_with_queries_still_imports_into_kb(manager: UserDataMa
     kb = manager._ensure_kb_source()
     data = await kb.fetch_database_data(manager._database, compact=True)
     assert data
+
+
+# ── set_person_name ──────────────────────────────────────────────────────────
+
+async def test_set_person_name_creates_single_person_entity_labeled_with_first_name(
+    manager: UserDataManager,
+) -> None:
+    await manager.set_person_name("Alice", "Smith")
+
+    kb = manager._ensure_kb_source()
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
+    assert len(entities) == 1
+    assert entities[0]["properties"]["name"] == "Alice"
+
+    person_class = await kb.find_class(manager._database, "PERSON")
+    is_instance_edges = [
+        e for e in data["edges"]
+        if e["type"] == "IS_INSTANCE_OF" and e["source_id"] == entities[0]["id"]
+    ]
+    assert [e["target_id"] for e in is_instance_edges] == [person_class["id"]]
+
+    literals = {n["id"]: n["properties"] for n in data["nodes"] if n["label"] == "LITERAL"}
+    has_property_edges = [
+        e for e in data["edges"]
+        if e["type"] == "HAS_PROPERTY" and e["source_id"] == entities[0]["id"]
+    ]
+    values = {literals[e["target_id"]]["value"] for e in has_property_edges}
+    assert values == {"Alice", "Smith"}
+
+
+async def test_set_person_name_without_last_name_only_sets_first_name_property(
+    manager: UserDataManager,
+) -> None:
+    await manager.set_person_name("Cher")
+
+    kb = manager._ensure_kb_source()
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
+    assert len(entities) == 1
+
+    literals = {n["id"]: n["properties"] for n in data["nodes"] if n["label"] == "LITERAL"}
+    has_property_edges = [
+        e for e in data["edges"]
+        if e["type"] == "HAS_PROPERTY" and e["source_id"] == entities[0]["id"]
+    ]
+    values = {literals[e["target_id"]]["value"] for e in has_property_edges}
+    assert values == {"Cher"}
+
+
+async def test_set_person_name_is_idempotent_for_same_first_name(manager: UserDataManager) -> None:
+    """Calling twice with the same first name reuses the entity instead of duplicating it."""
+    first_id = await manager.set_person_name("Alice", "Smith")
+    second_id = await manager.set_person_name("Alice", "Smith")
+    assert first_id == second_id
+
+    kb = manager._ensure_kb_source()
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
+    assert len(entities) == 1

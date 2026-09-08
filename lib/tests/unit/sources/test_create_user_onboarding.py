@@ -29,7 +29,9 @@ async def test_create_user_onboards_by_default() -> None:
         "blue_data_user_source.source.UserQueryReasoner.onboard", AsyncMock()
     ) as mock_onboard:
         await source.create_user("alice", **_create_user_kwargs())
-    mock_onboard.assert_awaited_once_with(metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH)
+    mock_onboard.assert_awaited_once_with(
+        metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH, include_metadata=True
+    )
 
 
 async def test_create_user_skips_onboarding_when_disabled() -> None:
@@ -41,6 +43,17 @@ async def test_create_user_skips_onboarding_when_disabled() -> None:
     mock_onboard.assert_not_awaited()
 
 
+async def test_create_user_passes_through_onboard_metadata_flag() -> None:
+    source = MemoryUserSource()
+    with patch(
+        "blue_data_user_source.source.UserQueryReasoner.onboard", AsyncMock()
+    ) as mock_onboard:
+        await source.create_user("alice", **_create_user_kwargs(onboard_metadata=False))
+    mock_onboard.assert_awaited_once_with(
+        metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH, include_metadata=False
+    )
+
+
 async def test_onboard_user_can_be_called_standalone() -> None:
     source = MemoryUserSource()
     with patch(
@@ -50,4 +63,18 @@ async def test_onboard_user_can_be_called_standalone() -> None:
         mock_onboard.assert_not_awaited()
 
         await source.onboard_user("alice")
-    mock_onboard.assert_awaited_once_with(metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH)
+    mock_onboard.assert_awaited_once_with(
+        metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH, include_metadata=True
+    )
+
+
+async def test_onboard_user_standalone_passes_through_include_metadata() -> None:
+    source = MemoryUserSource()
+    with patch(
+        "blue_data_user_source.source.UserQueryReasoner.onboard", AsyncMock()
+    ) as mock_onboard:
+        await source.create_user("alice", **_create_user_kwargs(onboard=False))
+        await source.onboard_user("alice", include_metadata=False)
+    mock_onboard.assert_awaited_once_with(
+        metadata_schema_path=_DEFAULT_METADATA_SCHEMA_PATH, include_metadata=False
+    )

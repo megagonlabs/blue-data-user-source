@@ -119,6 +119,7 @@ def test_database_create_onboards_by_default(runner: CliRunner, data_dir: Path) 
     assert result.exit_code == 0
     assert "alice" in result.output
     assert mock.create_user.await_args.kwargs["onboard"] is True
+    assert mock.create_user.await_args.kwargs["onboard_metadata"] is True
 
 
 def test_database_create_no_onboard_flag_disables_onboarding(
@@ -131,6 +132,18 @@ def test_database_create_no_onboard_flag_disables_onboarding(
         result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-onboard"])
     assert result.exit_code == 0
     assert mock.create_user.await_args.kwargs["onboard"] is False
+
+
+def test_database_create_no_metadata_onboard_flag(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-metadata-onboard"])
+    assert result.exit_code == 0
+    assert mock.create_user.await_args.kwargs["onboard_metadata"] is False
 
 
 def test_database_create_already_exists_exits_with_code_1(
@@ -174,7 +187,17 @@ def test_database_onboard_calls_onboard_user(runner: CliRunner, data_dir: Path) 
         result = _invoke(runner, data_dir, ["database", "onboard"])
     assert result.exit_code == 0
     assert "alice" in result.output
-    mock.onboard_user.assert_awaited_once_with("alice")
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True)
+
+
+def test_database_onboard_no_metadata_onboard_flag(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.onboard_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "onboard", "--no-metadata-onboard"])
+    assert result.exit_code == 0
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False)
 
 
 def test_database_onboard_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:

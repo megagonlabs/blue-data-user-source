@@ -238,12 +238,15 @@ class UserSource(DataSource):
         session_source_props: dict,
         doc_source_props: dict | None = None,
         onboard: bool = True,
+        onboard_metadata: bool = True,
     ) -> None:
         """Build a fresh per-user registry + all sources, seed schema, register the user.
 
         When ``onboard`` is True (the default), also runs :meth:`onboard_user`
         immediately afterward to ask the new user a few questions to seed
-        their data and metadata.
+        their data and metadata. ``onboard_metadata`` (default True) controls
+        whether that onboarding also asks structured metadata questions —
+        set to False to only seed the KB.
         """
         manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
         await manager.build(
@@ -266,19 +269,24 @@ class UserSource(DataSource):
         )
         self._managers[name] = manager
         if onboard:
-            await self.onboard_user(name)
+            await self.onboard_user(name, include_metadata=onboard_metadata)
 
-    async def onboard_user(self, name: str) -> None:
+    async def onboard_user(self, name: str, include_metadata: bool = True) -> None:
         """Ask a user a few onboarding questions to seed their KB data and metadata.
 
         Called automatically by :meth:`create_user` (unless ``onboard=False``
         was passed), and can also be re-run later for an existing user —
         metadata questions are only generated for keys still unset.
+
+        ``include_metadata`` (default True) controls whether the structured
+        metadata question batch is asked; set to False to only seed the KB
+        (plus the always-asked name, which also seeds ``identity.name``).
         """
         manager = self._get_manager(name)
         reasoner = UserQueryReasoner(source=self, manager=manager)
         await reasoner.onboard(
-            metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema")
+            metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema"),
+            include_metadata=include_metadata,
         )
 
     def list_users(self) -> list[str]:

@@ -531,6 +531,36 @@ class UserDataManager:
             self._database, text, queries=queries, source_id=source_id
         )
 
+    async def set_person_name(self, first_name: str, last_name: str | None = None) -> str:
+        """Deterministically create/update the user's single PERSON entity.
+
+        Labels the entity with ``first_name`` and stores ``first_name`` /
+        ``last_name`` as FIRST_NAME/LAST_NAME properties on it via direct
+        graph writes rather than LLM-based text extraction, so this always
+        produces exactly one PERSON node. Safe to call more than once: reuses
+        the existing entity (matched by name) instead of creating a duplicate.
+
+        Returns the PERSON entity's id.
+        """
+        kb = self._ensure_kb_source()
+        person_class = await kb.find_class(self._database, "PERSON")
+        class_id = person_class["id"] if person_class else None
+
+        entity = await kb.find_entity(self._database, first_name)
+        entity_id = entity["id"] if entity else await kb.add_entity(
+            self._database, first_name, class_id=class_id
+        )
+
+        for attr_name, value in (("FIRST_NAME", first_name), ("LAST_NAME", last_name)):
+            if not value:
+                continue
+            prop = await kb.find_property(self._database, attr_name)
+            if prop is not None:
+                await kb.add_entity_property_value(
+                    self._database, value, entity_id=entity_id, property_id=prop["id"]
+                )
+        return entity_id
+
     # ------------------------------------------------------------------ #
     # Metadata operations                                                  #
     # ------------------------------------------------------------------ #

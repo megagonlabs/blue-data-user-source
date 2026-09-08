@@ -63,28 +63,22 @@ async def test_onboard_asks_fixed_name_question_first(reasoner: UserQueryReasone
         return {"questions": ["What is your nationality?"]}
 
     mock_store = AsyncMock()
+    mock_set_person_name = AsyncMock(return_value="entity-1")
     mock_cm = _mock_contact_manager(["Alice Smith", "American", "they/them"])
 
     with (
         patch("blue_data_user_source.reasoning.reasoner._llm_complete", fake_llm_complete),
         patch("blue_data_user_source.interaction.ContactManager", return_value=mock_cm),
         patch.object(reasoner._manager, "store_data", mock_store),
+        patch.object(reasoner._manager, "set_person_name", mock_set_person_name),
     ):
         await reasoner.onboard(metadata_schema_path=_METADATA_SCHEMA)
 
     mock_cm.identify_contact_method.assert_awaited_once_with(topic="onboarding")
     assert reasoner._manager.get_metadata("identity.name") == "Alice Smith"
     assert reasoner._manager.get_metadata("identity.pronouns") == "they/them"
-    mock_store.assert_any_await(
-        "Question: What is your first and last name?\nUser Response: Alice Smith\n"
-        "(First name: Alice; Last name: Smith)",
-        queries=[
-            "What is the user's first name?",
-            "What is the user's last name?",
-            "What is the user's full name?",
-        ],
-    )
-    mock_store.assert_any_await(
+    mock_set_person_name.assert_awaited_once_with("Alice", "Smith")
+    mock_store.assert_awaited_once_with(
         "Question: What is your nationality?\nUser Response: American",
         queries=["What is your nationality?"],
     )
@@ -97,12 +91,14 @@ async def test_onboard_skips_name_question_when_already_set(reasoner: UserQueryR
         return {"questions": ["What is your nationality?"]}
 
     mock_store = AsyncMock()
+    mock_set_person_name = AsyncMock(return_value="entity-1")
     mock_cm = _mock_contact_manager(["American"])
 
     with (
         patch("blue_data_user_source.reasoning.reasoner._llm_complete", fake_llm_complete),
         patch("blue_data_user_source.interaction.ContactManager", return_value=mock_cm),
         patch.object(reasoner._manager, "store_data", mock_store),
+        patch.object(reasoner._manager, "set_person_name", mock_set_person_name),
     ):
         await reasoner.onboard(metadata_schema_path=_METADATA_SCHEMA)
 
@@ -110,6 +106,7 @@ async def test_onboard_skips_name_question_when_already_set(reasoner: UserQueryR
         "Question: What is your nationality?\nUser Response: American",
         queries=["What is your nationality?"],
     )
+    mock_set_person_name.assert_not_awaited()
     assert reasoner._manager.get_metadata("identity.name") == "Alice Smith"
 
 
@@ -120,14 +117,70 @@ async def test_onboard_skips_metadata_set_when_name_not_answered(
         return {"questions": []}
 
     mock_cm = _mock_contact_manager([""])
+    mock_set_person_name = AsyncMock(return_value="entity-1")
 
     with (
         patch("blue_data_user_source.reasoning.reasoner._llm_complete", fake_llm_complete),
         patch("blue_data_user_source.interaction.ContactManager", return_value=mock_cm),
+        patch.object(reasoner._manager, "set_person_name", mock_set_person_name),
     ):
         await reasoner.onboard(metadata_schema_path=_METADATA_SCHEMA)
 
     assert reasoner._manager.get_metadata("identity.name") is None
+    mock_set_person_name.assert_not_awaited()
+
+
+async def test_ask_name_question_passes_none_for_missing_last_name(
+    reasoner: UserQueryReasoner,
+) -> None:
+    """A single-word name answer sets first_name only; last_name is None, not ''."""
+    mock_set_person_name = AsyncMock(return_value="entity-1")
+    mock_cm = _mock_contact_manager(["Cher"])
+    session_manager = MagicMock()
+    session_manager.create_query = AsyncMock(return_value="q1")
+    session_manager.create_interaction = AsyncMock(return_value="i1")
+    session_manager.resolve_interaction = AsyncMock()
+    channel = await mock_cm.identify_contact_method()
+
+    with patch.object(reasoner._manager, "set_person_name", mock_set_person_name):
+        await reasoner._ask_name_question(session_manager, "s1", channel)
+
+    mock_set_person_name.assert_awaited_once_with("Cher", None)
+
+
+async def test_onboard_include_metadata_false_skips_metadata_questions(
+    reasoner: UserQueryReasoner,
+) -> None:
+    """include_metadata=False still asks the name (seeding identity.name) and KB
+    questions, but never generates or asks the additional metadata batch."""
+    metadata_question_calls: list[str] = []
+
+    async def fake_llm_complete(prompt: str, **kwargs):
+        if "user profile fields" in prompt:
+            metadata_question_calls.append(prompt)
+            return {"questions": [{"key": "identity.pronouns", "question": "What are your pronouns?"}]}
+        return {"questions": ["What is your nationality?"]}
+
+    mock_store = AsyncMock()
+    mock_set_person_name = AsyncMock(return_value="entity-1")
+    mock_cm = _mock_contact_manager(["Alice Smith", "American"])
+
+    with (
+        patch("blue_data_user_source.reasoning.reasoner._llm_complete", fake_llm_complete),
+        patch("blue_data_user_source.interaction.ContactManager", return_value=mock_cm),
+        patch.object(reasoner._manager, "store_data", mock_store),
+        patch.object(reasoner._manager, "set_person_name", mock_set_person_name),
+    ):
+        await reasoner.onboard(metadata_schema_path=_METADATA_SCHEMA, include_metadata=False)
+
+    assert metadata_question_calls == []
+    assert reasoner._manager.get_metadata("identity.name") == "Alice Smith"
+    assert reasoner._manager.get_metadata("identity.pronouns") is None
+    mock_set_person_name.assert_awaited_once_with("Alice", "Smith")
+    mock_store.assert_awaited_once_with(
+        "Question: What is your nationality?\nUser Response: American",
+        queries=["What is your nationality?"],
+    )
 
 
 async def test_onboard_skips_storing_when_no_response(reasoner: UserQueryReasoner) -> None:
@@ -171,10 +224,13 @@ async def test_generate_kb_onboarding_questions_uses_person_attributes(
     marker = "covering only the following attributes: "
     attrs = captured["prompt"].split(marker, 1)[1].split(".\n", 1)[0].split(", ")
     assert "NATIONALITY" in attrs
+    assert "DATE_OF_BIRTH" in attrs
     assert "NICK_NAME" in attrs  # only exact NAME/FIRST_NAME/LAST_NAME are excluded
     assert "NAME" not in attrs
     assert "FIRST_NAME" not in attrs
     assert "LAST_NAME" not in attrs
+    assert "GENDER" not in attrs
+    assert "AGE" not in attrs
 
 
 async def test_generate_kb_onboarding_questions_caps_at_five(reasoner: UserQueryReasoner) -> None:

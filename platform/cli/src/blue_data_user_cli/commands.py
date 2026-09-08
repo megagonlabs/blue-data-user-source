@@ -300,6 +300,12 @@ def database_list(obj: dict, fmt: str) -> None:
     show_default=True,
     help="Ask the new user a few onboarding questions to seed their data and metadata.",
 )
+@click.option(
+    "--metadata-onboard/--no-metadata-onboard",
+    default=True,
+    show_default=True,
+    help="Include structured metadata questions in onboarding (KB questions are always asked).",
+)
 @click.pass_obj
 def database_create(
     obj: dict,
@@ -311,6 +317,7 @@ def database_create(
     neo4j_password: str | None,
     doc_backend: str,
     onboard: bool,
+    metadata_onboard: bool,
 ) -> None:
     """Create a new user database."""
     data_dir: Path = obj["data_dir"]
@@ -343,6 +350,7 @@ def database_create(
             _user_session_props(data_dir, name),
             _user_doc_source_props(data_dir, name, doc_backend),
             onboard=onboard,
+            onboard_metadata=metadata_onboard,
         ))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
@@ -352,13 +360,19 @@ def database_create(
 
 
 @database_group.command("onboard")
+@click.option(
+    "--metadata-onboard/--no-metadata-onboard",
+    default=True,
+    show_default=True,
+    help="Include structured metadata questions in onboarding (KB questions are always asked).",
+)
 @click.pass_obj
-def database_onboard(obj: dict) -> None:
+def database_onboard(obj: dict, metadata_onboard: bool) -> None:
     """Ask the active database's user onboarding questions to seed data and metadata."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"], obj.get("schema_path"))
     try:
-        asyncio.run(source.onboard_user(db))
+        asyncio.run(source.onboard_user(db, include_metadata=metadata_onboard))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)

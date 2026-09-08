@@ -101,6 +101,10 @@ class UserQueryReasoner:
     _NAME_METADATA_KEY = "identity.name"
     _NAME_QUESTION = "What is your first and last name?"
 
+    # KB PERSON attributes never asked about during onboarding: gender is
+    # sensitive and out of scope, and birth date subsumes age.
+    _EXCLUDED_KB_ATTRS = {"GENDER", "AGE"}
+
     def __init__(
         self,
         source: UserSource,
@@ -325,20 +329,29 @@ class UserQueryReasoner:
             metrics = await self.assess_query_results(assessment_query, data, metadata)
         return new_items
 
-    async def onboard(self, metadata_schema_path: str | None = None) -> None:
+    async def onboard(
+        self,
+        metadata_schema_path: str | None = None,
+        include_metadata: bool = True,
+    ) -> None:
         """Ask a new user a small set of questions to seed their KB data and metadata.
 
         Always starts with one fixed, non-LLM-generated question asking for the
         user's first and last name (unless ``identity.name`` is already set),
-        whose answer seeds both the KB (PERSON's NAME/FIRST_NAME/LAST_NAME
-        attributes) and metadata (``identity.name``) in one step. It then
-        generates two further batches of questions — free-form KB facts (from
-        the KB schema's remaining PERSON attributes) and structured metadata
-        fields (from ``metadata_schema_path``, one per not-yet-set key, other
-        than ``identity.name``) — and asks each via the user's identified
-        contact method. KB answers are stored verbatim via ``store_data``;
-        metadata answers are reduced to a typed value via an LLM extraction
-        step and stored via ``set_metadata``.
+        whose answer seeds both the KB — a single PERSON entity, labeled with
+        the first name, with FIRST_NAME/LAST_NAME as properties, written
+        directly via ``UserDataManager.set_person_name`` rather than LLM
+        extraction — and metadata (``identity.name``), in one step. It then
+        generates a batch of free-form KB questions from the KB schema's
+        remaining PERSON attributes and asks each via the user's identified
+        contact method, storing answers verbatim via ``store_data``.
+
+        When ``include_metadata`` is True (the default), an additional batch
+        of structured metadata questions is also generated (one per not-yet-set
+        key in ``metadata_schema_path``, other than ``identity.name``); answers
+        are reduced to a typed value via an LLM extraction step and stored via
+        ``set_metadata``. Set ``include_metadata`` to False to skip this batch
+        entirely and only seed the KB (plus the always-asked name).
 
         Safe to call more than once: the name question is only asked while
         ``identity.name`` is unset, metadata questions are only generated for
@@ -353,7 +366,10 @@ class UserQueryReasoner:
 
         name_needed = self._manager.get_metadata(self._NAME_METADATA_KEY) is None
         kb_questions = await self._generate_kb_onboarding_questions()
-        metadata_questions = await self._generate_metadata_onboarding_questions(metadata_schema_path)
+        metadata_questions = (
+            await self._generate_metadata_onboarding_questions(metadata_schema_path)
+            if include_metadata else []
+        )
         if not name_needed and not kb_questions and not metadata_questions:
             return
 
@@ -386,7 +402,13 @@ class UserQueryReasoner:
     async def _ask_name_question(
         self, session_manager: Any, session_id: str, channel: ContactMethod
     ) -> None:
-        """Ask the fixed first/last name question and seed both KB and metadata from it."""
+        """Ask the fixed first/last name question and seed both KB and metadata from it.
+
+        The KB is seeded via ``UserDataManager.set_person_name`` — a direct
+        graph write rather than free-text LLM extraction — so onboarding
+        always produces exactly one PERSON entity, labeled with the first
+        name, with FIRST_NAME/LAST_NAME as properties on it.
+        """
         response = await self._ask_onboarding_question(
             session_manager, session_id, channel, self._NAME_QUESTION
         )
@@ -396,15 +418,7 @@ class UserQueryReasoner:
         first_name, _, last_name = full_name.partition(" ")
 
         self._manager.set_metadata(self._NAME_METADATA_KEY, full_name)
-        await self._manager.store_data(
-            f"Question: {self._NAME_QUESTION}\nUser Response: {response}\n"
-            f"(First name: {first_name}; Last name: {last_name})",
-            queries=[
-                "What is the user's first name?",
-                "What is the user's last name?",
-                "What is the user's full name?",
-            ],
-        )
+        await self._manager.set_person_name(first_name, last_name or None)
 
     async def _ask_onboarding_question(
         self, session_manager: Any, session_id: str, channel: ContactMethod, question: str
@@ -430,7 +444,8 @@ class UserQueryReasoner:
         """Generate onboarding questions from the KB schema's PERSON attributes.
 
         Excludes NAME/FIRST_NAME/LAST_NAME, which are covered by the fixed
-        name question asked separately in :meth:`onboard`.
+        name question asked separately in :meth:`onboard`, and GENDER/AGE,
+        which are never asked about (see ``_EXCLUDED_KB_ATTRS``).
         """
         if self._manager is None:
             return []
@@ -442,7 +457,8 @@ class UserQueryReasoner:
             return []
         person = schema.get("entities", {}).get("PERSON") or {}
         all_attrs = (person.get("contents") or {}).get("attributes") or {}
-        attrs = [a for a in all_attrs if a not in self._NAME_KB_ATTRS]
+        skip = self._NAME_KB_ATTRS | self._EXCLUDED_KB_ATTRS
+        attrs = [a for a in all_attrs if a not in skip]
         if not attrs:
             return []
 
@@ -451,6 +467,8 @@ class UserQueryReasoner:
             f"about a new user, covering only the following attributes: {', '.join(attrs)}.\n\n"
             "Each question should be clear, friendly, and cover a distinct attribute. "
             "Do not ask about anything other than the listed attributes. "
+            "Never ask about gender, gender identity, or age (ask for birth date "
+            "instead, if it is in the list). "
             "Do not ask more than 5 questions.\n\n"
             'Return a JSON object: {"questions": ["<question>", ...]}'
         )
