@@ -111,15 +111,46 @@ class UserSource(DataSource):
         us.set_metadata("alice", "preferences.verbosity", "brief")
     """
 
-    def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:
-        super().__init__(name, properties)
-        # Build the outer DataRegistry backed by the JSONSource from properties["registry"]
+    # ------------------------------------------------------------------ #
+    # DataSource: connection properties / connect API                      #
+    # ------------------------------------------------------------------ #
+
+    def _initialize_connection_properties(self) -> None:
+        conn = self.properties.get("connection", {})
+        conn.setdefault("protocol", "user/registry")
+        self.properties["connection"] = conn
+
+    def _connect(self, **connection) -> DataRegistry:  # noqa: ARG002 — no live socket; see class docstring
+        """Build the outer DataRegistry backed by the JSONSource from ``properties["registry"]``.
+
+        Called automatically by ``DataSource.__init__`` (via ``_start()`` ->
+        ``_start_connection()``), before the rest of ``__init__`` runs. The
+        registry is returned so it's tracked as ``self.connection`` per the
+        base class's lifecycle contract, and cached as ``self._registry`` for
+        use throughout this class. Also (re)initializes the per-user
+        ``UserDataManager`` cache, so a manual reconnect (``_connect()``
+        called again) starts with a clean cache.
+
+        ``**connection`` (``self.properties["connection"]``, e.g. its
+        ``protocol`` label) is unused here — the registry's own backend is
+        configured separately via ``properties["registry"]``.
+        """
         registry_json_props = self.properties.get("registry") or {
             "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
         }
-        registry_store = _build_json_source(f"{name}_registry", registry_json_props)
+        registry_store = _build_json_source(f"{self.name}_registry", registry_json_props)
         self._registry = DataRegistry(store=registry_store)
         self._managers: dict[str, UserDataManager] = {}
+        return self._registry
+
+    def _disconnect(self) -> None:
+        self._registry = None
+        self._managers = {}
+
+    def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:
+        super().__init__(name, properties)
+        # self._registry and self._managers are built by _connect(), invoked
+        # automatically above via DataSource.__init__ -> _start() -> _start_connection().
 
         # Register the source record in the outer DataRegistry, storing schema paths as properties.
         # On first run the record is created; on subsequent runs only explicitly provided values update it.
