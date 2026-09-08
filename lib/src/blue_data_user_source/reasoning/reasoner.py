@@ -94,6 +94,13 @@ class UserQueryReasoner:
         FreshnessMetric(),
     ]
 
+    # KB PERSON attributes and metadata key covered by the fixed name question
+    # rather than an LLM-generated one, since first/last name is always asked
+    # up front and would otherwise be duplicated by both generators.
+    _NAME_KB_ATTRS = {"NAME", "FIRST_NAME", "LAST_NAME"}
+    _NAME_METADATA_KEY = "identity.name"
+    _NAME_QUESTION = "What is your first and last name?"
+
     def __init__(
         self,
         source: UserSource,
@@ -321,15 +328,21 @@ class UserQueryReasoner:
     async def onboard(self, metadata_schema_path: str | None = None) -> None:
         """Ask a new user a small set of questions to seed their KB data and metadata.
 
-        Generates two batches of questions — free-form KB facts (from the KB
-        schema's PERSON attributes) and structured metadata fields (from
-        ``metadata_schema_path``, one per not-yet-set key) — then asks each
-        via the user's identified contact method. KB answers are stored
-        verbatim via ``store_data``; metadata answers are reduced to a typed
-        value via an LLM extraction step and stored via ``set_metadata``.
+        Always starts with one fixed, non-LLM-generated question asking for the
+        user's first and last name (unless ``identity.name`` is already set),
+        whose answer seeds both the KB (PERSON's NAME/FIRST_NAME/LAST_NAME
+        attributes) and metadata (``identity.name``) in one step. It then
+        generates two further batches of questions — free-form KB facts (from
+        the KB schema's remaining PERSON attributes) and structured metadata
+        fields (from ``metadata_schema_path``, one per not-yet-set key, other
+        than ``identity.name``) — and asks each via the user's identified
+        contact method. KB answers are stored verbatim via ``store_data``;
+        metadata answers are reduced to a typed value via an LLM extraction
+        step and stored via ``set_metadata``.
 
-        Safe to call more than once: metadata questions are only generated
-        for keys that are still unset, and KB answers are simply appended as
+        Safe to call more than once: the name question is only asked while
+        ``identity.name`` is unset, metadata questions are only generated for
+        keys that are still unset, and KB answers are simply appended as
         additional facts.
         """
         from blue_data_user_source.interaction import ContactManager, SessionManager
@@ -338,9 +351,10 @@ class UserQueryReasoner:
         if self._manager is None:
             raise QueryError("No data manager available for onboarding")
 
+        name_needed = self._manager.get_metadata(self._NAME_METADATA_KEY) is None
         kb_questions = await self._generate_kb_onboarding_questions()
         metadata_questions = await self._generate_metadata_onboarding_questions(metadata_schema_path)
-        if not kb_questions and not metadata_questions:
+        if not name_needed and not kb_questions and not metadata_questions:
             return
 
         session_manager = SessionManager(database=self._manager._database, data_manager=self._manager)
@@ -348,6 +362,9 @@ class UserQueryReasoner:
 
         contact_manager = ContactManager(database=self._manager._database, data_manager=self._manager)
         channel = await contact_manager.identify_contact_method(topic="onboarding")
+
+        if name_needed:
+            await self._ask_name_question(session_manager, session_id, channel)
 
         for question in kb_questions:
             response = await self._ask_onboarding_question(session_manager, session_id, channel, question)
@@ -365,6 +382,29 @@ class UserQueryReasoner:
             value = await self._extract_metadata_value(item, response)
             if value is not None:
                 self._manager.set_metadata(item["key"], value)
+
+    async def _ask_name_question(
+        self, session_manager: Any, session_id: str, channel: ContactMethod
+    ) -> None:
+        """Ask the fixed first/last name question and seed both KB and metadata from it."""
+        response = await self._ask_onboarding_question(
+            session_manager, session_id, channel, self._NAME_QUESTION
+        )
+        if not response:
+            return
+        full_name = response.strip()
+        first_name, _, last_name = full_name.partition(" ")
+
+        self._manager.set_metadata(self._NAME_METADATA_KEY, full_name)
+        await self._manager.store_data(
+            f"Question: {self._NAME_QUESTION}\nUser Response: {response}\n"
+            f"(First name: {first_name}; Last name: {last_name})",
+            queries=[
+                "What is the user's first name?",
+                "What is the user's last name?",
+                "What is the user's full name?",
+            ],
+        )
 
     async def _ask_onboarding_question(
         self, session_manager: Any, session_id: str, channel: ContactMethod, question: str
@@ -387,7 +427,11 @@ class UserQueryReasoner:
         return response
 
     async def _generate_kb_onboarding_questions(self) -> list[str]:
-        """Generate onboarding questions from the KB schema's PERSON attributes."""
+        """Generate onboarding questions from the KB schema's PERSON attributes.
+
+        Excludes NAME/FIRST_NAME/LAST_NAME, which are covered by the fixed
+        name question asked separately in :meth:`onboard`.
+        """
         if self._manager is None:
             return []
         try:
@@ -397,7 +441,8 @@ class UserQueryReasoner:
         except Exception:
             return []
         person = schema.get("entities", {}).get("PERSON") or {}
-        attrs = list((person.get("contents") or {}).get("attributes") or {})
+        all_attrs = (person.get("contents") or {}).get("attributes") or {}
+        attrs = [a for a in all_attrs if a not in self._NAME_KB_ATTRS]
         if not attrs:
             return []
 
@@ -418,6 +463,9 @@ class UserQueryReasoner:
     ) -> list[dict[str, str]]:
         """Generate one onboarding question per not-yet-set metadata key.
 
+        Excludes ``identity.name``, which is covered by the fixed name
+        question asked separately in :meth:`onboard`.
+
         Returns a list of ``{"key": "<category.key>", "question": "<text>", "type": "<type>"}``.
         """
         if not metadata_schema_path or self._manager is None:
@@ -432,6 +480,8 @@ class UserQueryReasoner:
                 if key.startswith("__"):
                     continue
                 dotted = f"{category}.{key}"
+                if dotted == self._NAME_METADATA_KEY:
+                    continue
                 if self._manager.get_metadata(dotted) is not None:
                     continue
                 specs[dotted] = spec
