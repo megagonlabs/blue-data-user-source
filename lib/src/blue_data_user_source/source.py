@@ -303,12 +303,15 @@ class UserSource(DataSource):
     def import_data(
         self,
         source: Any,
-        collection: str,
         database: str = "default",
+        collection: str = "default",
         entity: str | None = None,
         mode: str = "append",
         options: dict | None = None,
     ) -> dict:
+        """Signature matches ``DataSource.import_data`` (``database`` before
+        ``collection``, both defaulted) — a positional call valid against the
+        base class binds the same arguments here."""
         return asyncio.run(
             self._get_manager(database).import_data(source, collection, entity, mode, options)
         )
