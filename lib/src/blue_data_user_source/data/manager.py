@@ -203,14 +203,18 @@ class UserDataManager:
         registry_store = _build_json_source("registry", self._registry_props)
         self._registry = DataRegistry(store=registry_store)
 
-        # KB source
+        # KB source. Extra top-level keys (e.g. "search", for the KB's
+        # schema/data search index config) pass through alongside "connection" —
+        # same convention as _build_json_source's "namespace" passthrough.
         kb_enriched = _enrich_props(kb_source_props, "kb")
+        kb_extra = {k: v for k, v in kb_enriched.items() if k not in ("_class", "connection")}
         kb_source = DataSource.instantiate(
             kb_enriched["_class"], "kb",
-            properties={"connection": kb_enriched.get("connection", {})},
+            properties={"connection": kb_enriched.get("connection", {}), **kb_extra},
         )
         self._registry.register_source(kb_source)
         await self.seed_kb_source_schema(schema_path)
+        await self.seed_user_entity()
 
         # Metadata source
         meta_enriched = _enrich_props(metadata_source_props, "json")
@@ -266,6 +270,7 @@ class UserDataManager:
             await self.clear_kb()
             if schema_path:
                 await self.seed_kb_source_schema(schema_path)
+                await self.seed_user_entity()
 
         if "metadata" in sources:
             self.clear_metadata()
@@ -385,21 +390,41 @@ class UserDataManager:
             "entities": schema_dict["entities"],
             "relations": schema_dict["relations"],
         })
+        # Endpoints resolve by exact name, never via search_schema: that is a
+        # *ranked* match, and e.g. "PERSON" scores USER ("Digital user profile
+        # extending PERSON") above PERSON itself, which seeds USER IS_SUBCLASS_OF
+        # USER. Labels outside this mapping (PROPERTY subclassing, declared by
+        # some schema files) are skipped — add_is_subclass_of takes CLASS or
+        # RELATION nodes only.
+        finders = {"CLASS": kb.find_class, "RELATION": kb.find_relation_type}
         for sc in schema_dict.get("subclasses", []):
-            if sc["child_label"] not in ("CLASS", "RELATION"):
+            find_child = finders.get(sc["child_label"])
+            find_parent = finders.get(sc["parent_label"])
+            if find_child is None or find_parent is None:
                 continue
-            if sc["parent_label"] not in ("CLASS", "RELATION"):
-                continue
-            child_results = await kb.search_schema(
-                self._database, sc["child"], type_filter=sc["child_label"]
-            )
-            parent_results = await kb.search_schema(
-                self._database, sc["parent"], type_filter=sc["parent_label"]
-            )
-            if child_results and parent_results:
-                await kb.add_is_subclass_of(
-                    self._database, child_results[0].id, parent_results[0].id
-                )
+            child = await find_child(self._database, sc["child"])
+            parent = await find_parent(self._database, sc["parent"])
+            if child and parent:
+                await kb.add_is_subclass_of(self._database, child["id"], parent["id"])
+
+    async def seed_user_entity(self) -> str:
+        """Ensure the user has a self-entity in the KB by default — ``<database> ->
+        IS_INSTANCE_OF -> USER`` (``USER`` is ``IS_SUBCLASS_OF PERSON`` per the base
+        schema) — rather than leaving it to be created lazily whenever/if onboarding's
+        name question is answered.
+
+        Named after the database key as a placeholder (e.g. ``"alice"``); safe to call
+        more than once (reuses the existing entity instead of creating a duplicate).
+        :meth:`set_person_name` renames this same entity once the real name is known.
+        """
+        kb = self._ensure_kb_source()
+        user_class = await kb.find_class(self._database, "USER")
+        class_id = user_class["id"] if user_class else None
+
+        entity = await kb.find_entity(self._database, self._database)
+        if entity is not None:
+            return entity["id"]
+        return await kb.add_entity(self._database, self._database, class_id=class_id)
 
     async def execute_query(
         self,
@@ -494,8 +519,7 @@ class UserDataManager:
 
         if queries:
             text = "\n".join(chunk["text"] for chunk in chunks)
-            for query in queries:
-                await kb.import_text(self._database, text, queries=[query], source_id=source_id)
+            await kb.import_text(self._database, text, queries=queries, source_id=source_id)
 
     def remove_source(self, source_name: str) -> None:
         """Remove a source from the DataRegistry without touching KB data."""
@@ -532,24 +556,34 @@ class UserDataManager:
         )
 
     async def set_person_name(self, first_name: str, last_name: str | None = None) -> str:
-        """Deterministically create/update the user's single PERSON entity.
+        """Deterministically create/update the user's single USER entity (``IS_INSTANCE_OF
+        USER``, which is ``IS_SUBCLASS_OF PERSON`` per the base schema).
 
         Labels the entity with ``first_name`` and stores ``first_name`` /
         ``last_name`` as FIRST_NAME/LAST_NAME properties on it via direct
         graph writes rather than LLM-based text extraction, so this always
-        produces exactly one PERSON node. Safe to call more than once: reuses
+        produces exactly one USER node. Safe to call more than once: reuses
         the existing entity (matched by name) instead of creating a duplicate.
+        If a placeholder entity was already seeded by :meth:`seed_user_entity`
+        (named after the database key), renames that same entity to
+        ``first_name`` instead of creating a second one.
 
-        Returns the PERSON entity's id.
+        Returns the USER entity's id.
         """
         kb = self._ensure_kb_source()
-        person_class = await kb.find_class(self._database, "PERSON")
-        class_id = person_class["id"] if person_class else None
+        user_class = await kb.find_class(self._database, "USER")
+        class_id = user_class["id"] if user_class else None
 
         entity = await kb.find_entity(self._database, first_name)
-        entity_id = entity["id"] if entity else await kb.add_entity(
-            self._database, first_name, class_id=class_id
-        )
+        if entity is not None:
+            entity_id = entity["id"]
+        else:
+            placeholder = await kb.find_entity(self._database, self._database)
+            if placeholder is not None:
+                await kb.update_entity(self._database, placeholder["id"], name=first_name)
+                entity_id = placeholder["id"]
+            else:
+                entity_id = await kb.add_entity(self._database, first_name, class_id=class_id)
 
         for attr_name, value in (("FIRST_NAME", first_name), ("LAST_NAME", last_name)):
             if not value:

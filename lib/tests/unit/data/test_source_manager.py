@@ -218,7 +218,7 @@ async def test_add_source_with_queries_still_imports_into_kb(manager: UserDataMa
 
 # ── set_person_name ──────────────────────────────────────────────────────────
 
-async def test_set_person_name_creates_single_person_entity_labeled_with_first_name(
+async def test_set_person_name_creates_single_user_entity_labeled_with_first_name(
     manager: UserDataManager,
 ) -> None:
     await manager.set_person_name("Alice", "Smith")
@@ -229,12 +229,12 @@ async def test_set_person_name_creates_single_person_entity_labeled_with_first_n
     assert len(entities) == 1
     assert entities[0]["properties"]["name"] == "Alice"
 
-    person_class = await kb.find_class(manager._database, "PERSON")
+    user_class = await kb.find_class(manager._database, "USER")
     is_instance_edges = [
         e for e in data["edges"]
         if e["type"] == "IS_INSTANCE_OF" and e["source_id"] == entities[0]["id"]
     ]
-    assert [e["target_id"] for e in is_instance_edges] == [person_class["id"]]
+    assert [e["target_id"] for e in is_instance_edges] == [user_class["id"]]
 
     literals = {n["id"]: n["properties"] for n in data["nodes"] if n["label"] == "LITERAL"}
     has_property_edges = [
@@ -274,3 +274,90 @@ async def test_set_person_name_is_idempotent_for_same_first_name(manager: UserDa
     data = await kb.fetch_database_data(manager._database, compact=False)
     entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
     assert len(entities) == 1
+
+
+# ── seed_user_entity (default self-entity on create/reset) ────────────────────
+
+async def test_build_seeds_default_user_entity(manager: UserDataManager) -> None:
+    """A fresh database already has a self-entity: <database> -> IS_INSTANCE_OF -> USER,
+    with USER -> IS_SUBCLASS_OF -> PERSON coming from the base schema."""
+    kb = manager._ensure_kb_source()
+    entity = await kb.find_entity(manager._database, manager._database)
+    assert entity is not None
+
+    user_class = await kb.find_class(manager._database, "USER")
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    is_instance_edges = [
+        e for e in data["edges"]
+        if e["type"] == "IS_INSTANCE_OF" and e["source_id"] == entity["id"]
+    ]
+    assert [e["target_id"] for e in is_instance_edges] == [user_class["id"]]
+
+    schema = await kb.export_database_schema(manager._database)
+    subclass_pairs = {
+        (rel["source"], rel["target"])
+        for rel in schema["relations"].values()
+        if rel.get("name") == "IS_SUBCLASS_OF"
+    }
+    assert ("USER", "PERSON") in subclass_pairs
+
+
+# ── seed_kb_source_schema (subclass hierarchy) ────────────────────────────────
+
+async def test_seed_schema_resolves_subclass_endpoints_by_exact_name() -> None:
+    """Subclass endpoints resolve by exact name, not by ranked search. With a search
+    index enabled, searching "PERSON" scores USER ("Digital user profile extending
+    PERSON") and EMPLOYEE ("Person employed by an organization") above PERSON
+    itself — taking the top hit seeds USER IS_SUBCLASS_OF USER."""
+    mgr = UserDataManager("bm25db", _MEM_JSON)
+    await mgr.build(
+        schema_path=_SCHEMA,
+        kb_source_props={**_MEM_KB, "search": {"mode": "bm25"}},
+        metadata_schema_path=None,
+        metadata_source_props=_MEM_JSON,
+        contact_schema_path=None,
+        contact_source_props=_MEM_JSON,
+        session_source_props=_MEM_JSON,
+    )
+    kb = mgr._ensure_kb_source()
+    assert kb._search_indexer is not None, "test is meaningless without a ranked index"
+
+    schema = await kb.export_database_schema(mgr._database)
+    pairs = {
+        (rel["source"], rel["target"])
+        for rel in schema["relations"].values()
+        if rel.get("name") == "IS_SUBCLASS_OF"
+    }
+    assert pairs == {
+        ("USER", "PERSON"),
+        ("EMPLOYEE", "PERSON"),
+        ("COMPANY", "ORGANIZATION"),
+        ("CITY", "LOCATION"),
+        ("COUNTRY", "LOCATION"),
+    }
+
+
+async def test_set_person_name_renames_seeded_placeholder_entity(manager: UserDataManager) -> None:
+    """set_person_name reuses the placeholder seeded by build(), rather than creating
+    a second entity alongside it."""
+    kb = manager._ensure_kb_source()
+    placeholder = await kb.find_entity(manager._database, manager._database)
+
+    entity_id = await manager.set_person_name("Alice", "Smith")
+    assert entity_id == placeholder["id"]
+
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
+    assert len(entities) == 1
+    assert entities[0]["properties"]["name"] == "Alice"
+
+
+async def test_reset_reseeds_default_user_entity(manager: UserDataManager) -> None:
+    await manager.set_person_name("Alice", "Smith")
+    await manager.reset(schema_path=_SCHEMA, sources={"kb"})
+
+    kb = manager._ensure_kb_source()
+    data = await kb.fetch_database_data(manager._database, compact=False)
+    entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
+    assert len(entities) == 1
+    assert entities[0]["properties"]["name"] == manager._database

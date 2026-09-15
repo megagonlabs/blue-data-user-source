@@ -108,7 +108,7 @@ def test_fetch_collection_stats_kb_counts_entities_and_facts() -> None:
 
     stats = source.fetch_collection_stats("alice", "kb")
     assert stats["entity_count"] == 1
-    assert stats["entities_by_class"] == {"PERSON": 1}
+    assert stats["entities_by_class"] == {"USER": 1}
     assert stats["fact_count"] == 0
 
 
@@ -142,7 +142,7 @@ def test_fetch_entity_stats_counts_instances_and_properties() -> None:
     source = _make_user()
     _set_person_name(source, "alice", "Alice", "Smith")
 
-    stats = source.fetch_entity_stats("alice", "kb", "PERSON")
+    stats = source.fetch_entity_stats("alice", "kb", "USER")
     assert stats["count"] == 1
     assert stats["properties"] == {"FIRST_NAME": 1, "LAST_NAME": 1}
 
@@ -151,7 +151,7 @@ def test_fetch_entity_stats_sample_limit() -> None:
     source = _make_user()
     _set_person_name(source, "alice", "Alice", "Smith")
 
-    stats = source.fetch_entity_stats("alice", "kb", "PERSON", sample_limit=5)
+    stats = source.fetch_entity_stats("alice", "kb", "USER", sample_limit=5)
     assert stats["sample"] == ["Alice"]
 
 
@@ -164,7 +164,7 @@ def test_fetch_property_stats_counts_values() -> None:
     source = _make_user()
     _set_person_name(source, "alice", "Alice", "Smith")
 
-    stats = source.fetch_property_stats("alice", "kb", "PERSON", "FIRST_NAME")
+    stats = source.fetch_property_stats("alice", "kb", "USER", "FIRST_NAME")
     assert stats["count"] == 1
     assert stats["distinct_count"] == 1
     assert stats["null_count"] == 0
@@ -199,7 +199,7 @@ def test_execute_nl_tool_get_sample_passes_sample_size() -> None:
     _set_person_name(source, "alice", "Alice", "Smith")
 
     result = source.execute_nl_tool(
-        "get_sample", {"entity": "PERSON", "sample_size": 1}, database="alice", collection="kb",
+        "get_sample", {"entity": "USER", "sample_size": 1}, database="alice", collection="kb",
     )
     assert result["sample"] == ["Alice"]
 
@@ -210,7 +210,7 @@ def test_execute_nl_tool_get_column_stats() -> None:
 
     result = source.execute_nl_tool(
         "get_column_stats",
-        {"entity": "PERSON", "column": "FIRST_NAME"},
+        {"entity": "USER", "column": "FIRST_NAME"},
         database="alice", collection="kb",
     )
     assert result["count"] == 1

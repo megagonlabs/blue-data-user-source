@@ -17,6 +17,8 @@ from blue_data_user_source.data.manager import (
     CLS_KB_FILE,
     CLS_KB_MEMORY,
     CLS_KB_NEO4J,
+    CLS_VECTOR_FILE,
+    CLS_VECTOR_MEMORY,
 )
 
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
@@ -84,7 +86,55 @@ def _user_registry_props(data_dir: Path, name: str) -> dict:
     }
 
 
-def _user_kb_props(data_dir: Path, name: str, kb_backend: str, **kb_extras: Any) -> dict:
+def _kb_search_props(
+    data_dir: Path,
+    name: str,
+    kb_backend: str,
+    kb_search_mode: str,
+    kb_vector_backend: str,
+    kb_embedding_model: str,
+) -> dict:
+    """Build the "search" block for a KB source's connection properties, driving the
+    schema/data search index (used e.g. by extraction's search_schema/search_data
+    tools, and entity/fact dedup) — without it, KBSource falls back to a much
+    weaker exact-substring schema lookup. "none" omits the block entirely (no
+    index built). "bm25" is keyword-only, no extra config needed. "semantic"
+    additionally builds a vector index from kb_vector_backend/kb_embedding_model.
+
+    For persistent kb_backend values ("file"/"neo4j"), the BM25 corpus is
+    written under a directory of its own so it survives across CLI invocations
+    (each `udb` command is a fresh process — an unpersisted, in-memory-only
+    corpus would come back empty every time).
+    """
+    if kb_search_mode == "none":
+        return {}
+    search: dict[str, Any] = {"mode": kb_search_mode}
+    if kb_backend in ("file", "neo4j"):
+        search["bm25_index_dir"] = str(data_dir / "sources" / name / "kb_search_index")
+    if kb_search_mode == "semantic":
+        if kb_vector_backend == "file":
+            vector_conn = {"directory": str(data_dir / "sources" / name / "kb_vectors")}
+            vector_class = CLS_VECTOR_FILE
+        else:
+            vector_conn = {"protocol": "vector/memory"}
+            vector_class = CLS_VECTOR_MEMORY
+        search["vector"] = {"_class": vector_class, "connection": vector_conn}
+        search["embedding"] = {"provider": "openai", "model": kb_embedding_model}
+    return {"search": search}
+
+
+def _user_kb_props(
+    data_dir: Path,
+    name: str,
+    kb_backend: str,
+    kb_search_mode: str = "bm25",
+    kb_vector_backend: str = "file",
+    kb_embedding_model: str = "text-embedding-3-small",
+    **kb_extras: Any,
+) -> dict:
+    search_props = _kb_search_props(
+        data_dir, name, kb_backend, kb_search_mode, kb_vector_backend, kb_embedding_model
+    )
     if kb_backend == "file":
         return {
             "_class": CLS_KB_FILE,
@@ -92,16 +142,19 @@ def _user_kb_props(data_dir: Path, name: str, kb_backend: str, **kb_extras: Any)
                 "protocol": "kb/file",
                 "directory": str(data_dir / "sources" / name),
             },
+            **search_props,
         }
     if kb_backend == "memory":
         return {
             "_class": CLS_KB_MEMORY,
             "connection": {"protocol": "kb/memory"},
+            **search_props,
         }
     if kb_backend == "neo4j":
         return {
             "_class": CLS_KB_NEO4J,
             "connection": {"protocol": "kb/neo4j", **kb_extras},
+            **search_props,
         }
     raise ValueError(f"Unknown KB backend: {kb_backend!r}")
 
@@ -288,6 +341,30 @@ def database_list(obj: dict, fmt: str) -> None:
 @click.option("--neo4j-user", default="neo4j", show_default=True, help="Neo4j username.")
 @click.option("--neo4j-password", default=None, help="Neo4j password.")
 @click.option(
+    "--kb-search-mode",
+    default="bm25",
+    type=click.Choice(["none", "bm25", "semantic"]),
+    show_default=True,
+    help=(
+        "Schema/data search index for the KB (used by extraction and entity/fact "
+        "dedup, among others). 'none' falls back to a much weaker exact-substring "
+        "schema lookup."
+    ),
+)
+@click.option(
+    "--kb-vector-backend",
+    default="file",
+    type=click.Choice(["memory", "file"]),
+    show_default=True,
+    help="Vector store backend for KB semantic search (--kb-search-mode=semantic only).",
+)
+@click.option(
+    "--kb-embedding-model",
+    default="text-embedding-3-small",
+    show_default=True,
+    help="OpenAI embedding model for KB semantic search (--kb-search-mode=semantic only).",
+)
+@click.option(
     "--doc-backend",
     default="file",
     type=click.Choice(["memory", "file"]),
@@ -315,6 +392,9 @@ def database_create(
     neo4j_port: int,
     neo4j_user: str,
     neo4j_password: str | None,
+    kb_search_mode: str,
+    kb_vector_backend: str,
+    kb_embedding_model: str,
     doc_backend: str,
     onboard: bool,
     metadata_onboard: bool,
@@ -344,7 +424,13 @@ def database_create(
         asyncio.run(source.create_user(
             name,
             _user_registry_props(data_dir, name),
-            _user_kb_props(data_dir, name, kb_backend, **kb_extras),
+            _user_kb_props(
+                data_dir, name, kb_backend,
+                kb_search_mode=kb_search_mode,
+                kb_vector_backend=kb_vector_backend,
+                kb_embedding_model=kb_embedding_model,
+                **kb_extras,
+            ),
             _user_metadata_props(data_dir, name),
             _user_contact_props(data_dir, name),
             _user_session_props(data_dir, name),

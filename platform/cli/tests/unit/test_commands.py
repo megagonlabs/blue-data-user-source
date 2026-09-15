@@ -179,6 +179,77 @@ def test_database_create_error_exits_with_code_1(runner: CliRunner, data_dir: Pa
     assert result.exit_code == 1
 
 
+# ── database create: KB search index config ────────────────────────────────────
+
+def test_database_create_defaults_kb_search_mode_to_bm25(runner: CliRunner, data_dir: Path) -> None:
+    """Without --kb-search-mode, new users get a working schema/data search index
+    (bm25) rather than falling back to the much weaker exact-substring lookup."""
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])
+    assert result.exit_code == 0
+    kb_props = mock.create_user.await_args.args[2]
+    assert kb_props["search"]["mode"] == "bm25"
+    assert "bm25_index_dir" in kb_props["search"]
+
+
+def test_database_create_kb_search_mode_none_omits_search_key(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir, ["database", "create", "alice", "--kb-search-mode", "none"]
+        )
+    assert result.exit_code == 0
+    kb_props = mock.create_user.await_args.args[2]
+    assert "search" not in kb_props
+
+
+def test_database_create_kb_search_bm25_omits_index_dir_for_memory_backend(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """The memory KB backend has no persistent directory of its own, so the BM25
+    corpus (also ephemeral) doesn't get one either."""
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir, ["database", "create", "alice", "--kb-backend", "memory"]
+        )
+    assert result.exit_code == 0
+    kb_props = mock.create_user.await_args.args[2]
+    assert kb_props["search"] == {"mode": "bm25"}
+
+
+def test_database_create_kb_search_mode_semantic_builds_vector_and_embedding_config(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(
+            runner, data_dir,
+            [
+                "database", "create", "alice",
+                "--kb-search-mode", "semantic",
+                "--kb-vector-backend", "memory",
+                "--kb-embedding-model", "text-embedding-3-large",
+            ],
+        )
+    assert result.exit_code == 0
+    search = mock.create_user.await_args.args[2]["search"]
+    assert search["mode"] == "semantic"
+    assert search["vector"]["connection"] == {"protocol": "vector/memory"}
+    assert search["embedding"] == {"provider": "openai", "model": "text-embedding-3-large"}
+
+
 def test_database_onboard_calls_onboard_user(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
