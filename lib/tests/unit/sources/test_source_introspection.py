@@ -152,7 +152,7 @@ def test_fetch_entity_stats_sample_limit() -> None:
     _set_person_name(source, "alice", "Alice", "Smith")
 
     stats = source.fetch_entity_stats("alice", "kb", "USER", sample_limit=5)
-    assert stats["sample"] == ["Alice"]
+    assert stats["sample"] == ["Alice Smith"]
 
 
 def test_fetch_entity_stats_non_kb_collection_returns_none() -> None:
@@ -201,7 +201,7 @@ def test_execute_nl_tool_get_sample_passes_sample_size() -> None:
     result = source.execute_nl_tool(
         "get_sample", {"entity": "USER", "sample_size": 1}, database="alice", collection="kb",
     )
-    assert result["sample"] == ["Alice"]
+    assert result["sample"] == ["Alice Smith"]
 
 
 def test_execute_nl_tool_get_column_stats() -> None:

@@ -1232,8 +1232,16 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
 @click.option("--name", default=None, help="Human-readable label (defaults to source value).")
 @click.option("--description", default=None, help="Optional description.")
 @click.option("--original", default=None, help="Original date of the source (e.g. when it was published).")
+@click.option(
+    "--effort",
+    default="medium",
+    type=click.Choice(["low", "medium", "high"]),
+    show_default=True,
+    help="Extraction passes over the document (low/medium/high = 1/2/3). More passes "
+         "catch more of a dense document, at proportionally more LLM calls.",
+)
 @click.pass_obj
-def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None) -> None:
+def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None, effort: str) -> None:
     """Register a file (.txt/.pdf/.docx) as a data source.
 
     The file is always parsed, chunked, and embedded into the shared
@@ -1251,6 +1259,7 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
         props["description"] = description
     if original:
         props["original"] = original
+    props["effort"] = effort
     try:
         asyncio.run(source.add_source(file, database=db, optional_properties=props or None))
     except (UDbError, Exception) as exc:

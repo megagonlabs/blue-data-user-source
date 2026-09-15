@@ -461,10 +461,10 @@
         "attributes": {}
       }
     },
-    "EMPLOYEE__WORKED_AT__ORGANIZATION": {
+    "PERSON__WORKED_AT__ORGANIZATION": {
       "name": "WORKED_AT",
       "index": 0,
-      "source": "EMPLOYEE",
+      "source": "PERSON",
       "target": "ORGANIZATION",
       "description": "Employment relationship",
       "properties": {},
@@ -479,6 +479,11 @@
             "name": "END_DATE",
             "info": "str",
             "description": "End date of relation"
+          },
+          "TITLE": {
+            "name": "TITLE",
+            "info": "str",
+            "description": "Job title or role held in this position, e.g. Senior Project Manager"
           }
         }
       }

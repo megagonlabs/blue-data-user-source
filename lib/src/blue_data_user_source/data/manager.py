@@ -4,7 +4,7 @@ import contextlib
 import json
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
@@ -492,11 +492,16 @@ class UserDataManager:
         name: str | None = None,
         description: str | None = None,
         original: str | None = None,
+        effort: Literal["low", "medium", "high"] = "medium",
     ) -> None:
         """Register a file as a source, always ingesting it into the shared
         "external_documents" DocumentDataSource (parsed, chunked, embedded —
         see :meth:`ensure_external_documents_source`), and optionally also
         extracting facts into the KB for each of *queries* (Type 2 import).
+
+        ``effort`` is how many times the extraction pipeline passes over the
+        text (low/medium/high = 1/2/3); a single pass leaves much of a
+        moderately dense document unextracted.
 
         Deliberately does NOT create a per-file record in the outer
         DataRegistry — only the shared "external_documents" source is
@@ -507,8 +512,15 @@ class UserDataManager:
         """
         kb = self._ensure_kb_source()
         location = getattr(source, "location", str(source))
+        # The SOURCE node's description is rendered into the extraction system
+        # prompt, so naming the owner here is what lets the extractor tie an
+        # unattributed document ("Results-driven Project Manager with...") to
+        # this user's own entity instead of inventing a second person for it.
+        owner = self.get_metadata("identity.name") or self._database
         source_id = await kb.add_source(
-            self._database, location, name=name, description=description, original=original
+            self._database, location, name=name,
+            description=description or f"Belongs to {owner}, the user this knowledge base is about",
+            original=original,
         )
 
         doc_source = self.ensure_external_documents_source()
@@ -518,8 +530,22 @@ class UserDataManager:
         chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": location})
 
         if queries:
-            text = "\n".join(chunk["text"] for chunk in chunks)
-            await kb.import_text(self._database, text, queries=queries, source_id=source_id)
+            # Headings live in "section_title", not in the chunk body — a resume's
+            # job titles, degree, and name header are all headings, so joining only
+            # the bodies hands the extractor a document with those removed.
+            body = "\n".join(
+                f"{chunk['section_title']}\n{chunk['text']}" if chunk.get("section_title")
+                else chunk["text"]
+                for chunk in chunks
+            )
+            # A document often never names its own subject — a resume's name header is
+            # consumed as the document title, and the prose is all first-person — which
+            # leaves the extractor with no entity to hang WORKED_AT/HAS_SKILL facts on,
+            # so it either invents a second person or skips the relations entirely.
+            text = f"This document belongs to {owner}, the subject of every fact in it.\n{body}"
+            await kb.import_text(
+                self._database, text, queries=queries, source_id=source_id, effort=effort
+            )
 
     def remove_source(self, source_name: str) -> None:
         """Remove a source from the DataRegistry without touching KB data."""
@@ -559,31 +585,38 @@ class UserDataManager:
         """Deterministically create/update the user's single USER entity (``IS_INSTANCE_OF
         USER``, which is ``IS_SUBCLASS_OF PERSON`` per the base schema).
 
-        Labels the entity with ``first_name`` and stores ``first_name`` /
+        Labels the entity with the user's *full* name and stores ``first_name`` /
         ``last_name`` as FIRST_NAME/LAST_NAME properties on it via direct
         graph writes rather than LLM-based text extraction, so this always
         produces exactly one USER node. Safe to call more than once: reuses
         the existing entity (matched by name) instead of creating a duplicate.
         If a placeholder entity was already seeded by :meth:`seed_user_entity`
-        (named after the database key), renames that same entity to
-        ``first_name`` instead of creating a second one.
+        (named after the database key), renames that same entity instead of
+        creating a second one.
+
+        The label is the full name because that is what documents about the
+        user call them: extraction resolves candidates by exact name (with only
+        a case/punctuation-insensitive fallback), so a first-name-only label
+        leaves "Alice Chen" in a resume unmatched and forks a second person
+        entity that the user's own facts then hang off.
 
         Returns the USER entity's id.
         """
         kb = self._ensure_kb_source()
         user_class = await kb.find_class(self._database, "USER")
         class_id = user_class["id"] if user_class else None
+        label = f"{first_name} {last_name}" if last_name else first_name
 
-        entity = await kb.find_entity(self._database, first_name)
+        entity = await kb.find_entity(self._database, label)
         if entity is not None:
             entity_id = entity["id"]
         else:
             placeholder = await kb.find_entity(self._database, self._database)
             if placeholder is not None:
-                await kb.update_entity(self._database, placeholder["id"], name=first_name)
+                await kb.update_entity(self._database, placeholder["id"], name=label)
                 entity_id = placeholder["id"]
             else:
-                entity_id = await kb.add_entity(self._database, first_name, class_id=class_id)
+                entity_id = await kb.add_entity(self._database, label, class_id=class_id)
 
         for attr_name, value in (("FIRST_NAME", first_name), ("LAST_NAME", last_name)):
             if not value:

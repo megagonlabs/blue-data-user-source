@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
@@ -216,9 +217,70 @@ async def test_add_source_with_queries_still_imports_into_kb(manager: UserDataMa
     assert data
 
 
+async def test_add_source_extraction_text_keeps_section_headings(
+    manager: UserDataManager, tmp_path: Path
+) -> None:
+    """The doc pipeline lifts headings out of the chunk body into "section_title";
+    a resume's job titles and degree are headings, so joining only the bodies would
+    hand the extractor a document with exactly those removed."""
+    f = tmp_path / "resume.txt"
+    f.write_text(
+        "SENIOR PROJECT MANAGER\n"
+        "TechSolutions Inc., San Jose, CA\n"
+        "\n"
+        "SKILLS\n"
+        "* Technical: SQL, Basic Python\n"
+    )
+    kb = manager._ensure_kb_source()
+    with patch.object(kb, "import_text", AsyncMock()) as mock_import:
+        await manager.add_source(f, queries=["what is the job title"], effort="low")
+
+    text = mock_import.await_args.args[1]
+    assert "SENIOR PROJECT MANAGER" in text
+    assert "TechSolutions Inc." in text
+    assert mock_import.await_args.kwargs["effort"] == "low"
+
+
+async def test_add_source_defaults_to_medium_effort(
+    manager: UserDataManager, tmp_path: Path
+) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Alice knows Python.\n")
+    kb = manager._ensure_kb_source()
+    with patch.object(kb, "import_text", AsyncMock()) as mock_import:
+        await manager.add_source(f, queries=["what skills"])
+
+    assert mock_import.await_args.kwargs["effort"] == "medium"
+
+
+async def test_add_source_names_the_owner_in_the_source_description(
+    manager: UserDataManager, tmp_path: Path
+) -> None:
+    """The SOURCE description reaches the extraction prompt, so it is what ties an
+    unattributed document to this user rather than to a newly invented person."""
+    manager.set_metadata("identity.name", "Alice Chen")
+    f = tmp_path / "resume.txt"
+    f.write_text("Results-driven Project Manager.\n")
+    await manager.add_source(f)
+
+    sources = await manager.list_sources()
+    assert any("Alice Chen" in (s.get("description") or "") for s in sources)
+
+
+async def test_add_source_keeps_an_explicit_description(
+    manager: UserDataManager, tmp_path: Path
+) -> None:
+    f = tmp_path / "resume.txt"
+    f.write_text("Results-driven Project Manager.\n")
+    await manager.add_source(f, description="Q3 resume draft")
+
+    sources = await manager.list_sources()
+    assert any(s.get("description") == "Q3 resume draft" for s in sources)
+
+
 # ── set_person_name ──────────────────────────────────────────────────────────
 
-async def test_set_person_name_creates_single_user_entity_labeled_with_first_name(
+async def test_set_person_name_creates_single_user_entity_labeled_with_full_name(
     manager: UserDataManager,
 ) -> None:
     await manager.set_person_name("Alice", "Smith")
@@ -227,7 +289,7 @@ async def test_set_person_name_creates_single_user_entity_labeled_with_first_nam
     data = await kb.fetch_database_data(manager._database, compact=False)
     entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
     assert len(entities) == 1
-    assert entities[0]["properties"]["name"] == "Alice"
+    assert entities[0]["properties"]["name"] == "Alice Smith"
 
     user_class = await kb.find_class(manager._database, "USER")
     is_instance_edges = [
@@ -337,6 +399,57 @@ async def test_seed_schema_resolves_subclass_endpoints_by_exact_name() -> None:
     }
 
 
+async def test_worked_at_accepts_the_users_own_entity_as_head(manager: UserDataManager) -> None:
+    """WORKED_AT's domain is PERSON, not EMPLOYEE: nothing in the pipeline ever
+    classifies anyone as an EMPLOYEE, so an EMPLOYEE domain made employment facts
+    unwritable. Relies on USER IS_SUBCLASS_OF PERSON for the domain check to pass."""
+    kb = manager._ensure_kb_source()
+    alice_id = await manager.set_person_name("Alice", "Chen")   # instance of USER
+    company_class = await kb.find_class(manager._database, "COMPANY")
+    employer_id = await kb.add_entity(
+        manager._database, "TechSolutions Inc.", class_id=company_class["id"]
+    )
+    worked_at = await kb.find_relation_type(manager._database, "WORKED_AT")
+
+    verdict = await kb.is_fact_allowed(
+        manager._database, alice_id, worked_at["id"], employer_id
+    )
+    assert verdict["ok"], verdict
+
+
+async def test_worked_at_carries_a_job_title(manager: UserDataManager) -> None:
+    """A resume's job titles are only extractable if the schema can hold one; with no
+    JOB_TITLE class, TITLE on WORKED_AT is where "most recent job title" lives."""
+    kb = manager._ensure_kb_source()
+    alice_id = await manager.set_person_name("Alice", "Chen")
+    company_class = await kb.find_class(manager._database, "COMPANY")
+    employer_id = await kb.add_entity(
+        manager._database, "TechSolutions Inc.", class_id=company_class["id"]
+    )
+    worked_at = await kb.find_relation_type(manager._database, "WORKED_AT")
+    fact_id = await kb.add_fact(
+        manager._database, head_entity_id=alice_id, tail_entity_id=employer_id,
+        relation_id=worked_at["id"],
+    )
+
+    title = await kb.find_property(manager._database, "TITLE")
+    assert title is not None, "TITLE must be declared on WORKED_AT"
+    verdict = await kb.is_property_allowed(manager._database, fact_id, title["id"])
+    assert verdict["ok"], verdict
+
+    await kb.add_fact_property_value(
+        manager._database, "Senior Project Manager",
+        fact_id=fact_id, property_id=title["id"],
+    )
+    rows = await kb.fetch_database_data(manager._database, compact=True)
+    assert any(
+        r.get("relation_type") == "IS_VALUE_OF"
+        and r.get("property_name") == "TITLE"
+        and r.get("property_value") == "Senior Project Manager"
+        for r in rows
+    )
+
+
 async def test_set_person_name_renames_seeded_placeholder_entity(manager: UserDataManager) -> None:
     """set_person_name reuses the placeholder seeded by build(), rather than creating
     a second entity alongside it."""
@@ -349,7 +462,7 @@ async def test_set_person_name_renames_seeded_placeholder_entity(manager: UserDa
     data = await kb.fetch_database_data(manager._database, compact=False)
     entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
     assert len(entities) == 1
-    assert entities[0]["properties"]["name"] == "Alice"
+    assert entities[0]["properties"]["name"] == "Alice Smith"
 
 
 async def test_reset_reseeds_default_user_entity(manager: UserDataManager) -> None:
