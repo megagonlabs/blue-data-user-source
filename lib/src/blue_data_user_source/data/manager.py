@@ -516,7 +516,7 @@ class UserDataManager:
         # prompt, so naming the owner here is what lets the extractor tie an
         # unattributed document ("Results-driven Project Manager with...") to
         # this user's own entity instead of inventing a second person for it.
-        owner = self.get_metadata("identity.name") or self._database
+        owner = self._owner_name()
         source_id = await kb.add_source(
             self._database, location, name=name,
             description=description or f"Belongs to {owner}, the user this knowledge base is about",
@@ -571,14 +571,31 @@ class UserDataManager:
             result = [r for r in result if r.get("id") == source_id]
         return result
 
+    def _owner_name(self) -> str:
+        """What text about this user calls them — their name once onboarding has set
+        it, else the database key. Used to anchor extracted facts to the user's own
+        entity; see :meth:`store_data` and :meth:`add_source`."""
+        return self.get_metadata("identity.name") or self._database
+
     async def store_data(
         self,
         text: str,
         source_id: str | None = None,
         queries: list[str] | None = None,
     ) -> None:
+        """Extract *text* — a user's own answer to a question — into the KB.
+
+        The text is prefixed with a line naming the user, because on its own an
+        answer names nobody: "Question: What is your nationality?\\nUser Response:
+        USA" gives the extractor a second-person question and a bare country, so it
+        records COUNTRY "USA" and has no person to hang PERSON.NATIONALITY on.
+        """
+        anchored = (
+            f"The following question and answer are about {self._owner_name()}, "
+            f"the user this knowledge base describes.\n{text}"
+        )
         await self._ensure_kb_source().import_text(
-            self._database, text, queries=queries, source_id=source_id
+            self._database, anchored, queries=queries, source_id=source_id
         )
 
     async def set_person_name(self, first_name: str, last_name: str | None = None) -> str:

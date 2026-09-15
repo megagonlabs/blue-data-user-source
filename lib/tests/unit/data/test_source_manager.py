@@ -253,6 +253,37 @@ async def test_add_source_defaults_to_medium_effort(
     assert mock_import.await_args.kwargs["effort"] == "medium"
 
 
+# ── store_data (onboarding / clarification answers) ───────────────────────────
+
+async def test_store_data_names_the_user_answering(manager: UserDataManager) -> None:
+    """An answer on its own names nobody — "What is your nationality? / USA" gives the
+    extractor a second-person question and a bare country, so it records COUNTRY "USA"
+    and has no person to hang PERSON.NATIONALITY on."""
+    manager.set_metadata("identity.name", "Alice Chen")
+    kb = manager._ensure_kb_source()
+    with patch.object(kb, "import_text", AsyncMock()) as mock_import:
+        await manager.store_data(
+            "Question: What is your nationality?\nUser Response: USA",
+            queries=["What is your nationality?"],
+        )
+
+    text = mock_import.await_args.args[1]
+    assert "Alice Chen" in text
+    assert "Question: What is your nationality?\nUser Response: USA" in text
+
+
+async def test_store_data_falls_back_to_the_database_key_before_onboarding(
+    manager: UserDataManager,
+) -> None:
+    """identity.name is unset until onboarding asks for it, and answers stored before
+    then still need an anchor."""
+    kb = manager._ensure_kb_source()
+    with patch.object(kb, "import_text", AsyncMock()) as mock_import:
+        await manager.store_data("Question: Where do you live?\nUser Response: Denver")
+
+    assert manager._database in mock_import.await_args.args[1]
+
+
 async def test_add_source_names_the_owner_in_the_source_description(
     manager: UserDataManager, tmp_path: Path
 ) -> None:
