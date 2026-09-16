@@ -187,6 +187,16 @@ async def test_remove_source_unknown_returns_error():
     assert "error" in result
 
 
+async def test_remove_source_removes_a_registered_source(tmp_path):
+    """The guard on the unknown case must not block the real one."""
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Alice has ten years of Python experience.")
+    await add_source(USER, str(resume), name="resume")
+
+    result = json.loads(await remove_source(USER, "resume"))
+    assert result["removed"] is True
+
+
 # ---------------------------------------------------------------------------
 # Metadata
 # ---------------------------------------------------------------------------

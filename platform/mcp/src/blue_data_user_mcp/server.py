@@ -89,6 +89,11 @@ async def create_database(name: str) -> str:
     """
     try:
         source = get_source()
+        if name in source.list_users():
+            # UserSource.create_user is permissive — it rebuilds the manager and
+            # re-registers the record — so the guard lives here, as it does in
+            # the CLI's `database create`.
+            raise ValueError(f"Database '{name}' already exists.")
         props = default_user_props(name)
         await source.create_user(
             name,
@@ -326,7 +331,14 @@ async def remove_source(user: str, source_name: str) -> str:
         source_name: Name of the source to remove.
     """
     try:
-        get_source().remove_source(user, source_name)
+        source = get_source()
+        # UserDataManager.remove_source returns silently when nothing matches,
+        # so without this the tool reports removed:True for a source that was
+        # never there.
+        known = {s.get("name") for s in await source.list_sources(user)}
+        if source_name not in known:
+            raise ValueError(f"Source '{source_name}' is not registered for user '{user}'.")
+        source.remove_source(user, source_name)
         return _ok({"user": user, "source": source_name, "removed": True})
     except Exception as e:
         return _err(e)
