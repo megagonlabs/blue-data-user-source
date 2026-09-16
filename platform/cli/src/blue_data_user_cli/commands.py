@@ -85,12 +85,74 @@ def _humanize_date(iso_str: str | None) -> str:
         return iso_str
 
 
-def _make_source(data_dir: Path, schema_path: Path | None = None) -> FileUserSource:
+def _make_source(
+    data_dir: Path,
+    schema_path: Path | None = None,
+    metadata_schema_path: Path | None = None,
+    contact_schema_path: Path | None = None,
+) -> FileUserSource:
     data_dir.mkdir(parents=True, exist_ok=True)
     return FileUserSource("user_source", {
         "connection": {"path": str(data_dir / "registry.json")},
         "schema": str(schema_path) if schema_path else None,
+        "metadata_schema": str(metadata_schema_path) if metadata_schema_path else None,
+        "contact_schema": str(contact_schema_path) if contact_schema_path else None,
     })
+
+
+def _seeding_source(obj: dict) -> FileUserSource:
+    """A source for the commands that seed schemas, carrying the configured paths.
+
+    Every other command leaves the paths unset: the source record keeps whatever
+    was registered when the database was created.
+    """
+    return _make_source(
+        obj["data_dir"],
+        obj.get("schema_path"),
+        obj.get("metadata_schema_path"),
+        obj.get("contact_schema_path"),
+    )
+
+
+_SCHEMA_CACHE: dict[tuple[str, str | None], dict] = {}
+
+
+def _schema_doc(filename: str, path: str | Path | None) -> dict:
+    """The schema document at *path*, else the copy packaged with the library.
+
+    Cached per resolved path: `metadata list` and `contact list` read these on
+    every invocation and nothing rewrites them mid-run.
+    """
+    key = (filename, str(path) if path else None)
+    if key in _SCHEMA_CACHE:
+        return _SCHEMA_CACHE[key]
+
+    doc: dict = {}
+    if path:
+        try:
+            with open(Path(path).expanduser()) as f:
+                doc = json.load(f)
+        except Exception as exc:
+            err.print(f"[yellow]Warning:[/yellow] Could not read {path}: {exc}. "
+                      f"Falling back to the packaged {filename}.")
+    if not doc:
+        try:
+            import importlib.resources as _ir
+            with _ir.files("blue_data_user_source.data").joinpath(filename).open() as f:
+                doc = json.load(f)
+        except Exception:
+            doc = {}
+
+    _SCHEMA_CACHE[key] = doc
+    return doc
+
+
+def _metadata_schema(obj: dict) -> dict:
+    return _schema_doc("metadata_schema.json", obj.get("metadata_schema_path"))
+
+
+def _contact_schema(obj: dict) -> dict:
+    return _schema_doc("contact_schema.json", obj.get("contact_schema_path"))
 
 
 def _user_registry_props(data_dir: Path, name: str) -> dict:
@@ -296,6 +358,20 @@ def _get_session(obj: dict, session: str | None) -> str | None:
          "BLUE_DATA_USER_SOURCE_SCHEMA_PATH.",
     type=click.Path(exists=True, path_type=Path),
 )
+@click.option(
+    "--metadata-schema-path",
+    default=None,
+    help="Path to metadata_schema.json. Defaults to the profile's "
+         "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH, then the packaged schema.",
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--contact-schema-path",
+    default=None,
+    help="Path to contact_schema.json. Defaults to the profile's "
+         "BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH, then the packaged schema.",
+    type=click.Path(exists=True, path_type=Path),
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -303,6 +379,8 @@ def cli(
     database: str | None,
     data_dir: Path | None,
     schema_path: Path | None,
+    metadata_schema_path: Path | None,
+    contact_schema_path: Path | None,
 ) -> None:
     """udb — user database CLI.
 
@@ -331,6 +409,12 @@ def cli(
         data_dir or resolver.get("BLUE_DATA_USER_SOURCE_DATA_DIR") or _DEFAULT_DATA_DIR
     )
     ctx.obj["schema_path"] = schema_path or resolver.get("BLUE_DATA_USER_SOURCE_SCHEMA_PATH")
+    ctx.obj["metadata_schema_path"] = metadata_schema_path or resolver.get(
+        "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH"
+    )
+    ctx.obj["contact_schema_path"] = contact_schema_path or resolver.get(
+        "BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH"
+    )
 
 
 cli.add_command(profile_group)
@@ -487,8 +571,7 @@ def database_create(
     neo4j_port = _db_default(obj, "NEO4J_PORT", neo4j_port)
     neo4j_user = _db_default(obj, "NEO4J_USER", neo4j_user)
     data_dir: Path = obj["data_dir"]
-    schema_path: Path | None = obj.get("schema_path")
-    source = _make_source(data_dir, schema_path)
+    source = _seeding_source(obj)
 
     if name in source.list_users():
         err.print(f"[red]Error:[/red] Database '{name}' already exists.")
@@ -542,7 +625,7 @@ def database_create(
 def database_onboard(obj: dict, metadata_onboard: bool) -> None:
     """Ask the active database's user onboarding questions to seed data and metadata."""
     db = _get_db(obj)
-    source = _make_source(obj["data_dir"], obj.get("schema_path"))
+    source = _seeding_source(obj)
     try:
         asyncio.run(source.onboard_user(db, include_metadata=metadata_onboard))
     except UDbError as exc:
@@ -620,7 +703,7 @@ def database_reset(obj: dict, yes: bool) -> None:
     db = _get_db(obj)
     if not yes:
         click.confirm(f"Reset database '{db}'? This will clear all KB data.", abort=True)
-    source = _make_source(obj["data_dir"], obj.get("schema_path"))
+    source = _seeding_source(obj)
     try:
         asyncio.run(source.reset_user(db))
     except UDbError as exc:
@@ -1586,20 +1669,6 @@ def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_
 # udb metadata                                                        #
 # ------------------------------------------------------------------ #
 
-_METADATA_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent.parent.parent / \
-    "lib" / "src" / "blue_data_user_source" / "data" / "metadata_schema.json"
-
-def _load_metadata_schema() -> dict:
-    try:
-        import importlib.resources as _ir
-        with _ir.files("blue_data_user_source.data").joinpath("metadata_schema.json").open() as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-_METADATA_SCHEMA: dict = _load_metadata_schema()
-
-
 def _parse_metadata_value(raw: str) -> Any:
     """Try JSON first so lists/booleans/numbers work; fall back to plain string."""
     try:
@@ -1653,7 +1722,7 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
     dotted = ".".join(path)
     for i, segment in enumerate(path):
         if not isinstance(node, dict) or segment not in node:
-            if i == 0 and segment in _METADATA_SCHEMA:
+            if i == 0 and segment in _metadata_schema(obj):
                 node = {}
                 break
             err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
@@ -1686,14 +1755,14 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
             return [(prefix, subtree)]
 
         if not path:
-            all_cats = dict.fromkeys(list(_METADATA_SCHEMA.keys()) + list(all_meta.keys()))
+            all_cats = dict.fromkeys(list(_metadata_schema(obj).keys()) + list(all_meta.keys()))
             merged_root: dict[str, Any] = {}
             for cat in all_cats:
-                schema_cat = {k: v for k, v in _METADATA_SCHEMA.get(cat, {}).items() if not k.startswith("__")}
+                schema_cat = {k: v for k, v in _metadata_schema(obj).get(cat, {}).items() if not k.startswith("__")}
                 merged_root[cat] = _merge_category(all_meta.get(cat), schema_cat)
             flat = _flatten(merged_root)
         else:
-            schema_cat = {k: v for k, v in _METADATA_SCHEMA.get(path[0], {}).items() if not k.startswith("__")} if len(path) == 1 else {}
+            schema_cat = {k: v for k, v in _metadata_schema(obj).get(path[0], {}).items() if not k.startswith("__")} if len(path) == 1 else {}
             merged_cat = _merge_category(node, schema_cat)
             flat = _flatten(merged_cat, dotted)
 
@@ -1710,14 +1779,14 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
         return
 
     if not path:
-        categories = dict.fromkeys(list(_METADATA_SCHEMA.keys()) + list(all_meta.keys()))
+        categories = dict.fromkeys(list(_metadata_schema(obj).keys()) + list(all_meta.keys()))
         t = Table(show_header=True, header_style="bold")
         t.add_column("Category", style="bold")
         t.add_column("Keys set", style="dim", justify="right")
         t.add_column("Description", style="dim")
         for cat in categories:
             stored = all_meta.get(cat)
-            schema_cat = _METADATA_SCHEMA.get(cat, {})
+            schema_cat = _metadata_schema(obj).get(cat, {})
             desc = schema_cat.get("__description__", "")
             count = sum(1 for k, v in (stored or {}).items() if v is not None) if isinstance(stored, dict) else (1 if stored is not None else 0)
             t.add_row(cat, str(count) if count else "[dim]—[/dim]", desc)
@@ -1725,7 +1794,7 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
         return
 
     if isinstance(node, dict):
-        schema_cat = _METADATA_SCHEMA.get(path[0], {}) if len(path) == 1 else {}
+        schema_cat = _metadata_schema(obj).get(path[0], {}) if len(path) == 1 else {}
         schema_keys = {k: v for k, v in schema_cat.items() if not k.startswith("__")}
         all_keys = dict.fromkeys(list(schema_keys.keys()) + list(node.keys()))
         t = Table(show_header=True, header_style="bold")
@@ -1833,17 +1902,6 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
 # udb contact                                                         #
 # ------------------------------------------------------------------ #
 
-def _load_contact_schema() -> dict:
-    try:
-        import importlib.resources as _ir
-        with _ir.files("blue_data_user_source.data").joinpath("contact_schema.json").open() as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-_CONTACT_SCHEMA: dict = _load_contact_schema()
-
-
 @cli.group("contact")
 def contact_group() -> None:
     """Contact methods for agents to reach you."""
@@ -1879,7 +1937,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
     for i, segment in enumerate(path):
         if not isinstance(node, dict) or segment not in node:
             # Known schema protocol with no entries yet
-            if i == 0 and segment in _CONTACT_SCHEMA:
+            if i == 0 and segment in _contact_schema(obj):
                 node = {}
                 break
             err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
@@ -1912,10 +1970,10 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
             return [(prefix, subtree)]
 
         if not path:
-            protocols = dict.fromkeys(list(_CONTACT_SCHEMA.keys()) + list(all_contacts.keys()))
+            protocols = dict.fromkeys(list(_contact_schema(obj).keys()) + list(all_contacts.keys()))
             merged_root: dict[str, Any] = {}
             for proto in protocols:
-                schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+                schema_fields = {k: v for k, v in _contact_schema(obj).get(proto, {}).items() if not k.startswith("__")}
                 entries = all_contacts.get(proto, {})
                 entries = entries if isinstance(entries, dict) else {}
                 merged_proto = {
@@ -1928,7 +1986,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
             flat = _flatten(merged_root)
         elif len(path) == 1:
             proto = path[0]
-            schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+            schema_fields = {k: v for k, v in _contact_schema(obj).get(proto, {}).items() if not k.startswith("__")}
             entries = node if isinstance(node, dict) else {}
             merged_proto = {
                 entry_name: _merge_entry(details, schema_fields)
@@ -1938,7 +1996,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
             flat = _flatten(merged_proto, dotted)
         else:
             proto = path[0]
-            schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+            schema_fields = {k: v for k, v in _contact_schema(obj).get(proto, {}).items() if not k.startswith("__")}
             merged_entry = _merge_entry(node, schema_fields)
             flat = _flatten(merged_entry, dotted)
 
@@ -1956,7 +2014,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
 
     if not path:
         # Top level: show all protocols with entry counts
-        protocols = dict.fromkeys(list(_CONTACT_SCHEMA.keys()) + list(all_contacts.keys()))
+        protocols = dict.fromkeys(list(_contact_schema(obj).keys()) + list(all_contacts.keys()))
         t = Table(show_header=True, header_style="bold")
         t.add_column("Protocol", style="bold")
         t.add_column("Entries", style="dim", justify="right")
@@ -1964,14 +2022,14 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
         for proto in protocols:
             entries = all_contacts.get(proto, {})
             count = len(entries) if isinstance(entries, dict) else 0
-            desc = _CONTACT_SCHEMA.get(proto, {}).get("__description__", "")
+            desc = _contact_schema(obj).get(proto, {}).get("__description__", "")
             t.add_row(proto, str(count) if count else "[dim]—[/dim]", desc)
         console.print(t)
 
     elif len(path) == 1:
         # Protocol level: show named entries with their key fields
         proto = path[0]
-        schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+        schema_fields = {k: v for k, v in _contact_schema(obj).get(proto, {}).items() if not k.startswith("__")}
         entries = node if isinstance(node, dict) else {}
         if not entries:
             console.print("[dim](no entries)[/dim]")
@@ -1992,7 +2050,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
     else:
         # Named-entry level: show field-by-field with schema hints
         proto = path[0]
-        schema_fields = {k: v for k, v in _CONTACT_SCHEMA.get(proto, {}).items() if not k.startswith("__")}
+        schema_fields = {k: v for k, v in _contact_schema(obj).get(proto, {}).items() if not k.startswith("__")}
         entry = node if isinstance(node, dict) else {}
         all_keys = dict.fromkeys(list(schema_fields.keys()) + list(entry.keys()))
         t = Table(show_header=True, header_style="bold")
@@ -2101,9 +2159,9 @@ def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
       udb contact add email work
       udb contact add sms primary --preference 1
     """
-    if protocol not in _CONTACT_SCHEMA:
+    if protocol not in _contact_schema(obj):
         err.print(f"[red]Error:[/red] Unknown protocol {protocol!r}. "
-                  f"Known: {', '.join(_CONTACT_SCHEMA)}")
+                  f"Known: {', '.join(_contact_schema(obj))}")
         sys.exit(1)
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])

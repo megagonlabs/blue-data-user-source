@@ -49,7 +49,8 @@ export BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/my-udb   # or: udb profile config
 ## Global options
 
 ```
-udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+udb [--database NAME] [--data-dir DIR] [--schema-path PATH]
+    [--metadata-schema-path PATH] [--contact-schema-path PATH] COMMAND
 ```
 
 | Option | Env var | Default | Description |
@@ -57,9 +58,11 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
+| `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to a custom metadata schema |
+| `--contact-schema-path PATH` | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | packaged `contact_schema.json` | Path to a custom contact schema |
 
 Every option falls back to the selected profile (`udb profile config`); an exported environment variable of the same name still overrides it. Precedence: **command option > environment variable > profile > default**. The full parameter table is in [platform/cli/README.md](../platform/cli/README.md#profiles-and-configuration).
-| `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
 
 `--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.
 

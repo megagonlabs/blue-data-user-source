@@ -17,6 +17,18 @@
     "required": false,
     "cast": "file"
   },
+  "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH": {
+    "default": null,
+    "prompt": "Path to metadata_schema.json (defaults to the one packaged with the library)",
+    "required": false,
+    "cast": "file"
+  },
+  "BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH": {
+    "default": null,
+    "prompt": "Path to contact_schema.json (defaults to the one packaged with the library)",
+    "required": false,
+    "cast": "file"
+  },
 
   "BLUE_DATA_USER_SOURCE_LLM_MODEL": {
     "default": null,

@@ -262,3 +262,30 @@ def test_profile_commands_do_not_create_a_database(runner, data_dir):
     _run(runner, data_dir, ["profile", "config", "BLUE_DATA_LLM_MODEL", "gpt-4o"])
     assert (data_dir / ".profiles").exists()
     assert not (data_dir / "registry.json").exists()
+
+
+def test_the_schema_paths_are_optional_file_parameters():
+    """All three seeding schemas are configurable, and none is asked for on
+    first run — each falls back to the copy packaged with the library."""
+    spec = cli_spec()
+    for name in (
+        "BLUE_DATA_USER_SOURCE_SCHEMA_PATH",
+        "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH",
+        "BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH",
+    ):
+        assert name in spec
+        assert spec[name].cast == "file"
+        assert spec[name].required is False
+
+
+def test_the_metadata_schema_path_comes_from_the_profile(runner, data_dir, tmp_path, monkeypatch):
+    schema = tmp_path / "metadata_schema.json"
+    schema.write_text("{}")
+    _run(runner, data_dir, [
+        "profile", "config", "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH", str(schema),
+    ])
+    monkeypatch.delenv("BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH", raising=False)
+    out = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])
+    assert out["values"]["BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH"] == {
+        "value": str(schema), "source": "profile:default",
+    }

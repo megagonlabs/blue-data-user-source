@@ -806,3 +806,101 @@ def test_contact_remove_confirmed(runner: CliRunner, data_dir: Path) -> None:
         result = _invoke(runner, data_dir, ["contact", "remove", "sms", "primary", "--yes"])
     assert result.exit_code == 0
     manager.delete_contact.assert_called_once_with("sms", "primary")
+
+
+# ── configurable metadata/contact schemas ──────────────────────────────────────
+
+def _write_schema(tmp_path: Path, name: str, doc: dict) -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def test_metadata_list_defaults_to_the_packaged_schema(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """With nothing configured, the schema shipped with the library is used."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["metadata", "list"])
+    assert result.exit_code == 0
+    assert "identity" in result.output
+
+
+def test_metadata_list_uses_the_configured_schema(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    schema = _write_schema(tmp_path, "metadata_schema.json", {"spaceflight": {"callsign": None}})
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {}
+    with _patched(mock):
+        result = runner.invoke(cli, [
+            "--data-dir", str(data_dir),
+            "--metadata-schema-path", str(schema),
+            "metadata", "list",
+        ])
+    assert result.exit_code == 0, result.output
+    assert "spaceflight" in result.output
+    assert "identity" not in result.output
+
+
+def test_contact_list_uses_the_configured_schema(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    schema = _write_schema(tmp_path, "contact_schema.json", {"carrier_pigeon": {"loft": None}})
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_contacts.return_value = {}
+    with _patched(mock):
+        result = runner.invoke(cli, [
+            "--data-dir", str(data_dir),
+            "--contact-schema-path", str(schema),
+            "contact", "list",
+        ])
+    assert result.exit_code == 0, result.output
+    assert "carrier_pigeon" in result.output
+
+
+def test_an_unreadable_schema_warns_and_falls_back_to_the_packaged_copy(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    """A broken schema degrades to the packaged one rather than emptying the CLI."""
+    schema = tmp_path / "broken_metadata_schema.json"
+    schema.write_text("{ not json")
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_metadata.return_value = {}
+    with _patched(mock):
+        result = runner.invoke(cli, [
+            "--data-dir", str(data_dir),
+            "--metadata-schema-path", str(schema),
+            "metadata", "list",
+        ])
+    assert result.exit_code == 0, result.output
+    assert "Warning" in result.output
+    assert "identity" in result.output
+
+
+def test_database_create_registers_the_configured_schema_paths(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    """The seeding commands hand the paths to the source, which stores them."""
+    metadata_schema = _write_schema(tmp_path, "metadata_schema.json", {"spaceflight": {}})
+    contact_schema = _write_schema(tmp_path, "contact_schema.json", {"carrier_pigeon": {}})
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock) as make_source:
+        result = runner.invoke(cli, [
+            "--data-dir", str(data_dir),
+            "--metadata-schema-path", str(metadata_schema),
+            "--contact-schema-path", str(contact_schema),
+            "database", "create", "alice", "--no-onboard", "--no-metadata-onboard",
+        ])
+    assert result.exit_code == 0, result.output
+    args = make_source.call_args.args
+    assert str(metadata_schema) in [str(a) for a in args]
+    assert str(contact_schema) in [str(a) for a in args]

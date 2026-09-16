@@ -60,7 +60,8 @@ udb session end                                 # done — clears the selection
 ### Global options
 
 ```
-udb [--profile NAME] [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+udb [--profile NAME] [--database NAME] [--data-dir DIR] [--schema-path PATH]
+    [--metadata-schema-path PATH] [--contact-schema-path PATH] COMMAND
 ```
 
 | Option | Profile parameter | Default | Description |
@@ -69,6 +70,8 @@ udb [--profile NAME] [--database NAME] [--data-dir DIR] [--schema-path PATH] COM
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
+| `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to the metadata schema |
+| `--contact-schema-path PATH` | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | packaged `contact_schema.json` | Path to the contact schema |
 
 Each option falls back to the selected profile; exporting the environment variable of the same name still overrides the profile. See [Profiles and configuration](#profiles-and-configuration).
 
@@ -110,6 +113,8 @@ $ udb profile config                  # configures staging, now that it is selec
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.udb` | ✓ |
 | `BLUE_DATA_USER_SOURCE_DATABASE` | str | — | ✓ |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | file | — | |
+| `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | file | *packaged* | |
+| `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | file | *packaged* | |
 | `BLUE_DATA_USER_SOURCE_LLM_MODEL` | str | *inherits* | |
 | `BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL` | str | *inherits* | |
 | `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL` | str | *inherits* | |
