@@ -17,9 +17,11 @@ from blue_data_user_source.memory_user_source import MemoryUserSource
 from blue_data_user_source.source import UserSource
 
 
-def test_default_connection_protocol_is_user_registry() -> None:
+def test_default_connection_protocol_names_the_family_only() -> None:
+    """A bare UserSource has no registry backend of its own to name, so the
+    second segment is absent rather than filled with a non-backend label."""
     source = UserSource("us")
-    assert source.properties["connection"]["protocol"] == "user/registry"
+    assert source.properties["connection"]["protocol"] == "user"
 
 
 def test_memory_user_source_overrides_protocol() -> None:

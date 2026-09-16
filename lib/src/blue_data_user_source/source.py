@@ -125,8 +125,18 @@ class UserSource(DataSource):
     # ------------------------------------------------------------------ #
 
     def _initialize_connection_properties(self) -> None:
+        """Declare the connection protocol: ``<family>/<backend>``, family ``user``.
+
+        The base class names the family only. Unlike a SQLSource, a UserSource
+        is a composite: the per-user kb/metadata/contact/session/doc backends
+        are chosen at ``create_user`` time and may differ between users, so the
+        one backend fixed at instantiation is the outer registry's — the
+        catalog of which users exist. Each concrete subclass names that
+        (``user/file``, ``user/memory``, ``user/redis``); a bare UserSource has
+        no registry backend of its own to name, so it reports ``user``.
+        """
         conn = self.properties.get("connection", {})
-        conn.setdefault("protocol", "user/registry")
+        conn.setdefault("protocol", "user")
         self.properties["connection"] = conn
 
     def _connect(self, **connection) -> DataRegistry:  # noqa: ARG002 — no live socket; see class docstring

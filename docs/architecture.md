@@ -175,6 +175,8 @@ UserSource.execute_query(query, database, optional_properties)
 
 Each mixes in a different `JSONSource` for the registry (`MemoryJSONSource`/`FileJSONSource`/`RedisJSONSource` from `blue-data`) and reports its own `user/memory`/`user/file`/`user/redis` connection protocol.
 
+The protocol follows the family-wide `<family>/<backend>` convention, but for a composite source the second segment needs reading with care: it names the **outer registry's** backend — the catalog of which users exist — not the storage behind any one user. The per-user `kb`/`metadata`/`contacts`/`sessions`/`documents` backends are chosen at `create_user` time, may differ between users of the same source, and each carries its own honest protocol (`kb/file`, `json/file`, `vector/file`) in its own source record. The base `UserSource` has no registry backend of its own, so it reports the family alone: `user`.
+
 ### Per-user knowledge graph (`UserDataManager`'s `"kb"` source)
 
 | Backend | Class path | Notes |
