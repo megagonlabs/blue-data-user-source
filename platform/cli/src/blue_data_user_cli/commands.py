@@ -1455,11 +1455,24 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
 def source_remove(obj: dict, name: str, yes: bool) -> None:
     """Remove a source from the registry (KG data is preserved)."""
     db = _get_db(obj)
+    source = _make_source(obj["data_dir"])
+
+    # UserDataManager.remove_source returns silently when no record matches, so
+    # without this the command reports a removal that never happened. Checked
+    # before the prompt, so there is nothing to confirm when the name is wrong.
+    try:
+        known = {s.get("name") for s in asyncio.run(source.list_sources(db))}
+    except (UDbError, Exception) as exc:
+        err.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    if name not in known:
+        err.print(f"[red]Error:[/red] Source '{name}' is not registered for database '{db}'.")
+        sys.exit(1)
+
     if not yes:
         click.confirm(
             f"Remove source '{name}' from registry? KG data will be preserved.", abort=True
         )
-    source = _make_source(obj["data_dir"])
     try:
         source.remove_source(db, name)
     except (UDbError, Exception) as exc:

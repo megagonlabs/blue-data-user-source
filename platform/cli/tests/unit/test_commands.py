@@ -568,10 +568,24 @@ def test_source_add_missing_file_exits_with_code_2(runner: CliRunner, data_dir: 
 def test_source_remove_deregisters(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=[{"name": "resume.txt"}])
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "source", "remove", "resume.txt", "--yes"])
     assert result.exit_code == 0
     mock.remove_source.assert_called_once_with("alice", "resume.txt")
+
+
+def test_source_remove_unknown_source_errors(runner: CliRunner, data_dir: Path) -> None:
+    """remove_source returns silently when nothing matches, so the command has
+    to check first or it reports a removal that never happened."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=[{"name": "resume.txt"}])
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "remove", "nonexistent", "--yes"])
+    assert result.exit_code == 1
+    assert "not registered" in result.output
+    mock.remove_source.assert_not_called()
 
 
 # ── schema group ───────────────────────────────────────────────────────────────
