@@ -80,7 +80,12 @@ def _build_source() -> tuple[FileUserSource, Path]:
     d = Path(os.environ.get("BLUE_DATA_USER_SOURCE_DATA_DIR", "~/.udb")).expanduser().resolve()
     d.mkdir(parents=True, exist_ok=True)
     props: dict[str, Any] = {"connection": {"path": str(d / "registry.json")}}
-    schema = os.environ.get("BLUE_DATA_USER_SOURCE_SCHEMA_PATH", "")
-    if schema:
-        props["schema"] = schema
+    for prop, var in (
+        ("schema", "BLUE_DATA_USER_SOURCE_SCHEMA_PATH"),
+        ("metadata_schema", "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH"),
+        ("contact_schema", "BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH"),
+    ):
+        value = os.environ.get(var, "")
+        if value:
+            props[prop] = value
     return FileUserSource("user_source", props), d

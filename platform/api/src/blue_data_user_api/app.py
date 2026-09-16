@@ -19,7 +19,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     data_dir = settings.data_dir.expanduser().resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    source = create_source(data_dir, settings.schema_path)
+    source = create_source(
+        data_dir,
+        settings.schema_path,
+        settings.metadata_schema_path,
+        settings.contact_schema_path,
+    )
     app.state.source = source
     app.state.data_dir = data_dir
 

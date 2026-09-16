@@ -66,6 +66,8 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
 | `BLUE_DATA_USER_SOURCE_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; leave unset to disable auth |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
+| `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
+| `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | _(packaged `contact_schema.json`)_ | Path to a custom contact schema |
 | `BLUE_DATA_USER_SOURCE_HOST` | `127.0.0.1` | Server bind address |
 | `BLUE_DATA_USER_SOURCE_PORT` | `8000` | Server port |
 

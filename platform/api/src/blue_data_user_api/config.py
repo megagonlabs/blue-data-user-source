@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     data_dir: Path = Path("~/.udb").expanduser()
     api_key: str = ""
     schema_path: str = ""
+    metadata_schema_path: str = ""
+    contact_schema_path: str = ""
     host: str = "127.0.0.1"
     port: int = 8000
 

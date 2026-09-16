@@ -40,8 +40,18 @@ def _default_user_props(name: str, data_dir: Path) -> dict[str, Any]:
     }
 
 
-def create_source(data_dir: Path, schema_path: str = "") -> FileUserSource:
+def create_source(
+    data_dir: Path,
+    schema_path: str = "",
+    metadata_schema_path: str = "",
+    contact_schema_path: str = "",
+) -> FileUserSource:
     props: dict[str, Any] = {"connection": {"path": str(data_dir / "registry.json")}}
-    if schema_path:
-        props["schema"] = schema_path
+    for prop, value in (
+        ("schema", schema_path),
+        ("metadata_schema", metadata_schema_path),
+        ("contact_schema", contact_schema_path),
+    ):
+        if value:
+            props[prop] = value
     return FileUserSource("user_source", props)

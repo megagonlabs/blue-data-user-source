@@ -129,8 +129,8 @@ Directory locations, backend selection, and server configuration are set via env
 | `BLUE_DATA_USER_SOURCE_DATABASE` | CLI | Default `--database` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | CLI, MCP, API | Directory for `registry.json` and per-user files (default `~/.udb`) |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `schema.json` for KB schema seeding |
-| `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | CLI | Path to a custom `metadata_schema.json` (default: the one packaged with the library) |
-| `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | CLI | Path to a custom `contact_schema.json` (default: the one packaged with the library) |
+| `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `metadata_schema.json` (default: the one packaged with the library) |
+| `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `contact_schema.json` (default: the one packaged with the library) |
 | `BLUE_DATA_USER_SOURCE_SESSION` | CLI | Default `--session` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_API_KEY` | API | `X-API-Key` value required on every request; unset disables auth |
 | `BLUE_DATA_USER_SOURCE_HOST` | API | Server bind address (default `127.0.0.1`) |
