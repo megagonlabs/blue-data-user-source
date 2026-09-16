@@ -98,6 +98,11 @@ async def create_database(name: str) -> str:
             contact_source_props=props["contact_source"],
             session_source_props=props["session_source"],
             doc_source_props=props["doc_source"],
+            # `create_user` onboards by default, which prompts on the console.
+            # A server has none: the prompts would go nowhere and the call would
+            # block or read EOF. Onboarding belongs to the CLI.
+            onboard=False,
+            onboard_metadata=False,
         )
         return _ok({"name": name, "created": True})
     except Exception as e:

@@ -6,6 +6,7 @@ singleton so no file I/O, network access, or OPENAI_API_KEY is needed
 """
 from __future__ import annotations
 
+import io
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -60,8 +61,35 @@ async def source():
         metadata_source_props=_MEMORY_REGISTRY,
         contact_source_props=_MEMORY_REGISTRY,
         session_source_props=_MEMORY_REGISTRY,
+        # `create_user` onboards by default, which prompts on stdin — see the
+        # module docstring: these tests need no input, network, or API key.
+        onboard=False,
+        onboard_metadata=False,
     )
     return inst
+
+
+class _RefusingStdin(io.StringIO):
+    """A stdin that fails loudly instead of quietly returning EOF.
+
+    An empty stream would let a prompt "succeed" with a blank answer, which is
+    how #107 stayed invisible: the interactive path ran, read nothing, and the
+    test failed later for an unrelated-looking reason.
+    """
+
+    def _refuse(self, *args, **kwargs):
+        raise AssertionError(
+            "the server prompted for input — nothing in this suite may read stdin"
+        )
+
+    read = readline = readlines = __next__ = _refuse
+
+
+@pytest.fixture(autouse=True)
+def no_stdin(monkeypatch):
+    """Nothing reachable from an MCP tool may prompt: a server has no console."""
+    monkeypatch.setattr("sys.stdin", _RefusingStdin())
+    monkeypatch.setattr("builtins.input", _RefusingStdin()._refuse)
 
 
 @pytest.fixture(autouse=True)
@@ -137,8 +165,10 @@ async def test_query_returns_results():
 # Data
 # ---------------------------------------------------------------------------
 
-async def test_add_source_type1_no_queries():
-    result = json.loads(await add_source(USER, "resume.txt", name="resume"))
+async def test_add_source_type1_no_queries(tmp_path):
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Alice has ten years of Python experience.")
+    result = json.loads(await add_source(USER, str(resume), name="resume"))
     assert result["added"] is True
 
 
