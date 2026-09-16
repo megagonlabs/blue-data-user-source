@@ -79,7 +79,9 @@ blue-data-user-source/
         ├── src/
         │   └── blue_data_user_cli/
         │       ├── __init__.py
-        │       └── commands.py          # Click command groups
+        │       ├── commands.py          # Click command groups
+        │       ├── profile.py           # `udb profile` group over blue_data.utils.config
+        │       └── profile_spec.json    # This CLI's configuration parameters
         └── tests/
             └── unit/
 ```

@@ -13,23 +13,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from blue_data_user_source.types import QueryError
 from click.testing import CliRunner
 
 from blue_data_user_cli.commands import cli
-
-
-@pytest.fixture
-def runner() -> CliRunner:
-    return CliRunner()
-
-
-@pytest.fixture
-def data_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "udb"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 
 def _invoke(runner: CliRunner, data_dir: Path, args: list[str], database: str | None = None):

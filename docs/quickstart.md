@@ -14,7 +14,7 @@ export OPENAI_API_KEY=sk-...
 
 ## 1. Create a database and select it
 
-Databases (one per user) persist under `~/.udb/` by default (override with `export BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/dir`). `create` auto-selects the new database.
+Databases (one per user) persist under `~/.udb/` by default (override with `udb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/dir`, or by exporting `BLUE_DATA_USER_SOURCE_DATA_DIR`). `create` auto-selects the new database.
 
 ```bash
 udb database create alice

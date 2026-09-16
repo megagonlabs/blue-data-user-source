@@ -51,9 +51,12 @@ def _strip_json_fences(text: str) -> str:
     return text.strip()
 
 
+DEFAULT_MODEL = "gpt-4o"
+
+
 async def _llm_complete(
     prompt: str,
-    model: str = "gpt-4o",
+    model: str = DEFAULT_MODEL,
     properties: dict | None = None,
 ) -> str | dict:
     """Call the LLM and return a string or parsed dict.
@@ -111,11 +114,13 @@ class UserQueryReasoner:
         manager: UserDataManager | None = None,
         session_id: str | None = None,
         query_id: str | None = None,
+        model: str = DEFAULT_MODEL,
     ) -> None:
         self._source = source
         self._manager = manager
         self._session_id = session_id
         self._query_id = query_id
+        self._model = model
         self._metrics: list[UserDataMetric] = list(self._DEFAULT_METRICS)
         if manager is not None:
             self._metrics.append(PrivacyMetric(manager=manager))
@@ -140,7 +145,7 @@ class UserQueryReasoner:
             "Return only the rewritten query, with no explanation.\n\n"
             f"Query: {query}"
         )
-        result = await _llm_complete(prompt)
+        result = await _llm_complete(prompt, model=self._model)
         return result or query
 
     async def expand_query(self, query: str) -> list[str]:
@@ -182,7 +187,7 @@ class UserQueryReasoner:
             "need up to 5. Never pad the list just to reach a quota.\n\n"
             'Return a JSON object: {"questions": ["<question>", ...]} (the list may be empty).'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        result = await _llm_complete(prompt, model=self._model, properties={"response_format": "json_object"})
         questions = result.get("questions", []) if isinstance(result, dict) else []
         return questions[:5] if isinstance(questions, list) else []
 
@@ -269,7 +274,7 @@ class UserQueryReasoner:
             "Return only the rewritten question.\n\n"
             f"Question: {raw_question}\n\n" + "\n".join(context_lines)
         )
-        user_question = await _llm_complete(prompt)
+        user_question = await _llm_complete(prompt, model=self._model)
         if not user_question:
             user_question = raw_question
 
@@ -472,7 +477,7 @@ class UserQueryReasoner:
             "Do not ask more than 5 questions.\n\n"
             'Return a JSON object: {"questions": ["<question>", ...]}'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        result = await _llm_complete(prompt, model=self._model, properties={"response_format": "json_object"})
         questions = result.get("questions", []) if isinstance(result, dict) else []
         return questions[:5] if isinstance(questions, list) else []
 
@@ -515,7 +520,7 @@ class UserQueryReasoner:
             "Each question should be clear and cover exactly one field.\n\n"
             'Return a JSON object: {"questions": [{"key": "<field>", "question": "<question>"}, ...]}'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        result = await _llm_complete(prompt, model=self._model, properties={"response_format": "json_object"})
         items = result.get("questions", []) if isinstance(result, dict) else []
         if not isinstance(items, list):
             return []
@@ -532,7 +537,7 @@ class UserQueryReasoner:
             f"following user response.\n\nResponse: {response}\n\n"
             'Return a JSON object: {"value": <value>}, using null if it cannot be determined.'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        result = await _llm_complete(prompt, model=self._model, properties={"response_format": "json_object"})
         return result.get("value") if isinstance(result, dict) else None
 
     def _locale_instruction(self) -> str:
@@ -551,7 +556,7 @@ class UserQueryReasoner:
             f"original question using only the information above.{self._locale_instruction()} "
             "Do not mention sub-questions."
         )
-        return await _llm_complete(prompt)
+        return await _llm_complete(prompt, model=self._model)
 
     async def synthesize_expanded_nl(self, results: list[QueryResult]) -> str:
         """Summarize the per-sub-question queries and raw results as prose.
@@ -571,7 +576,7 @@ class UserQueryReasoner:
             "Do not use a Q: / A: transcript format, and do not include raw JSON or data "
             "structures — write flowing prose."
         )
-        return await _llm_complete(prompt)
+        return await _llm_complete(prompt, model=self._model)
 
     async def synthesize_results_json(
         self, original_query: str, results: list[QueryResult]
@@ -595,7 +600,7 @@ class UserQueryReasoner:
             "to the original question.\n"
             'Return only a JSON object of the form: {"rows": [{...}, ...]}'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        result = await _llm_complete(prompt, model=self._model, properties={"response_format": "json_object"})
         rows = result.get("rows", []) if isinstance(result, dict) else []
         return rows if isinstance(rows, list) else []
 
@@ -608,7 +613,7 @@ class UserQueryReasoner:
             f"The following attributes are stored about a user:\n{chr(10).join(lines)}\n\n"
             "Write a concise natural language summary of this information."
         )
-        return await _llm_complete(prompt)
+        return await _llm_complete(prompt, model=self._model)
 
     async def synthesize_metadata_nl(self, entries: list[dict]) -> str:
         lines = []
@@ -621,7 +626,7 @@ class UserQueryReasoner:
             f"The following sources are registered in a user database:\n{chr(10).join(lines)}\n\n"
             "Write a concise natural language summary of these sources."
         )
-        return await _llm_complete(prompt)
+        return await _llm_complete(prompt, model=self._model)
 
     def _identify_user_data_metrics(
         self,

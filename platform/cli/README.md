@@ -60,14 +60,80 @@ udb session end                                 # done — clears the selection
 ### Global options
 
 ```
-udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+udb [--profile NAME] [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 ```
 
-| Option | Env var | Default | Description |
+| Option | Profile parameter | Default | Description |
 |---|---|---|---|
+| `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
+
+Each option falls back to the selected profile; exporting the environment variable of the same name still overrides the profile. See [Profiles and configuration](#profiles-and-configuration).
+
+### Profiles and configuration
+
+A **profile** is a named set of configuration values — API keys, models, backend choices — stored as one section of `~/.udb/.profiles`. Everything the CLI reads comes from the selected profile, so switching environments is one command rather than a shell full of exports.
+
+The first `udb` command creates a `default` profile and selects it, so there is nothing to set up before the CLI works:
+
+```bash
+$ udb profile config                  # walk through the required parameters
+$ udb profile inspect                 # every value, and where it came from
+```
+
+`add` is for additional profiles:
+
+```bash
+$ udb profile add staging
+$ udb profile select staging
+$ udb profile config                  # configures staging, now that it is selected
+```
+
+`udb profile config` has three forms — no arguments walks every required parameter, `PARAM` prompts for one, `PARAM VALUE` sets one directly. Add `--profile NAME` to configure a profile other than the selected one.
+
+**Precedence:** command option > environment variable > profile > default. `udb profile inspect` reports the winning tier for every parameter.
+
+**Secrets** are never accepted as a command-line value — that would put them in your shell history — so `udb profile config OPENAI_API_KEY` always prompts. Enter the key to store it encoded, or `$OPENAI_API_KEY` to store a reference read from the environment at use. `~/.udb/.profiles` is written `0600` and `inspect` masks stored secrets.
+
+> The encoded form is obfuscation, not encryption: anyone who can read the file can decode it. The file mode is the real protection, and the `$VAR` reference form keeps the secret off disk entirely.
+
+| Parameter | Cast | Default | Asked by `config` |
+|---|---|---|---|
+| `OPENAI_API_KEY` | secret | — | ✓ |
+| `ANTHROPIC_API_KEY` | secret | — | |
+| `BLUE_DATA_LLM_PROVIDER` | str | `openai` | |
+| `BLUE_DATA_LLM_MODEL` | str | `gpt-4o` | ✓ |
+| `BLUE_DATA_CLI_FORMAT` | str | `table` | |
+| `BLUE_DATA_CLI_LOG_LIMIT` | int | `80` | |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.udb` | ✓ |
+| `BLUE_DATA_USER_SOURCE_DATABASE` | str | — | ✓ |
+| `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | file | — | |
+| `BLUE_DATA_USER_SOURCE_LLM_MODEL` | str | *inherits* | |
+| `BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL` | str | *inherits* | |
+| `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL` | str | *inherits* | |
+| `BLUE_DATA_USER_SOURCE_KB_BACKEND` | str | `file` | |
+| `BLUE_DATA_USER_SOURCE_KB_SEARCH_MODE` | str | `bm25` | |
+| `BLUE_DATA_USER_SOURCE_KB_VECTOR_BACKEND` | str | `file` | |
+| `BLUE_DATA_USER_SOURCE_KB_EMBEDDING_MODEL` | str | `text-embedding-3-small` | |
+| `BLUE_DATA_USER_SOURCE_DOC_BACKEND` | str | `file` | |
+| `BLUE_DATA_USER_SOURCE_NEO4J_HOST` | str | `localhost` | |
+| `BLUE_DATA_USER_SOURCE_NEO4J_PORT` | int | `7687` | |
+| `BLUE_DATA_USER_SOURCE_NEO4J_USER` | str | `neo4j` | |
+
+Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to `BLUE_DATA_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `udb database create`, which has no `config set` to change them afterwards.
+
+`BLUE_DATA_USER_SOURCE_HOME` (default `~/.udb`) is deliberately *not* a profile parameter: it is the directory the profiles themselves live in, so it can only be set in the environment.
+
+| Command | Description |
+|---|---|
+| `udb profile add NAME` | Create an additional profile (`default` is created on first use) |
+| `udb profile remove NAME [--confirm]` | Delete a profile and its configuration |
+| `udb profile list [--format table\|json]` | List profiles, marking the selected one |
+| `udb profile select NAME` | Make a profile the default for subsequent commands |
+| `udb profile inspect [NAME] [--format table\|json]` | Show every value and the tier it came from; secrets masked |
+| `udb profile config [PARAM [VALUE]] [--profile NAME]` | Set configuration; secrets always prompt |
 
 `--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.
 
@@ -301,6 +367,8 @@ Data is persisted under `~/.udb/` by default:
 
 ```
 ~/.udb/
+├── .profiles                  # configuration profiles (mode 0600, written by 'udb profile config')
+├── .selected.profile          # active profile name (written by 'udb profile select')
 ├── .selected.database         # active database name (written by 'udb database select'/'create')
 ├── .selected.session           # active session id (written by 'udb session select'/'start', and auto-created sessions)
 ├── registry.json              # outer DataRegistry store (databases + source properties)

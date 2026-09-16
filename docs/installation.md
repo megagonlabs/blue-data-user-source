@@ -125,6 +125,7 @@ Directory locations, backend selection, and server configuration are set via env
 | Variable | Used by | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` | lib, CLI, MCP, API | Required for any LLM operation (querying, extraction) |
+| `BLUE_DATA_USER_SOURCE_HOME` | CLI | Where the CLI keeps `.profiles` and `.selected.profile` (default `~/.udb`). Environment-only — it is where profiles are read from, so it cannot come from one |
 | `BLUE_DATA_USER_SOURCE_DATABASE` | CLI | Default `--database` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | CLI, MCP, API | Directory for `registry.json` and per-user files (default `~/.udb`) |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `schema.json` for KB schema seeding |

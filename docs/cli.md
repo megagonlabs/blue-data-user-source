@@ -43,7 +43,7 @@ Data is persisted under `~/.udb/` by default:
 Override the data directory globally:
 
 ```bash
-export BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/my-udb
+export BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/my-udb   # or: udb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/my-udb
 ```
 
 ## Global options
@@ -54,8 +54,11 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 | Option | Env var | Default | Description |
 |---|---|---|---|
+| `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+
+Every option falls back to the selected profile (`udb profile config`); an exported environment variable of the same name still overrides it. Precedence: **command option > environment variable > profile > default**. The full parameter table is in [platform/cli/README.md](../platform/cli/README.md#profiles-and-configuration).
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
 
 `--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.

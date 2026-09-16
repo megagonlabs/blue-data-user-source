@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,9 @@ from rich.console import Console
 from rich.table import Table
 
 from blue_data_user_source import FileUserSource, UDbError, sanitize_registry_name
+from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
+
+from blue_data_user_cli.profile import profile_group, profile_store, resolver_for
 from blue_data_user_source.data.manager import (
     CLS_JSON_FILE,
     CLS_JSON_MEMORY,
@@ -22,6 +26,19 @@ from blue_data_user_source.data.manager import (
 )
 
 _DEFAULT_DATA_DIR = Path.home() / ".udb"
+
+
+def _cli_home() -> str:
+    """Where this CLI keeps its profiles and profile selection.
+
+    Deliberately not a profile parameter — it is the directory the profiles are
+    read from, so it can only come from the environment. Defaults to the same
+    ~/.udb the data lives in, so everything sits together unless a profile
+    points the data elsewhere.
+    """
+    return str(Path(
+        os.environ.get("BLUE_DATA_USER_SOURCE_HOME", str(_DEFAULT_DATA_DIR))
+    ).expanduser())
 _SELECTED_DB_FILE = ".selected.database"
 _SELECTED_SESSION_FILE = ".selected.session"
 _INTERNAL_SOURCES = {"kb", "metadata", "contacts", "sessions", "session_content", "external_documents"}
@@ -252,33 +269,97 @@ def _get_session(obj: dict, session: str | None) -> str | None:
 
 @click.group()
 @click.option(
-    "--database",
-    envvar="BLUE_DATA_USER_SOURCE_DATABASE",
+    "--profile",
+    "profile_name",
+    envvar="BLUE_DATA_PROFILE",
     default=None,
-    help="Database (user) name. Overrides BLUE_DATA_USER_SOURCE_DATABASE env var.",
+    help="Configuration profile. Overrides BLUE_DATA_PROFILE. "
+         "Defaults to the selection in ~/.udb/.selected.profile.",
+)
+@click.option(
+    "--database",
+    default=None,
+    help="Database (user) name. Defaults to the selection made by "
+         "'udb database select', then the profile's BLUE_DATA_USER_SOURCE_DATABASE.",
 )
 @click.option(
     "--data-dir",
-    envvar="BLUE_DATA_USER_SOURCE_DATA_DIR",
-    default=str(_DEFAULT_DATA_DIR),
-    show_default=True,
-    help="Directory where user data is stored. Overrides BLUE_DATA_USER_SOURCE_DATA_DIR env var.",
+    default=None,
+    help="Directory where user data is stored. Defaults to the profile's "
+         "BLUE_DATA_USER_SOURCE_DATA_DIR.",
     type=click.Path(path_type=Path),
 )
 @click.option(
     "--schema-path",
-    envvar="BLUE_DATA_USER_SOURCE_SCHEMA_PATH",
     default=None,
-    help="Path to schema.json for KB schema seeding.",
+    help="Path to schema.json for KB schema seeding. Defaults to the profile's "
+         "BLUE_DATA_USER_SOURCE_SCHEMA_PATH.",
     type=click.Path(exists=True, path_type=Path),
 )
 @click.pass_context
-def cli(ctx: click.Context, database: str | None, data_dir: Path, schema_path: Path | None) -> None:
-    """udb — user database CLI."""
+def cli(
+    ctx: click.Context,
+    profile_name: str | None,
+    database: str | None,
+    data_dir: Path | None,
+    schema_path: Path | None,
+) -> None:
+    """udb — user database CLI.
+
+    Configuration lives in profiles: `udb profile config` to set values,
+    `udb profile inspect` to see them and where each came from.
+    """
+    home = _cli_home()
+
+    # A fresh install gets its `default` profile here, rather than being told to
+    # run `udb profile add` before anything works. Keyed on the profiles file, so
+    # a profile removed on purpose is not resurrected on the next command.
+    profile_store(home).initialize()
+
+    # Apply the profile before anything else runs: resolved values are written
+    # into the environment, which is where the library, the OpenAI SDK and any
+    # remaining `envvar=` options already read their configuration from.
+    resolver = resolver_for(home, profile_name)
+    resolver.export()
+
     ctx.ensure_object(dict)
-    ctx.obj["database"] = database
-    ctx.obj["data_dir"] = data_dir
-    ctx.obj["schema_path"] = schema_path
+    ctx.obj["home"] = home
+    ctx.obj["profile"] = resolver.profile
+    ctx.obj["config"] = resolver
+    ctx.obj["database"] = database or resolver.get("BLUE_DATA_USER_SOURCE_DATABASE")
+    ctx.obj["data_dir"] = Path(
+        data_dir or resolver.get("BLUE_DATA_USER_SOURCE_DATA_DIR") or _DEFAULT_DATA_DIR
+    )
+    ctx.obj["schema_path"] = schema_path or resolver.get("BLUE_DATA_USER_SOURCE_SCHEMA_PATH")
+
+
+cli.add_command(profile_group)
+
+
+def _model_for(obj: dict, function: str, option: str | None) -> str:
+    """The model a command should use.
+
+    `--model` wins; otherwise the profile's parameter for this function, which
+    itself falls back through BLUE_DATA_USER_SOURCE_LLM_MODEL to
+    BLUE_DATA_LLM_MODEL.
+    """
+    if option:
+        return option
+    return obj["config"].get(f"BLUE_DATA_USER_SOURCE_{function}_LLM_MODEL") or DEFAULT_MODEL
+
+
+def _db_default(obj: dict, param: str, option):
+    """A `database create` default: the command option if given, else the profile."""
+    if option is not None:
+        return option
+    return obj["config"].get(f"BLUE_DATA_USER_SOURCE_{param}")
+
+
+def _log_limit(obj: dict, option: int | None) -> int:
+    """`--log-limit` if given, else the family-wide BLUE_DATA_CLI_LOG_LIMIT."""
+    if option is not None:
+        return option
+    return obj["config"].get("BLUE_DATA_CLI_LOG_LIMIT") or 80
 
 
 # ------------------------------------------------------------------ #
@@ -331,20 +412,18 @@ def database_list(obj: dict, fmt: str) -> None:
 @click.argument("name")
 @click.option(
     "--kb-backend",
-    default="file",
+    default=None,
     type=click.Choice(["memory", "file", "neo4j"]),
-    show_default=True,
     help="KBSource backend to use.",
 )
-@click.option("--neo4j-host", default="localhost", show_default=True, help="Neo4j host (neo4j backend only).")
-@click.option("--neo4j-port", default=7687, show_default=True, type=int, help="Neo4j bolt port.")
-@click.option("--neo4j-user", default="neo4j", show_default=True, help="Neo4j username.")
+@click.option("--neo4j-host", default=None, help="Neo4j host (neo4j backend only).")
+@click.option("--neo4j-port", default=None, type=int, help="Neo4j bolt port.")
+@click.option("--neo4j-user", default=None, help="Neo4j username.")
 @click.option("--neo4j-password", default=None, help="Neo4j password.")
 @click.option(
     "--kb-search-mode",
-    default="bm25",
+    default=None,
     type=click.Choice(["none", "bm25", "semantic"]),
-    show_default=True,
     help=(
         "Schema/data search index for the KB (used by extraction and entity/fact "
         "dedup, among others). 'none' falls back to a much weaker exact-substring "
@@ -353,22 +432,19 @@ def database_list(obj: dict, fmt: str) -> None:
 )
 @click.option(
     "--kb-vector-backend",
-    default="file",
+    default=None,
     type=click.Choice(["memory", "file"]),
-    show_default=True,
     help="Vector store backend for KB semantic search (--kb-search-mode=semantic only).",
 )
 @click.option(
     "--kb-embedding-model",
-    default="text-embedding-3-small",
-    show_default=True,
+    default=None,
     help="OpenAI embedding model for KB semantic search (--kb-search-mode=semantic only).",
 )
 @click.option(
     "--doc-backend",
-    default="file",
+    default=None,
     type=click.Choice(["memory", "file"]),
-    show_default=True,
     help="Vector backend for per-session interaction-transcript storage.",
 )
 @click.option(
@@ -387,19 +463,29 @@ def database_list(obj: dict, fmt: str) -> None:
 def database_create(
     obj: dict,
     name: str,
-    kb_backend: str,
-    neo4j_host: str,
-    neo4j_port: int,
-    neo4j_user: str,
+    kb_backend: str | None,
+    neo4j_host: str | None,
+    neo4j_port: int | None,
+    neo4j_user: str | None,
     neo4j_password: str | None,
-    kb_search_mode: str,
-    kb_vector_backend: str,
-    kb_embedding_model: str,
-    doc_backend: str,
+    kb_search_mode: str | None,
+    kb_vector_backend: str | None,
+    kb_embedding_model: str | None,
+    doc_backend: str | None,
     onboard: bool,
     metadata_onboard: bool,
 ) -> None:
     """Create a new user database."""
+    # Each backend choice falls back to the selected profile, so an environment
+    # that always wants (say) neo4j sets it once rather than on every create.
+    kb_backend = _db_default(obj, "KB_BACKEND", kb_backend)
+    kb_search_mode = _db_default(obj, "KB_SEARCH_MODE", kb_search_mode)
+    kb_vector_backend = _db_default(obj, "KB_VECTOR_BACKEND", kb_vector_backend)
+    kb_embedding_model = _db_default(obj, "KB_EMBEDDING_MODEL", kb_embedding_model)
+    doc_backend = _db_default(obj, "DOC_BACKEND", doc_backend)
+    neo4j_host = _db_default(obj, "NEO4J_HOST", neo4j_host)
+    neo4j_port = _db_default(obj, "NEO4J_PORT", neo4j_port)
+    neo4j_user = _db_default(obj, "NEO4J_USER", neo4j_user)
     data_dir: Path = obj["data_dir"]
     schema_path: Path | None = obj.get("schema_path")
     source = _make_source(data_dir, schema_path)
@@ -886,13 +972,18 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
     "--include-expanded", "include_expanded", is_flag=True, default=False,
     help="Also return the per-sub-question queries and their raw results.",
 )
+@click.option(
+    "--model", default=None,
+    help="OpenAI model for query reasoning. Default: the profile's "
+         "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL.",
+)
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
-@click.option("--log-limit", "log_limit", default=80, type=int, show_default=True, help="Truncation limit for logged values.")
+@click.option("--log-limit", "log_limit", default=None, type=int, help="Truncation limit for logged values. Default: the profile's BLUE_DATA_CLI_LOG_LIMIT.")
 @click.pass_obj
 def data_query(
     obj: dict, text: str, session: str | None, fmt: str, top_k: int, include_expanded: bool,
-    verbose: bool, log: bool, log_limit: int,
+    model: str | None, verbose: bool, log: bool, log_limit: int | None,
 ) -> None:
     """Execute a natural-language query against the database."""
     db = _get_db(obj)
@@ -908,10 +999,11 @@ def data_query(
     try:
         with console.status("Querying…") as status:
             on_tool_call, on_tool_result = _status_tool_callbacks(
-                status, "Querying", verbose=verbose, log=log, log_limit=log_limit
+                status, "Querying", verbose=verbose, log=log, log_limit=_log_limit(obj, log_limit)
             )
             props["on_tool_call"] = on_tool_call
             props["on_tool_result"] = on_tool_result
+            props["model"] = _model_for(obj, "REASONING", model)
             results, session_id = source.execute_query(text, database=db, optional_properties=props)
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
@@ -1074,10 +1166,10 @@ def data_export(obj: dict, show_provenance: bool, output) -> None:
 @click.argument("text")
 @click.option("--query", "queries", multiple=True, help="Guiding question (repeatable).")
 @click.option("--source", "source_name", default=None, help="Source name for provenance.")
-@click.option("--model", default="gpt-4o", show_default=True, help="OpenAI model.")
+@click.option("--model", default=None, help="OpenAI model. Default: the profile's model for this command.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
-@click.option("--log-limit", "log_limit", default=80, type=int, show_default=True, help="Truncation limit for logged values.")
+@click.option("--log-limit", "log_limit", default=None, type=int, help="Truncation limit for logged values. Default: the profile's BLUE_DATA_CLI_LOG_LIMIT.")
 @click.pass_obj
 def data_extract(
     obj: dict,
@@ -1111,12 +1203,12 @@ def data_extract(
                 sys.exit(1)
         with console.status("Extracting…") as status:
             on_tool_call, on_tool_result = _status_tool_callbacks(
-                status, "Extracting", verbose=verbose, log=log, log_limit=log_limit
+                status, "Extracting", verbose=verbose, log=log, log_limit=_log_limit(obj, log_limit)
             )
             asyncio.run(kb.import_text(
                 db, text,
                 queries=list(queries) or None,
-                model=model,
+                model=_model_for(obj, "EXTRACTION", model),
                 source_id=source_id,
                 on_tool_call=on_tool_call,
                 on_tool_result=on_tool_result,

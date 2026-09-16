@@ -107,6 +107,8 @@ async def test_data_entry_written_to_both_stores(dml, json_store, vector_store):
 
 Common fixtures are defined in `tests/conftest.py`. A standard user fixture provides a pre-populated user database for tests that need existing data.
 
+The CLI suite's `platform/cli/tests/unit/conftest.py` additionally isolates the CLI home: `--data-dir` alone is not enough, because profiles are read from the home directory *before* any option is applied, so without it the suite writes into the developer's own `~/.udb`. It points every home/data variable at `tmp_path`, clears every configuration parameter (so a developer's exported `OPENAI_API_KEY` cannot change what the tests observe), snapshots the environment around each invocation (a real run gets a fresh process; in-process, the profile's exports would leak into the next command), and asserts afterwards that nothing was written to the real `~/.udb`. That last guard is the durable part — the failure it catches is invisible until someone inspects their own home directory.
+
 ```python
 @pytest.fixture
 def user_id() -> str:

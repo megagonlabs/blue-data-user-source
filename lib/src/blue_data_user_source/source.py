@@ -40,6 +40,15 @@ def _count_set_leaves(d: dict) -> int:
     return count
 
 
+def _model_kwarg(model: str | None) -> dict[str, str]:
+    """`{"model": …}` when a model was chosen, `{}` otherwise.
+
+    Keeps `UserQueryReasoner`'s own default as the single place the fallback
+    lives, rather than repeating "gpt-4o" at every construction site.
+    """
+    return {"model": model} if model else {}
+
+
 class UserSource(DataSource):
     """
     A multi-user data source for storing and querying personal user data on behalf of agents.
@@ -579,7 +588,9 @@ class UserSource(DataSource):
         if onboard:
             await self.onboard_user(name, include_metadata=onboard_metadata)
 
-    async def onboard_user(self, name: str, include_metadata: bool = True) -> None:
+    async def onboard_user(
+        self, name: str, include_metadata: bool = True, model: str | None = None
+    ) -> None:
         """Ask a user a few onboarding questions to seed their KB data and metadata.
 
         Called automatically by :meth:`create_user` (unless ``onboard=False``
@@ -591,7 +602,7 @@ class UserSource(DataSource):
         (plus the always-asked name, which also seeds ``identity.name``).
         """
         manager = self._get_manager(name)
-        reasoner = UserQueryReasoner(source=self, manager=manager)
+        reasoner = UserQueryReasoner(source=self, manager=manager, **_model_kwarg(model))
         await reasoner.onboard(
             metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema"),
             include_metadata=include_metadata,
@@ -661,13 +672,17 @@ class UserSource(DataSource):
     async def list_sources(self, database: str, source_id: str | None = None) -> list[dict]:
         return await self._get_manager(database).list_sources(source_id)
 
-    async def describe_data(self, database: str) -> str:
+    async def describe_data(self, database: str, model: str | None = None) -> str:
         entries = await self.list_data(database)
-        return await UserQueryReasoner(source=self).synthesize_data_nl(entries)
+        reasoner = UserQueryReasoner(source=self, **_model_kwarg(model))
+        return await reasoner.synthesize_data_nl(entries)
 
-    async def describe_sources(self, database: str, source_id: str | None = None) -> str:
+    async def describe_sources(
+        self, database: str, source_id: str | None = None, model: str | None = None
+    ) -> str:
         entries = await self.list_sources(database, source_id)
-        return await UserQueryReasoner(source=self).synthesize_metadata_nl(entries)
+        reasoner = UserQueryReasoner(source=self, **_model_kwarg(model))
+        return await reasoner.synthesize_metadata_nl(entries)
 
     # ------------------------------------------------------------------ #
     # User metadata                                                        #
@@ -789,7 +804,8 @@ class UserSource(DataSource):
         query_id = await session_manager.create_query(session_id, query, output_form)
 
         reasoner = UserQueryReasoner(
-            source=self, manager=manager, session_id=session_id, query_id=query_id
+            source=self, manager=manager, session_id=session_id, query_id=query_id,
+            **_model_kwarg(props.get("model")),
         )
 
         # Phase 1: contextualize then expand (sequential — expand uses the rewritten query)

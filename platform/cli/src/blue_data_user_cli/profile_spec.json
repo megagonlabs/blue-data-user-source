@@ -1,0 +1,91 @@
+{
+  "BLUE_DATA_USER_SOURCE_DATA_DIR": {
+    "default": "~/.udb",
+    "prompt": "Directory where user databases and CLI state are stored",
+    "required": true,
+    "cast": "directory"
+  },
+  "BLUE_DATA_USER_SOURCE_DATABASE": {
+    "default": null,
+    "prompt": "Default database (user) when --database is not given",
+    "required": true,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_SCHEMA_PATH": {
+    "default": null,
+    "prompt": "Path to schema.json used to seed a new database's KB schema",
+    "required": false,
+    "cast": "file"
+  },
+
+  "BLUE_DATA_USER_SOURCE_LLM_MODEL": {
+    "default": null,
+    "prompt": "LLM model for all udb commands (overrides BLUE_DATA_LLM_MODEL)",
+    "required": false,
+    "cast": "str",
+    "inherits": ["BLUE_DATA_LLM_MODEL"]
+  },
+  "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL": {
+    "default": null,
+    "prompt": "LLM model for `udb data extract`",
+    "required": false,
+    "cast": "str",
+    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL"]
+  },
+  "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL": {
+    "default": null,
+    "prompt": "LLM model for query reasoning, onboarding and NL synthesis",
+    "required": false,
+    "cast": "str",
+    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL"]
+  },
+
+  "BLUE_DATA_USER_SOURCE_KB_BACKEND": {
+    "default": "file",
+    "prompt": "KBSource backend for a new database (file or neo4j)",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_KB_SEARCH_MODE": {
+    "default": "bm25",
+    "prompt": "KB search mode for a new database (none, bm25 or semantic)",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_KB_VECTOR_BACKEND": {
+    "default": "file",
+    "prompt": "Vector store backend for KB semantic search",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_KB_EMBEDDING_MODEL": {
+    "default": "text-embedding-3-small",
+    "prompt": "OpenAI embedding model for KB semantic search",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_DOC_BACKEND": {
+    "default": "file",
+    "prompt": "Vector backend for per-session interaction transcripts",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_NEO4J_HOST": {
+    "default": "localhost",
+    "prompt": "Neo4j host (neo4j KB backend only)",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_NEO4J_PORT": {
+    "default": 7687,
+    "prompt": "Neo4j bolt port",
+    "required": false,
+    "cast": "int"
+  },
+  "BLUE_DATA_USER_SOURCE_NEO4J_USER": {
+    "default": "neo4j",
+    "prompt": "Neo4j username",
+    "required": false,
+    "cast": "str"
+  }
+}
