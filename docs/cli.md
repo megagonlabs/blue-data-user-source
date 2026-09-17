@@ -229,6 +229,8 @@ Schema management. All `schema` commands require an active database.
 | `udb schema export [-o FILE]` | Export the schema as JSON |
 | `udb schema search QUERY [--type]` | Search schema elements by keyword or semantic similarity |
 
+`schema search` options: `--type class|relation|property` (repeatable), `--mode keyword|semantic`, `--top-k N`, `--format table|json`.
+
 ---
 
 ## `udb metadata`

@@ -1630,7 +1630,7 @@ def schema_export(obj: dict, output) -> None:
 @click.argument("query")
 @click.option(
     "--type", "types",
-    type=click.Choice(["CLASS", "RELATION", "PROPERTY"], case_sensitive=False),
+    type=click.Choice(["class", "relation", "property"], case_sensitive=False),
     multiple=True,
     help="Filter by schema type (repeatable).",
 )

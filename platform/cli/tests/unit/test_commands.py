@@ -657,6 +657,34 @@ def test_schema_search_returns_matches(runner: CliRunner, data_dir: Path) -> Non
     assert "PERSON" in result.output
 
 
+def test_schema_search_type_is_lowercase_like_every_other_choice(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """`--type` was the CLI's only uppercase Choice; `data search --type` and the
+    other 20 are lowercase. The KB still receives the uppercase wire value."""
+    _select_database(data_dir, "alice")
+    kb = _kb_source(search_schema=[])
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "search", "person", "--type", "class"])
+    assert result.exit_code == 0
+    assert kb.search_schema.await_args.kwargs["type_filter"] == ["CLASS"]
+
+
+def test_schema_search_type_still_accepts_uppercase(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """case_sensitive=False keeps the old spelling working for anyone scripted
+    against it."""
+    _select_database(data_dir, "alice")
+    kb = _kb_source(search_schema=[])
+    mock = _source_with_manager(_manager_with_kb(kb))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["schema", "search", "person", "--type", "CLASS"])
+    assert result.exit_code == 0
+    assert kb.search_schema.await_args.kwargs["type_filter"] == ["CLASS"]
+
+
 # ── metadata group ─────────────────────────────────────────────────────────────
 
 def test_metadata_list_shows_categories(runner: CliRunner, data_dir: Path) -> None:

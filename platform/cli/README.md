@@ -351,7 +351,7 @@ Schema management. All `schema` commands require an active database.
 udb schema list
 udb schema export --output schema.json
 udb schema import schema.json
-udb schema search "employment" --type CLASS
+udb schema search "employment" --type class
 ```
 
 ---
