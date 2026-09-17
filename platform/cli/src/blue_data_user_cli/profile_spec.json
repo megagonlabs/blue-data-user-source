@@ -11,6 +11,12 @@
     "required": true,
     "cast": "str"
   },
+  "BLUE_DATA_USER_SOURCE_SESSION": {
+    "default": null,
+    "prompt": "Default session id when --session is not given (usually left unset)",
+    "required": false,
+    "cast": "str"
+  },
   "BLUE_DATA_USER_SOURCE_SCHEMA_PATH": {
     "default": null,
     "prompt": "Path to schema.json used to seed a new database's KB schema",

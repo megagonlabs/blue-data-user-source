@@ -436,6 +436,59 @@ def test_data_query_selects_new_session_when_none_given(
     assert (data_dir / ".selected.session").read_text() == "sess-new"
 
 
+def test_root_session_option_is_forwarded(runner: CliRunner, data_dir: Path) -> None:
+    """`--session` is a root option like `--database`, not just a `data query` one."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        result = runner.invoke(
+            cli, ["--data-dir", str(data_dir), "--session", "sess-root", "data", "query", "q"]
+        )
+    assert result.exit_code == 0, result.output
+    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-root"
+
+
+def test_session_env_var_is_forwarded(runner: CliRunner, data_dir: Path, monkeypatch) -> None:
+    """BLUE_DATA_USER_SOURCE_SESSION used to be read inline in _get_session; it is
+    now a declared parameter resolved like every other one."""
+    _select_database(data_dir, "alice")
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_SESSION", "sess-env")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "query", "q"])
+    assert result.exit_code == 0, result.output
+    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-env"
+
+
+def test_command_session_option_outranks_the_root_one(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        result = runner.invoke(cli, [
+            "--data-dir", str(data_dir), "--session", "sess-root",
+            "data", "query", "q", "--session", "sess-cmd",
+        ])
+    assert result.exit_code == 0, result.output
+    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-cmd"
+
+
+def test_selected_session_file_is_the_last_resort(runner: CliRunner, data_dir: Path) -> None:
+    """The file still wins over nothing, and still loses to an explicit value."""
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session").write_text("sess-file")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "query", "q"])
+    assert result.exit_code == 0, result.output
+    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-file"
+
+
 def test_data_query_top_k_is_forwarded(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()

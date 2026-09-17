@@ -49,7 +49,7 @@ export BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/my-udb   # or: udb profile config
 ## Global options
 
 ```
-udb [--database NAME] [--data-dir DIR] [--schema-path PATH]
+udb [--database NAME] [--session ID] [--data-dir DIR] [--schema-path PATH]
     [--metadata-schema-path PATH] [--contact-schema-path PATH] COMMAND
 ```
 
@@ -57,6 +57,7 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH]
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
+| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.udb/.selected.session` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to a custom metadata schema |

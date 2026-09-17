@@ -306,17 +306,21 @@ def _selected_session_path(data_dir: Path) -> Path:
 
 
 def _get_session(obj: dict, session: str | None) -> str | None:
-    """Resolve a session id: --session flag → env var → .selected.session file → None.
+    """Resolve a session id: command argument → root `--session` → the
+    `.selected.session` file → None.
+
+    The root option carries the environment variable and the profile with it
+    (see the root callback), so this no longer reads `BLUE_DATA_USER_SOURCE_SESSION`
+    itself — the variable is declared once, in `profile_spec.json`, like every
+    other parameter.
 
     Unlike _get_db, an unresolved session is NOT an error — None means the
     caller should let the query auto-create a new session (reuse-or-create).
     """
     if session:
         return session
-    import os
-    env_session = os.environ.get("BLUE_DATA_USER_SOURCE_SESSION")
-    if env_session:
-        return env_session
+    if obj.get("session"):
+        return obj["session"]
     sel_path = _selected_session_path(obj["data_dir"])
     if sel_path.exists():
         sel = sel_path.read_text().strip()
@@ -343,6 +347,13 @@ def _get_session(obj: dict, session: str | None) -> str | None:
     default=None,
     help="Database (user) name. Defaults to the selection made by "
          "'udb database select', then the profile's BLUE_DATA_USER_SOURCE_DATABASE.",
+)
+@click.option(
+    "--session",
+    default=None,
+    help="Session id for query context. Defaults to the profile's "
+         "BLUE_DATA_USER_SOURCE_SESSION, then the selection made by "
+         "'udb session select'.",
 )
 @click.option(
     "--data-dir",
@@ -377,6 +388,7 @@ def cli(
     ctx: click.Context,
     profile_name: str | None,
     database: str | None,
+    session: str | None,
     data_dir: Path | None,
     schema_path: Path | None,
     metadata_schema_path: Path | None,
@@ -405,6 +417,7 @@ def cli(
     ctx.obj["profile"] = resolver.profile
     ctx.obj["config"] = resolver
     ctx.obj["database"] = database or resolver.get("BLUE_DATA_USER_SOURCE_DATABASE")
+    ctx.obj["session"] = session or resolver.get("BLUE_DATA_USER_SOURCE_SESSION")
     ctx.obj["data_dir"] = Path(
         data_dir or resolver.get("BLUE_DATA_USER_SOURCE_DATA_DIR") or _DEFAULT_DATA_DIR
     )

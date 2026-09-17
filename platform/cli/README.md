@@ -60,14 +60,16 @@ udb session end                                 # done — clears the selection
 ### Global options
 
 ```
-udb [--profile NAME] [--database NAME] [--data-dir DIR] [--schema-path PATH]
-    [--metadata-schema-path PATH] [--contact-schema-path PATH] COMMAND
+udb [--profile NAME] [--database NAME] [--session ID] [--data-dir DIR]
+    [--schema-path PATH] [--metadata-schema-path PATH] [--contact-schema-path PATH]
+    COMMAND
 ```
 
 | Option | Profile parameter | Default | Description |
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
+| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.udb/.selected.session` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to the metadata schema |
@@ -112,6 +114,7 @@ $ udb profile config                  # configures staging, now that it is selec
 | `BLUE_DATA_CLI_LOG_LIMIT` | int | `80` | |
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.udb` | ✓ |
 | `BLUE_DATA_USER_SOURCE_DATABASE` | str | — | ✓ |
+| `BLUE_DATA_USER_SOURCE_SESSION` | str | — | |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | file | — | |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | file | *packaged* | |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | file | *packaged* | |
