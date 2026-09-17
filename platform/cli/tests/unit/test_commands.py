@@ -970,6 +970,52 @@ def test_contact_remove_confirmed(runner: CliRunner, data_dir: Path) -> None:
     manager.delete_contact.assert_called_once_with("sms", "primary")
 
 
+
+
+# ── error reporting ────────────────────────────────────────────────────────────
+
+def test_json_format_errors_are_json(runner: CliRunner, data_dir: Path) -> None:
+    """A caller parsing --format json output needs something parseable when the
+    command fails, not a plain-text line."""
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "list", "--format", "json"])
+    assert result.exit_code == 1
+    assert "No database selected" in json.loads(result.output)["error"]
+
+
+def test_plain_format_errors_stay_human_readable(runner: CliRunner, data_dir: Path) -> None:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "list"])
+    assert result.exit_code == 1
+    assert result.output.startswith("Error:")
+
+
+def test_session_start_failure_reports_cleanly(runner: CliRunner, data_dir: Path) -> None:
+    """session start called asyncio.run unguarded, so a library exception reached
+    the user as a traceback where every other command caught it."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.create_session = AsyncMock(side_effect=RuntimeError("backend is down"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "start"])
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "backend is down" in result.output
+
+
+def test_session_show_failure_reports_cleanly(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_session = AsyncMock(side_effect=RuntimeError("backend is down"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "show", "sess-1"])
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+
 # ── configurable metadata/contact schemas ──────────────────────────────────────
 
 def _write_schema(tmp_path: Path, name: str, doc: dict) -> Path:

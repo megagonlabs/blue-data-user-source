@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import click
 from rich.console import Console
@@ -288,7 +288,21 @@ def _selected_db_path(data_dir: Path) -> Path:
     return data_dir / _SELECTED_DB_FILE
 
 
-def _get_db(obj: dict) -> str:
+def _fail(message: str, fmt: str | None = None) -> NoReturn:
+    """Report an error on stderr and exit 1.
+
+    Under ``--format json`` the error is emitted as a JSON object, so a caller
+    parsing the CLI's output gets something parseable on failure too. It still
+    goes to stderr, which keeps stdout clean for the successful case.
+    """
+    if fmt == "json":
+        err.print_json(json.dumps({"error": message}))
+    else:
+        err.print(f"[red]Error:[/red] {message}")
+    sys.exit(1)
+
+
+def _get_db(obj: dict, fmt: str | None = None) -> str:
     db = obj.get("database")
     if db:
         return db
@@ -297,8 +311,7 @@ def _get_db(obj: dict) -> str:
         db = sel_path.read_text().strip()
         if db:
             return db
-    err.print("[red]Error:[/red] No database selected. Use --database or run 'udb database select NAME'.")
-    sys.exit(1)
+    _fail("No database selected. Use --database or run 'udb database select NAME'.", fmt)
 
 
 def _selected_session_path(data_dir: Path) -> Path:
@@ -752,12 +765,11 @@ def database_config_group() -> None:
 @click.pass_obj
 def database_config_show(obj: dict, fmt: str) -> None:
     """Show the database configuration."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     entry = source.get_user(db)
     if entry is None:
-        err.print(f"[red]Error:[/red] Database '{db}' not found.")
-        sys.exit(1)
+        _fail(f"Database '{db}' not found.", fmt)
     if fmt == "json":
         console.print_json(json.dumps(entry))
         return
@@ -796,7 +808,10 @@ def session_start(obj: dict) -> None:
     """Create a session and select it."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
-    session_id = asyncio.run(source.create_session(db))
+    try:
+        session_id = asyncio.run(source.create_session(db))
+    except (UDbError, Exception) as exc:
+        _fail(str(exc))
     _selected_session_path(obj["data_dir"]).write_text(session_id)
     console.print(f"Started session: [bold]{session_id}[/bold] (selected)")
 
@@ -808,9 +823,12 @@ def session_select(obj: dict, session_id: str) -> None:
     """Set the default session."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
-    if asyncio.run(source.get_session(db, session_id)) is None:
-        err.print(f"[red]Error:[/red] Session '{session_id}' not found.")
-        sys.exit(1)
+    try:
+        found = asyncio.run(source.get_session(db, session_id))
+    except (UDbError, Exception) as exc:
+        _fail(str(exc))
+    if found is None:
+        _fail(f"Session '{session_id}' not found.")
     _selected_session_path(obj["data_dir"]).write_text(session_id)
     console.print(f"Selected session: [bold]{session_id}[/bold]")
 
@@ -854,9 +872,12 @@ def session_list(obj: dict, fmt: str) -> None:
 
     Lists sessions for the selected database.
     """
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
-    sessions = asyncio.run(source.list_sessions(db))
+    try:
+        sessions = asyncio.run(source.list_sessions(db))
+    except (UDbError, Exception) as exc:
+        _fail(str(exc), fmt)
     selected = _get_session(obj, None)
     if fmt == "json":
         console.print_json(json.dumps(sessions))
@@ -891,16 +912,17 @@ def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
 
     Defaults to the selected session.
     """
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     sid = _get_session(obj, session_id)
     if sid is None:
-        err.print("[red]Error:[/red] No session selected. Pass SESSION_ID or run 'udb session select ID'.")
-        sys.exit(1)
+        _fail("No session selected. Pass SESSION_ID or run 'udb session select ID'.", fmt)
     source = _make_source(obj["data_dir"])
-    record = asyncio.run(source.get_session(db, sid))
+    try:
+        record = asyncio.run(source.get_session(db, sid))
+    except (UDbError, Exception) as exc:
+        _fail(str(exc), fmt)
     if record is None:
-        err.print(f"[red]Error:[/red] Session '{sid}' not found.")
-        sys.exit(1)
+        _fail(f"Session '{sid}' not found.", fmt)
     if fmt == "json":
         console.print_json(json.dumps(record))
         return
@@ -968,7 +990,7 @@ def data_group() -> None:
 @click.pass_obj
 def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -> None:
     """List all instance data."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
         manager = source._get_manager(db)
@@ -977,8 +999,7 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
             kb.fetch_database_data(db, include_provenance=show_provenance, compact=True, detailed=show_detailed)
         )
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
     if fmt == "json":
         console.print_json(json.dumps(rows))
         return
@@ -1137,7 +1158,7 @@ def data_query(
     model: str | None, verbose: bool, log: bool, log_limit: int | None,
 ) -> None:
     """Answer a question from the database."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     props: dict[str, Any] = {"top_k": top_k}
     resolved_session = _get_session(obj, session)
@@ -1157,8 +1178,7 @@ def data_query(
             props["model"] = _model_for(obj, "REASONING", model)
             results, session_id = source.execute_query(text, database=db, optional_properties=props)
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
     if not resolved_session:
         # Auto-select-after-auto-create: continue this session on the next query
         # without requiring an explicit 'udb session select'.
@@ -1220,7 +1240,7 @@ def data_query(
 @click.pass_obj
 def data_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k: int, fmt: str) -> None:
     """Search entities and facts."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     type_filter = [t.upper() for t in types] if types else None
     try:
@@ -1228,8 +1248,7 @@ def data_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k:
         kb = manager._ensure_kb_source()
         results = asyncio.run(kb.search_data(db, query, k=top_k, mode=mode, type_filter=type_filter))
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
     if fmt == "json":
         console.print_json(json.dumps([
             {
@@ -1397,7 +1416,7 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
     Shows user-added sources only (excludes internal kb/metadata/contacts sources).
     Sources present in the KG but removed from the registry are marked (*).
     """
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
         manager = source._get_manager(db)
@@ -1407,8 +1426,7 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
         ]
         kg_sources = asyncio.run(manager.list_sources())
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
 
     # Build lookup maps from KG source nodes
     ks_by_id:   dict[str, dict] = {ks.get("id", ""): ks for ks in kg_sources}
@@ -1572,15 +1590,14 @@ def schema_group() -> None:
 @click.pass_obj
 def schema_list(obj: dict, fmt: str) -> None:
     """List classes, relations, and properties."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
         manager = source._get_manager(db)
         kb = manager._ensure_kb_source()
         schema = asyncio.run(kb.fetch_database_schema(db))
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
     if fmt == "json":
         console.print_json(json.dumps(schema.to_json()))
         return
@@ -1725,7 +1742,7 @@ def schema_export(obj: dict, output) -> None:
 @click.pass_obj
 def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k: int, fmt: str) -> None:
     """Search classes, relations, and properties."""
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     type_filter = [t.upper() for t in types] if types else None
     try:
@@ -1733,8 +1750,7 @@ def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_
         kb = manager._ensure_kb_source()
         results = asyncio.run(kb.search_schema(db, query, k=top_k, mode=mode, type_filter=type_filter))
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
     if fmt == "json":
         console.print_json(json.dumps([
             {"id": r.id, "type": r.type, "name": r.name, "description": r.description}
@@ -1801,13 +1817,12 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
       udb metadata list identity --recursive
       udb metadata list --recursive
     """
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
         all_meta: dict[str, Any] = source.list_metadata(db)
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
 
     node: Any = all_meta
     dotted = ".".join(path)
@@ -1816,8 +1831,7 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
             if i == 0 and segment in _metadata_schema(obj):
                 node = {}
                 break
-            err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
-            sys.exit(1)
+            _fail(f"Key not found: {dotted!r}", fmt)
         node = node[segment]
 
     if fmt == "json":
@@ -2018,13 +2032,12 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
       udb contact list email --recursive
       udb contact list --recursive
     """
-    db = _get_db(obj)
+    db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
         all_contacts: dict = source._get_manager(db).get_contacts()
     except (UDbError, Exception) as exc:
-        err.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
+        _fail(f"{exc}", fmt)
 
     dotted = ".".join(path)
     node: Any = all_contacts
@@ -2034,8 +2047,7 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
             if i == 0 and segment in _contact_schema(obj):
                 node = {}
                 break
-            err.print(f"[red]Error:[/red] Key not found: {dotted!r}")
-            sys.exit(1)
+            _fail(f"Key not found: {dotted!r}", fmt)
         node = node[segment]
 
     if fmt == "json":
