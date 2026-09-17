@@ -308,12 +308,29 @@ def test_database_select_unknown_name_exits_with_code_1(
 def test_database_search_filters_by_keyword(runner: CliRunner, data_dir: Path) -> None:
     mock = MagicMock()
     mock.list_users.return_value = ["alice", "bob", "alicia"]
+    mock.get_user.return_value = {"registry": {"connection": {"protocol": "json/memory"}}}
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "search", "ali"])
     assert result.exit_code == 0
     assert "alice" in result.output
     assert "alicia" in result.output
     assert "bob" not in result.output
+
+
+def test_database_search_table_format_renders_a_table(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """`--format table` printed bare names before; it now renders the same
+    columns `database list` does."""
+    mock = MagicMock()
+    mock.list_users.return_value = ["alice"]
+    mock.get_user.return_value = {"registry": {"connection": {"protocol": "json/file"}}}
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "search", "ali", "--format", "table"])
+    assert result.exit_code == 0
+    assert "Name" in result.output and "Registry" in result.output
+    assert "json/file" in result.output
+    assert "┃" in result.output or "|" in result.output
 
 
 def test_database_reset_confirmed_calls_reset_user(runner: CliRunner, data_dir: Path) -> None:
@@ -379,6 +396,56 @@ def test_session_list_shows_sessions(runner: CliRunner, data_dir: Path) -> None:
         result = _invoke(runner, data_dir, ["session", "list"])
     assert result.exit_code == 0
     assert "sess-1" in result.output
+
+
+def test_session_show_renders_tables(runner: CliRunner, data_dir: Path) -> None:
+    """`--format table` printed prose lines before; the session, its queries and
+    its interactions each get a real table now."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_session = AsyncMock(return_value={
+        "status": "open",
+        "created_at": "2026-09-16T10:00:00+00:00",
+        "queries": {
+            "q1": {
+                "query": "What are alice's skills?",
+                "interactions": {
+                    "i1": {
+                        "status": "answered",
+                        "contact": {"protocol": "email"},
+                        "question": "Which role?",
+                        "response": "Backend.",
+                    },
+                },
+            },
+        },
+    })
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "show", "sess-1"])
+    assert result.exit_code == 0, result.output
+    # session detail table
+    assert "Field" in result.output and "Status" in result.output
+    # per-level tables
+    assert "Queries" in result.output and "Interactions" in result.output
+    assert "Which role?" in result.output and "Backend." in result.output
+    assert "email" in result.output
+
+
+def test_session_show_without_interactions_omits_that_table(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.get_session = AsyncMock(return_value={
+        "status": "open",
+        "created_at": "2026-09-16T10:00:00+00:00",
+        "queries": {"q1": {"query": "skills?", "interactions": {}}},
+    })
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["session", "show", "sess-1"])
+    assert result.exit_code == 0, result.output
+    assert "Which role?" not in result.output
+    assert "skills?" in result.output
 
 
 def test_session_show_not_found_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:

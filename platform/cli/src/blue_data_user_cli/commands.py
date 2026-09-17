@@ -704,8 +704,17 @@ def database_search(obj: dict, keyword: str, fmt: str) -> None:
     if not matches:
         console.print("[dim](no matches)[/dim]")
         return
+    sel_path = _selected_db_path(obj["data_dir"])
+    selected = sel_path.read_text().strip() if sel_path.exists() else None
+    t = Table(show_header=True, header_style="bold")
+    t.add_column("Name", style="bold")
+    t.add_column("Registry", style="dim")
+    t.add_column("", max_width=3)
     for name in matches:
-        console.print(name)
+        entry = source.get_user(name) or {}
+        protocol = entry.get("registry", {}).get("connection", {}).get("protocol", "json/memory")
+        t.add_row(name, protocol, "[green]*[/green]" if name == selected else "")
+    console.print(t)
 
 
 @database_group.command("reset")
@@ -882,13 +891,46 @@ def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
     if fmt == "json":
         console.print_json(json.dumps(record))
         return
-    console.print(f"Session [bold]{sid}[/bold] — status: {record.get('status')}, created: {_humanize_date(record.get('created_at'))}")
-    for qid, q in record.get("queries", {}).items():
-        console.print(f"\n[bold]Query[/bold] {qid}: {q.get('query')}")
-        for iid, ia in q.get("interactions", {}).items():
-            console.print(f"  [dim]interaction {iid}[/dim] ({ia.get('status')}) via {ia.get('contact', {}).get('protocol')}")
-            console.print(f"    Q: {ia.get('question')}")
-            console.print(f"    A: {ia.get('response')}")
+    queries = record.get("queries", {})
+
+    details = Table(show_header=True, header_style="bold")
+    details.add_column("Field", style="bold")
+    details.add_column("Value", style="dim")
+    details.add_row("Session", sid)
+    details.add_row("Status", record.get("status", ""))
+    details.add_row("Created", _humanize_date(record.get("created_at")))
+    details.add_row("Queries", str(len(queries)))
+    console.print(details)
+
+    if queries:
+        qt = Table(show_header=True, header_style="bold", title="Queries", title_justify="left")
+        qt.add_column("ID", style="dim")
+        qt.add_column("Query", style="bold")
+        qt.add_column("Interactions", justify="right")
+        for qid, q in queries.items():
+            qt.add_row(qid, q.get("query", ""), str(len(q.get("interactions", {}))))
+        console.print(qt)
+
+    interactions = [
+        (qid, iid, ia)
+        for qid, q in queries.items()
+        for iid, ia in q.get("interactions", {}).items()
+    ]
+    if interactions:
+        it = Table(show_header=True, header_style="bold", title="Interactions", title_justify="left")
+        it.add_column("Query", style="dim")
+        it.add_column("ID", style="dim")
+        it.add_column("Status")
+        it.add_column("Via")
+        it.add_column("Question", style="bold")
+        it.add_column("Response")
+        for qid, iid, ia in interactions:
+            it.add_row(
+                qid, iid, ia.get("status", ""),
+                ia.get("contact", {}).get("protocol", ""),
+                ia.get("question", ""), ia.get("response", ""),
+            )
+        console.print(it)
 
 
 # ------------------------------------------------------------------ #
