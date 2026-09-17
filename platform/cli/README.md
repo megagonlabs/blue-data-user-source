@@ -139,7 +139,7 @@ Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to
 | `udb profile add NAME` | Create an additional profile (`default` is created on first use) |
 | `udb profile remove NAME [--confirm]` | Delete a profile and its configuration |
 | `udb profile list [--format table\|json]` | List profiles, marking the selected one |
-| `udb profile select NAME` | Make a profile the default for subsequent commands |
+| `udb profile select NAME` | Set the default profile |
 | `udb profile inspect [NAME] [--format table\|json]` | Show every value and the tier it came from; secrets masked |
 | `udb profile config [PARAM [VALUE]] [--profile NAME]` | Set configuration; secrets always prompt |
 
@@ -164,8 +164,7 @@ Manage user databases.
 | `udb database select NAME` | Set the active database |
 | `udb database search KEYWORD` | Search databases by name keyword |
 | `udb database reset` | Clear KB data for the active database and reseed the schema |
-| `udb database config show` | Show stored configuration for the active database |
-
+| `udb database config show` | Show the database configuration |
 ```bash
 udb database create alice
 udb database select alice
@@ -208,10 +207,10 @@ A session groups the queries and clarification interactions of one conversation.
 
 | Command | Description |
 |---|---|
-| `udb session start` | Create a new session for the active database and select it |
+| `udb session start` | Create a session and select it |
 | `udb session select ID` | Set the active session |
 | `udb session end [ID]` | End a session (defaults to the selected one); clears the selection if it matches |
-| `udb session list` | List sessions for the active database |
+| `udb session list` | List sessions |
 | `udb session show [ID]` | Show a session's queries and interactions (defaults to the selected one) |
 
 ```bash
@@ -311,8 +310,7 @@ Manage data sources associated with the active database.
 |---|---|
 | `udb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
 | `udb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
-| `udb data source remove NAME` | Remove a source from the registry (KG data is preserved) |
-
+| `udb data source remove NAME` | Remove a source, keeping its KB data |
 **Type 1 — register + ingest for later search**
 
 ```bash
@@ -345,11 +343,10 @@ Schema management. All `schema` commands require an active database.
 
 | Command | Description |
 |---|---|
-| `udb schema list` | List classes, relations, and their properties |
+| `udb schema list` | List classes, relations, and properties |
 | `udb schema import INPUT_FILE` | Import a schema (idempotent) |
 | `udb schema export` | Export the schema as JSON |
-| `udb schema search QUERY` | Search schema elements by keyword or semantic similarity |
-
+| `udb schema search QUERY` | Search classes, relations, and properties |
 ```bash
 udb schema list
 udb schema export --output schema.json

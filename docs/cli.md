@@ -132,8 +132,7 @@ Manage user databases.
 | `udb database select NAME` | Set the active database |
 | `udb database search KEYWORD [--format]` | Keyword search over database names |
 | `udb database reset [--yes]` | Clear KB data for the active database and reseed the schema |
-| `udb database config show [--format]` | Show stored configuration for the active database |
-
+| `udb database config show [--format]` | Show the database configuration |
 `database create` options:
 
 | Option | Default | Description |
@@ -158,10 +157,10 @@ A session groups the queries and clarification interactions of one conversation.
 
 | Command | Description |
 |---|---|
-| `udb session start` | Create a new session for the active database and select it |
+| `udb session start` | Create a session and select it |
 | `udb session select SESSION_ID` | Set the active session |
 | `udb session end [SESSION_ID]` | End a session (defaults to the selected one); clears the selection if it matches |
-| `udb session list [--format]` | List sessions for the active database |
+| `udb session list [--format]` | List sessions |
 | `udb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected one) |
 
 **Resolution order** for the session used by `udb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and writes it to `.selected.session`, so the next query continues it automatically.
@@ -176,7 +175,7 @@ Instance data management. All `data` commands require an active database.
 |---|---|
 | `udb data list [--show-provenance] [--show-detailed] [--format table\|json]` | List entities, property values, and facts |
 | `udb data query TEXT [options]` | Execute a natural-language query |
-| `udb data search QUERY [options]` | Search entities and facts by keyword or semantic similarity |
+| `udb data search QUERY [options]` | Search entities and facts |
 | `udb data import FILE` | Import instance data from `udb data export` output (KG only) |
 | `udb data export [--show-provenance] [-o FILE]` | Export instance data as JSON |
 | `udb data extract TEXT [options]` | Extract entities/facts from free text via LLM |
@@ -225,11 +224,10 @@ Schema management. All `schema` commands require an active database.
 
 | Command | Description |
 |---|---|
-| `udb schema list [--format]` | List classes, relations, and their properties |
+| `udb schema list [--format]` | List classes, relations, and properties |
 | `udb schema import FILE` | Import a schema (idempotent) |
 | `udb schema export [-o FILE]` | Export the schema as JSON |
-| `udb schema search QUERY [--type]` | Search schema elements by keyword or semantic similarity |
-
+| `udb schema search QUERY [--type]` | Search classes, relations, and properties |
 `schema search` options: `--type class|relation|property` (repeatable), `--mode keyword|semantic`, `--top-k N`, `--format table|json`.
 
 ---

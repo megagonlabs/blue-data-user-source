@@ -465,7 +465,7 @@ def _log_limit(obj: dict, option: int | None) -> int:
 
 @cli.group("database")
 def database_group() -> None:
-    """User database management."""
+    """Manage user databases."""
 
 
 @database_group.command("list")
@@ -477,7 +477,7 @@ def database_group() -> None:
 )
 @click.pass_obj
 def database_list(obj: dict, fmt: str) -> None:
-    """List all registered user databases."""
+    """List registered user databases."""
     source = _make_source(obj["data_dir"])
     names = source.list_users()
     sel_path = _selected_db_path(obj["data_dir"])
@@ -572,7 +572,7 @@ def database_create(
     onboard: bool,
     metadata_onboard: bool,
 ) -> None:
-    """Create a new user database."""
+    """Create a user database using the profile's config."""
     # Each backend choice falls back to the selected profile, so an environment
     # that always wants (say) neo4j sets it once rather than on every create.
     kb_backend = _db_default(obj, "KB_BACKEND", kb_backend)
@@ -636,7 +636,10 @@ def database_create(
 )
 @click.pass_obj
 def database_onboard(obj: dict, metadata_onboard: bool) -> None:
-    """Ask the active database's user onboarding questions to seed data and metadata."""
+    """Ask the user onboarding questions.
+
+    Seeds both KB data and structured metadata for the selected database.
+    """
     db = _get_db(obj)
     source = _seeding_source(obj)
     try:
@@ -652,7 +655,7 @@ def database_onboard(obj: dict, metadata_onboard: bool) -> None:
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_obj
 def database_delete(obj: dict, name: str, yes: bool) -> None:
-    """Delete a user database and all its data."""
+    """Delete a user database and its data."""
     if not yes:
         click.confirm(f"Delete database '{name}' and all its data?", abort=True)
     source = _make_source(obj["data_dir"])
@@ -674,7 +677,7 @@ def database_delete(obj: dict, name: str, yes: bool) -> None:
 @click.argument("name")
 @click.pass_obj
 def database_select(obj: dict, name: str) -> None:
-    """Select the active database."""
+    """Set the default database."""
     data_dir: Path = obj["data_dir"]
     source = _make_source(data_dir)
     if name not in source.list_users():
@@ -694,7 +697,7 @@ def database_select(obj: dict, name: str) -> None:
 )
 @click.pass_obj
 def database_search(obj: dict, keyword: str, fmt: str) -> None:
-    """Search databases by keyword."""
+    """Search user databases by name."""
     source = _make_source(obj["data_dir"])
     kw = keyword.lower()
     matches = [n for n in source.list_users() if kw in n.lower()]
@@ -721,7 +724,7 @@ def database_search(obj: dict, keyword: str, fmt: str) -> None:
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_obj
 def database_reset(obj: dict, yes: bool) -> None:
-    """Reset the active database, clearing KB data and reseeding the schema."""
+    """Clear the database and reseed its schema."""
     db = _get_db(obj)
     if not yes:
         click.confirm(f"Reset database '{db}'? This will clear all KB data.", abort=True)
@@ -736,7 +739,7 @@ def database_reset(obj: dict, yes: bool) -> None:
 
 @database_group.group("config")
 def database_config_group() -> None:
-    """Database configuration."""
+    """Show database configuration."""
 
 
 @database_config_group.command("show")
@@ -748,7 +751,7 @@ def database_config_group() -> None:
 )
 @click.pass_obj
 def database_config_show(obj: dict, fmt: str) -> None:
-    """Show stored configuration for the active database."""
+    """Show the database configuration."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     entry = source.get_user(db)
@@ -783,13 +786,14 @@ def database_config_show(obj: dict, fmt: str) -> None:
 
 @cli.group("session")
 def session_group() -> None:
-    """Session management — a session groups the queries/interactions of one conversation."""
+    """Manage sessions.
 
-
+    A session groups the queries and interactions of one conversation.
+    """
 @session_group.command("start")
 @click.pass_obj
 def session_start(obj: dict) -> None:
-    """Create a new session for the active database and select it."""
+    """Create a session and select it."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     session_id = asyncio.run(source.create_session(db))
@@ -801,7 +805,7 @@ def session_start(obj: dict) -> None:
 @click.argument("session_id")
 @click.pass_obj
 def session_select(obj: dict, session_id: str) -> None:
-    """Select the active session, so 'udb data query' doesn't need --session."""
+    """Set the default session."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     if asyncio.run(source.get_session(db, session_id)) is None:
@@ -815,7 +819,10 @@ def session_select(obj: dict, session_id: str) -> None:
 @click.argument("session_id", required=False, default=None)
 @click.pass_obj
 def session_end(obj: dict, session_id: str | None) -> None:
-    """End a session (defaults to the selected session). Clears the selection if it matches."""
+    """End a session.
+
+    Defaults to the selected session, and clears the selection if it matches.
+    """
     db = _get_db(obj)
     data_dir: Path = obj["data_dir"]
     sid = _get_session(obj, session_id)
@@ -843,7 +850,10 @@ def session_end(obj: dict, session_id: str | None) -> None:
 )
 @click.pass_obj
 def session_list(obj: dict, fmt: str) -> None:
-    """List sessions for the active database."""
+    """List sessions.
+
+    Lists sessions for the selected database.
+    """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     sessions = asyncio.run(source.list_sessions(db))
@@ -877,7 +887,10 @@ def session_list(obj: dict, fmt: str) -> None:
 )
 @click.pass_obj
 def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
-    """Show a session's queries and interactions (defaults to the selected session)."""
+    """Show a session's queries and interactions.
+
+    Defaults to the selected session.
+    """
     db = _get_db(obj)
     sid = _get_session(obj, session_id)
     if sid is None:
@@ -939,7 +952,7 @@ def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
 
 @cli.group("data")
 def data_group() -> None:
-    """Instance data management."""
+    """Manage instance data."""
 
 
 @data_group.command("list")
@@ -954,7 +967,7 @@ def data_group() -> None:
 )
 @click.pass_obj
 def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -> None:
-    """List all entities, property values, and facts in the database."""
+    """List all instance data."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
@@ -1123,7 +1136,7 @@ def data_query(
     obj: dict, text: str, session: str | None, fmt: str, top_k: int, include_expanded: bool,
     model: str | None, verbose: bool, log: bool, log_limit: int | None,
 ) -> None:
-    """Execute a natural-language query against the database."""
+    """Answer a question from the database."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     props: dict[str, Any] = {"top_k": top_k}
@@ -1206,7 +1219,7 @@ def data_query(
 )
 @click.pass_obj
 def data_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k: int, fmt: str) -> None:
-    """Search entities and facts by keyword or semantic similarity."""
+    """Search entities and facts."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     type_filter = [t.upper() for t in types] if types else None
@@ -1255,7 +1268,7 @@ def data_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k:
 @click.argument("input_file", type=click.File("r"))
 @click.pass_obj
 def data_import(obj: dict, input_file) -> None:
-    """Import instance data previously produced by `udb data export` (KG only).
+    """Import instance data from JSON (KG only).
 
     Schema must already exist — import it first with `udb schema import`.
     """
@@ -1282,7 +1295,9 @@ def data_import(obj: dict, input_file) -> None:
               help="Write JSON to this file (default: stdout).")
 @click.pass_obj
 def data_export(obj: dict, show_provenance: bool, output) -> None:
-    """Export the database's instance data (entities, facts, property values) as JSON.
+    """Export instance data as JSON.
+
+    Writes entities, facts and property values in the shape `udb data import` reads.
 
     Does not include schema — use `udb schema export` for that, and import it
     first so `udb data import` has classes/relations/properties to resolve against.
@@ -1319,7 +1334,7 @@ def data_extract(
     log: bool,
     log_limit: int,
 ) -> None:
-    """Extract entities, facts, and property values from free text.
+    """Extract entities and facts from text.
 
     Requires the openai extra: pip install 'blue-data-kb-source[openai]'
     and OPENAI_API_KEY in the environment.
@@ -1363,7 +1378,7 @@ def data_extract(
 
 @data_group.group("source")
 def source_group() -> None:
-    """Data source management."""
+    """Manage data sources."""
 
 
 @source_group.command("list")
@@ -1472,7 +1487,9 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
 )
 @click.pass_obj
 def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None, effort: str) -> None:
-    """Register a file (.txt/.pdf/.docx) as a data source.
+    """Register a data source.
+
+    Accepts .txt, .pdf and .docx files.
 
     The file is always parsed, chunked, and embedded into the shared
     "external_documents" DocumentDataSource, making it searchable. Pass
@@ -1508,7 +1525,7 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_obj
 def source_remove(obj: dict, name: str, yes: bool) -> None:
-    """Remove a source from the registry (KG data is preserved)."""
+    """Remove a source, keeping its KB data."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
 
@@ -1542,7 +1559,7 @@ def source_remove(obj: dict, name: str, yes: bool) -> None:
 
 @cli.group("schema")
 def schema_group() -> None:
-    """Schema management."""
+    """Manage the schema."""
 
 
 @schema_group.command("list")
@@ -1554,7 +1571,7 @@ def schema_group() -> None:
 )
 @click.pass_obj
 def schema_list(obj: dict, fmt: str) -> None:
-    """List classes, relations, and their properties."""
+    """List classes, relations, and properties."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
@@ -1644,7 +1661,7 @@ def schema_list(obj: dict, fmt: str) -> None:
 @click.argument("input_file", type=click.File("r"))
 @click.pass_obj
 def schema_import(obj: dict, input_file) -> None:
-    """Import a schema previously produced by `udb schema export` (declares idempotently)."""
+    """Import a schema from JSON (idempotent)."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
@@ -1667,7 +1684,10 @@ def schema_import(obj: dict, input_file) -> None:
               help="Write JSON to this file (default: stdout).")
 @click.pass_obj
 def schema_export(obj: dict, output) -> None:
-    """Export the database's schema as JSON, in the shape `udb schema import` reads back."""
+    """Export the schema as JSON.
+
+    Written in the shape `udb schema import` reads back.
+    """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     try:
@@ -1704,7 +1724,7 @@ def schema_export(obj: dict, output) -> None:
 )
 @click.pass_obj
 def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k: int, fmt: str) -> None:
-    """Search schema elements by keyword or semantic similarity."""
+    """Search classes, relations, and properties."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
     type_filter = [t.upper() for t in types] if types else None
@@ -1759,7 +1779,10 @@ def _print_metadata_node(key: str, value: Any, indent: int = 0) -> None:
 
 @cli.group("metadata")
 def metadata_group() -> None:
-    """User metadata for agents acting on your behalf."""
+    """Manage user metadata.
+
+    Metadata is what agents consult when acting on the user's behalf.
+    """
 
 
 @metadata_group.command("list")
@@ -1768,7 +1791,7 @@ def metadata_group() -> None:
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
 @click.pass_obj
 def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -> None:
-    """List metadata at the given path, or top-level categories if no path given.
+    """List metadata values.
 
     Examples:
 
@@ -1972,7 +1995,10 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
 
 @cli.group("contact")
 def contact_group() -> None:
-    """Contact methods for agents to reach you."""
+    """Manage contact methods.
+
+    Contact methods are how agents reach the user for clarification.
+    """
 
 
 @contact_group.command("list")
@@ -1981,7 +2007,7 @@ def contact_group() -> None:
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table", show_default=True)
 @click.pass_obj
 def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -> None:
-    """List contacts at the given path, or all protocols if no path given.
+    """List contact methods.
 
     Examples:
 
@@ -2217,7 +2243,7 @@ def contact_set(obj: dict, args: tuple[str, ...]) -> None:
               help="Ordering priority (lower = preferred).")
 @click.pass_obj
 def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
-    """Create a named contact entry under a protocol.
+    """Add a contact method.
 
     Set individual fields with `udb contact set` afterwards.
 
@@ -2252,7 +2278,7 @@ def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_obj
 def contact_remove(obj: dict, protocol: str, name: str, yes: bool) -> None:
-    """Remove a named contact entry.
+    """Remove a contact method.
 
     Examples:
 
