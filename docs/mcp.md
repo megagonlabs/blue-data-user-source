@@ -90,7 +90,7 @@ These share their names with the `blue-userdb` CLI's profile parameters but noth
 
 ## Tool reference
 
-Tool groups: Users (write/read), Query, Sessions, Data (write/read), Metadata (write/read), Contacts (write/read) — 20 tools total.
+Tool groups: Users (write/read), Query, Sessions, Data (write/read), Metadata (write/read), Contacts (write/read) — 23 tools total.
 
 ### Users (write)
 

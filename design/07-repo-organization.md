@@ -5,85 +5,114 @@
 ```
 blue-data-user-source/
 │
-├── docs/
-│   └── design/                          # design documents
+├── README.md                            # one-line description, layout, quick start, package table
+├── .gitignore
+├── dev.envrc                            # local-only secrets (git-ignored via *.envrc)
+├── treehouse.toml                       # local tooling config (untracked)
 │
-├── lib/                                 # Python library (blue-userdb PyPI package)
-│   ├── pyproject.toml                   # package metadata, dependencies, tool config
+├── data/                                # sample input used by the docs and examples
+│   └── resume.txt
+│
+├── design/                              # design documents (this directory)
+│   ├── 01-overview.md … 13-decision-log.md
+│   ├── design-process.md
+│   └── repo-organization-template.md
+│
+├── docs/                                # user-facing documentation (start at docs/README.md)
+│
+├── examples/                            # runnable demos, each with a captured .output.txt
+│   ├── backends/                        # memory / file / redis UserSource backends
+│   ├── feature-demos/                   # one feature per script
+│   ├── framework-demos/                 # LangGraph, direct and over MCP
+│   ├── integration-demos/               # multi-step pipelines
+│   └── scenario-demos/                  # end-to-end user scenarios
+│
+├── tools/
+│   └── convert_schema.py                # one-off schema conversion helper
+│
+├── lib/                                 # Python library (blue-data-user-source)
+│   ├── pyproject.toml                   # package metadata, dependencies, ruff/pyright config
+│   ├── README.md
 │   ├── scripts/
 │   │   ├── build.sh                     # build the distribution package
-│   │   └── publish.sh                   # publish to PyPI
+│   │   └── publish.sh                   # twine upload dist/*
 │   ├── src/
 │   │   └── blue_data_user_source/
-│   │       ├── __init__.py              # re-exports UserSource
+│   │       ├── __init__.py              # re-exports UserSource and friends
 │   │       ├── source.py                # UserSource — NLQI and main entry point
+│   │       ├── file_user_source.py      # FileUserSource      (user/file)
+│   │       ├── memory_user_source.py    # MemoryUserSource    (user/memory)
 │   │       ├── types.py                 # shared result types and query models
 │   │       │
-│   │       ├── reasoning/
-│   │       │   ├── __init__.py
-│   │       │   ├── reasoner.py          # UserQueryReasoner
-│   │       │   └── metric.py            # UserDataMetric
+│   │       ├── redis/
+│   │       │   └── redis_user_source.py # RedisUserSource     (user/redis)
 │   │       │
 │   │       ├── data/
-│   │       │   ├── __init__.py
 │   │       │   ├── manager.py           # UserDataManager
-│   │       │   ├── planner.py           # UserDataPlanner
-│   │       │   └── registry.py          # UserDataRegistry
+│   │       │   └── planner.py           # UserDataPlanner
 │   │       │
-│   │       └── interaction/
-│   │           ├── __init__.py
-│   │           ├── contact.py           # ContactManager, ContactMethod
-│   │           └── manager.py           # InteractionManager
+│   │       ├── reasoning/
+│   │       │   ├── reasoner.py          # UserQueryReasoner
+│   │       │   └── metric.py            # UserDataMetric and its subclasses
+│   │       │
+│   │       ├── interaction/
+│   │       │   ├── contact.py           # ContactManager, ContactMethod
+│   │       │   ├── manager.py           # InteractionManager
+│   │       │   ├── session.py           # SessionManager
+│   │       │   ├── pending.py           # pending-interaction registry
+│   │       │   └── email/               # SMTP, Mailgun, Postmark, Sendgrid adapters
+│   │       │
+│   │       └── data/                    # packaged schemas
+│   │           ├── schema.json
+│   │           ├── metadata_schema.json
+│   │           └── contact_schema.json
 │   │
 │   └── tests/
 │       ├── conftest.py                  # shared fixtures and in-memory doubles
-│       ├── cassettes/                   # recorded LLM HTTP responses (VCR)
-│       └── unit/
-│           ├── reasoning/
-│           ├── data/
-│           └── interaction/
+│       ├── unit/                        # fast, offline, no API key
+│       │   ├── backends/  data/  doubles/  interaction/  reasoning/  sources/
+│       └── benchmarks/                  # report-only LLM benchmarks (VCR-replayed)
+│           ├── common/  extraction/  querying/  reasoning/
 │
-└── platform/                            # External interface services
-    ├── api/                             # REST API service
-    │   ├── pyproject.toml
-    │   ├── Dockerfile
-    │   ├── scripts/
-    │   │   ├── build.sh                 # build Docker image
-    │   │   └── deploy.sh                # deploy service
+└── platform/                            # external interface services
+    ├── cli/                             # command-line interface (blue-userdb)
+    │   ├── pyproject.toml               # declares the `blue-userdb` console script
+    │   ├── README.md
     │   ├── src/
-    │   │   └── blue_data_user_api/
-    │   │       ├── __init__.py
-    │   │       ├── app.py               # FastAPI app factory
-    │   │       └── routes.py            # /query, /import, /databases endpoints
-    │   └── tests/
-    │       └── unit/
+    │   │   └── blue_data_user_cli/
+    │   │       ├── commands.py          # Click command groups
+    │   │       ├── profile.py           # `blue-userdb profile` over blue_data.utils.config
+    │   │       └── profile_spec.json    # this CLI's configuration parameters
+    │   └── tests/unit/
     │
-    ├── mcp/                             # MCP server service
+    ├── mcp/                             # MCP server (blue-userdb-mcp)
     │   ├── pyproject.toml
-    │   ├── Dockerfile
+    │   ├── README.md
     │   ├── scripts/
     │   │   ├── build.sh
-    │   │   └── deploy.sh
+    │   │   └── install.sh
     │   ├── src/
     │   │   └── blue_data_user_mcp/
-    │   │       ├── __init__.py
-    │   │       └── server.py            # MCP server and tool definitions
+    │   │       ├── server.py            # the 23 MCP tools
+    │   │       └── config.py            # UserSource singleton, configured from the environment
     │   └── tests/
-    │       └── unit/
     │
-    └── cli/                             # CLI tool
+    └── api/                             # REST API (blue-userdb-api)
         ├── pyproject.toml
+        ├── README.md
         ├── scripts/
-        │   ├── build.sh                 # build distributable
-        │   └── deploy.sh                # publish CLI package
+        │   ├── build.sh
+        │   ├── install.sh
+        │   └── start.sh                 # run uvicorn bound to all interfaces
         ├── src/
-        │   └── blue_data_user_cli/
-        │       ├── __init__.py
-        │       ├── commands.py          # Click command groups
-        │       ├── profile.py           # `blue-userdb profile` group over blue_data.utils.config
-        │       └── profile_spec.json    # This CLI's configuration parameters
+        │   └── blue_data_user_api/
+        │       ├── app.py               # FastAPI app, lifespan, router registration
+        │       ├── auth.py              # X-API-Key dependency
+        │       ├── config.py            # pydantic-settings over BLUE_DATA_USER_SOURCE_*
+        │       ├── source.py            # UserSource construction
+        │       └── routes/              # databases, query, data, metadata, contacts,
+        │                                #   interactions, sessions
         └── tests/
-            └── unit/
 ```
 
 ---
@@ -119,11 +148,14 @@ Each platform service follows the same internal structure:
 | Path | Purpose |
 |------|---------|
 | `pyproject.toml` | Package metadata and dependencies (includes `lib` as a dependency) |
-| `Dockerfile` | Container image definition (api and mcp only) |
-| `scripts/build.sh` | Builds the service artifact (Docker image or distribution package) |
-| `scripts/deploy.sh` | Deploys the service to the target environment |
+| `README.md` | Install, usage, and the interface's own reference |
+| `scripts/build.sh` | Builds the distribution package (`mcp` and `api`; `cli` has no `scripts/`) |
+| `scripts/install.sh` | Editable install with dev extras (`mcp` and `api`) |
 | `src/<package>/` | Interface adapter code |
-| `tests/unit/` | Unit tests for the adapter layer |
+| `tests/` | Unit tests for the adapter layer (`cli` nests them under `tests/unit/`) |
+
+Container images are described in [12-deployment-ops.md](12-deployment-ops.md); no
+`Dockerfile` or `deploy.sh` is checked in yet.
 
 ### `types.py`
 
@@ -136,11 +168,18 @@ Library tests live under `lib/tests/`. Each platform service has its own `tests/
 ```
 lib/tests/
 ├── conftest.py          # shared fixtures: UserSource instance, in-memory doubles
-├── cassettes/           # VCR cassettes for recorded LLM responses
-└── unit/
-    ├── reasoning/        # UserQueryReasoner, UserDataMetric
-    ├── data/             # UserDataManager, UserDataPlanner, UserDataRegistry
-    └── interaction/      # ContactManager, InteractionManager
+├── unit/
+│   ├── backends/        # FileUserSource, MemoryUserSource, RedisUserSource
+│   ├── data/            # UserDataManager, UserDataPlanner
+│   ├── doubles/         # in-memory stand-ins shared across the suite
+│   ├── interaction/     # ContactManager, InteractionManager, SessionManager
+│   ├── reasoning/       # UserQueryReasoner, UserDataMetric
+│   └── sources/         # connection lifecycle and protocol
+└── benchmarks/          # report-only, per module
+    ├── common/
+    ├── extraction/
+    ├── querying/
+    └── reasoning/       # each with cases/ (YAML) and run.py
 ```
 
 Platform adapter tests use the same in-memory doubles (imported from `lib/tests/`) and test only the translation layer: request parsing, response serialization, and error mapping.

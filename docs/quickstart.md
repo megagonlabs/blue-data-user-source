@@ -17,7 +17,7 @@ export OPENAI_API_KEY=sk-...
 Databases (one per user) persist under `~/.blue-userdb/` by default (override with `blue-userdb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/dir`, or by exporting `BLUE_DATA_USER_SOURCE_DATA_DIR`). `create` auto-selects the new database.
 
 ```bash
-blue-userdb database create alice
+blue-userdb database create alice        # add --no-onboard to skip the questions
 ```
 
 ## 2. Register a data source
@@ -26,10 +26,10 @@ A file is always parsed, chunked, and embedded for later search — that alone i
 
 ```bash
 # Type 1 — register only
-blue-userdb data source add resume.txt
+blue-userdb data source add data/resume.txt
 
 # Type 2 — register + extract
-blue-userdb data source add resume.txt \
+blue-userdb data source add data/resume.txt \
     --query "What skills does the user have?" \
     --query "What is the user's most recent job title?"
 ```
@@ -98,7 +98,7 @@ async def main():
                                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"}},
     )
 
-    await us.add_source("resume.txt", database="alice")
+    await us.add_source("data/resume.txt", database="alice")
 
     results, session_id = us.execute_query("jobs suitable for me", database="alice")
     for r in results:

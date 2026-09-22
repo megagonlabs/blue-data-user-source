@@ -51,21 +51,26 @@ export OPENAI_API_KEY=sk-...
 ## Quick start
 
 ```bash
+# Install the three sibling libraries first — they are not on PyPI, so pip
+# cannot resolve them for you. Clone them alongside this repo.
+pip install -e ../blue-data/lib
+pip install -e ../blue-data-kb-source/lib
+pip install -e ../blue-data-doc-source/lib
+
 # Install the library
 cd lib && pip install -e . && cd ..
 
 # Install the CLI
 cd platform/cli && pip install -e . && cd ../..
 
-# Create a database and select it as active
+# Create a database — this onboards interactively; add --no-onboard to skip
 blue-userdb database create alice
-blue-userdb database select alice
 
 # Register a file as a data source (Type 1 — source registration only)
-blue-userdb data source add resume.txt
+blue-userdb data source add data/resume.txt
 
 # Extract specific attributes via LLM (Type 2)
-blue-userdb data source add resume.txt \
+blue-userdb data source add data/resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
