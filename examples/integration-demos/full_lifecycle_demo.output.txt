@@ -13,7 +13,7 @@ Metadata snapshot: {'identity': {'name': 'Carol', 'pronouns': None, 'locale': No
 3. add_source -- extract structured data from a bio into the KB
 ------------------------------------------------------------
 list_data('carol') -> 2 row(s)
-list_sources('carol') -> 1 source(s): ['/tmp/udb-full-lifecycle-demo-27npugl9/carol-bio.txt']
+list_sources('carol') -> 1 source(s): ['/tmp/blue-userdb-full-lifecycle-demo-27npugl9/carol-bio.txt']
 
 ------------------------------------------------------------
 4. Run a session of two queries

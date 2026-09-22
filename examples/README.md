@@ -129,7 +129,7 @@ python3 examples/framework-demos/langgraph_direct_demo.py
 
 No UserSource-specific code on the LangGraph side at all — a `create_react_agent` ReAct
 agent freely chooses among all 23 tools auto-discovered via `langchain-mcp-adapters`
-from the real `blue-data-user-mcp` server (the `udb-mcp` console script), launched
+from the real `blue-data-user-mcp` server (the `blue-userdb-mcp` console script), launched
 automatically as a subprocess over stdio.
 
 ```bash

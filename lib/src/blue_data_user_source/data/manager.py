@@ -143,7 +143,7 @@ class UserDataManager:
       round-trip through ``_class``/``connection`` reflection, so this manager
       rebuilds and caches it itself from ``doc_source_props``.
     - ``"external_documents"`` (DocumentDataSource) — shared across all files
-      registered via :meth:`add_source` (e.g. ``udb data source add``); every
+      registered via :meth:`add_source` (e.g. ``blue-userdb data source add``); every
       file is parsed, chunked, and embedded into this source so it can later
       be searched or used to answer queries. Created on demand via
       :meth:`ensure_external_documents_source`; same non-reconnected caching
@@ -851,7 +851,7 @@ class UserDataManager:
     def ensure_external_documents_source(self) -> Any:
         """Return the shared "external_documents" DocumentDataSource, built + registered on first use.
 
-        Every file registered via :meth:`add_source` (``udb data source add``)
+        Every file registered via :meth:`add_source` (``blue-userdb data source add``)
         is parsed, chunked, and embedded into this single DocumentDataSource,
         making it searchable and available for future query-answering —
         replacing the old FileSource, which only ever read raw lines.

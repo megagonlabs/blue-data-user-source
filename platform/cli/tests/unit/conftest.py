@@ -1,9 +1,9 @@
-"""Shared fixtures for the `udb` CLI tests.
+"""Shared fixtures for the `blue-userdb` CLI tests.
 
 Isolation lives here rather than in a single test module because profiles are
 read from the CLI home *before* any option is applied: `--data-dir` alone does
 not cover them, and without this the suite writes into the developer's own
-~/.udb.
+~/.blue-userdb.
 """
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-# Anything in the real ~/.udb newer than this was written by the test run.
+# Anything in the real ~/.blue-userdb newer than this was written by the test run.
 _SESSION_START = time.time()
 
 # Every environment variable that can steer the CLI at a real home directory.
 # Listed explicitly so that adding one without isolating it trips the guard
-# below rather than silently writing into the developer's own ~/.udb.
+# below rather than silently writing into the developer's own ~/.blue-userdb.
 _HOME_ENV_VARS = (
     "BLUE_DATA_USER_SOURCE_HOME",
     "BLUE_DATA_USER_SOURCE_DATA_DIR",
@@ -46,7 +46,7 @@ class IsolatedRunner(CliRunner):
 
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "udb"
+    d = tmp_path / "blue-userdb"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -57,7 +57,7 @@ def isolated_home(data_dir, monkeypatch):
 
     `--data-dir` alone is not enough: profiles are read from the CLI home
     before any option is applied, so without this the suite writes into the
-    developer's real ~/.udb. The guard is the part that matters — it turns that
+    developer's real ~/.blue-userdb. The guard is the part that matters — it turns that
     class of mistake into a test failure rather than a surprise in someone's
     home directory.
     """
@@ -74,7 +74,7 @@ def isolated_home(data_dir, monkeypatch):
 
     yield
 
-    real_home = Path.home() / ".udb"
+    real_home = Path.home() / ".blue-userdb"
     if real_home.exists():
         touched = [
             f.name for f in real_home.iterdir()

@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-udb-mcp = "blue_data_user_mcp.server:main"
+blue-userdb-mcp = "blue_data_user_mcp.server:main"
 
 [project.optional-dependencies]
 dev   = ["pytest", "pytest-asyncio"]

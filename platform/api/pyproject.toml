@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-udb-api = "blue_data_user_api.app:main"
+blue-userdb-api = "blue_data_user_api.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

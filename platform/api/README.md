@@ -1,4 +1,4 @@
-# udb REST API
+# blue-userdb REST API
 
 REST API for the user database — manage users, query their knowledge graphs, and handle webhook interactions over HTTP via FastAPI.
 
@@ -27,11 +27,11 @@ export OPENAI_API_KEY=sk-...
 ## Quick start
 
 ```bash
-# Start the server (defaults: 127.0.0.1:8000, no auth, ~/.udb data dir)
-udb-api
+# Start the server (defaults: 127.0.0.1:8000, no auth, ~/.blue-userdb data dir)
+blue-userdb-api
 
 # Or with explicit configuration
-BLUE_DATA_USER_SOURCE_DATA_DIR=/data/udb BLUE_DATA_USER_SOURCE_API_KEY=secret udb-api
+BLUE_DATA_USER_SOURCE_DATA_DIR=/data/blue-userdb BLUE_DATA_USER_SOURCE_API_KEY=secret blue-userdb-api
 
 # Interactive docs
 open http://localhost:8000/docs
@@ -63,7 +63,7 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
 
 | Variable | Default | Description |
 |---|---|---|
-| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `BLUE_DATA_USER_SOURCE_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; leave unset to disable auth |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
@@ -226,9 +226,9 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
   "name": "work",
   "details": {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
     "inbound_provider": "mailgun"
   },
@@ -342,10 +342,10 @@ curl -X POST http://localhost:8000/alice/contacts \
 
 ## Storage layout
 
-Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.udb`):
+Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.blue-userdb`):
 
 ```
-~/.udb/
+~/.blue-userdb/
 ├── registry.json              # outer DataRegistry store (users + source properties)
 ├── registries/
 │   └── alice.json             # per-user DataRegistry store

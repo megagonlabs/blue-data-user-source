@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BLUE_DATA_USER_SOURCE_", env_file=".env", extra="ignore")
 
-    data_dir: Path = Path("~/.udb").expanduser()
+    data_dir: Path = Path("~/.blue-userdb").expanduser()
     api_key: str = ""
     schema_path: str = ""
     metadata_schema_path: str = ""

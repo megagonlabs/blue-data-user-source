@@ -56,4 +56,4 @@ Thumbs.db
 
 # User database files
 *.udb
-~/.udb/
+~/.blue-userdb/

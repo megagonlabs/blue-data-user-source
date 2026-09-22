@@ -35,7 +35,7 @@ def _file_kb_props(directory: Path) -> dict:
 
 
 async def main():
-    tmp = Path(tempfile.mkdtemp(prefix="udb-file-backend-demo-"))
+    tmp = Path(tempfile.mkdtemp(prefix="blue-userdb-file-backend-demo-"))
     print(f"Working directory: {tmp}")
 
     # ---------------------------------------------------------------- #
@@ -46,7 +46,7 @@ async def main():
     print("1. Create user (file-backed registry, KB, metadata, contacts, sessions)")
     print(DIVIDER)
 
-    outer = FileUserSource("udb", {"connection": {"path": str(tmp / "registry.json")}})
+    outer = FileUserSource("blue-userdb", {"connection": {"path": str(tmp / "registry.json")}})
     await outer.create_user(
         "alice",
         registry_props=_file_json_props(tmp / "registries" / "alice.json"),
@@ -104,7 +104,7 @@ async def main():
     print("4. Persistence -- reopen the same directory with a new instance")
     print(DIVIDER)
 
-    reopened = FileUserSource("udb", {"connection": {"path": str(tmp / "registry.json")}})
+    reopened = FileUserSource("blue-userdb", {"connection": {"path": str(tmp / "registry.json")}})
     print("Users visible after reopen:", reopened.list_users())
     print("Metadata survived:", {
         k: v for k, v in reopened.list_metadata("alice")["identity"].items() if v

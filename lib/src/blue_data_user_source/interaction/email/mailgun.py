@@ -2,7 +2,7 @@
 
 Mailgun POSTs form-encoded data when an email arrives. Relevant fields:
 
-    recipient      — full To address, e.g. interaction-<id>@udb.example.com
+    recipient      — full To address, e.g. interaction-<id>@blue-userdb.example.com
     stripped-text  — reply body with quoted text and signatures removed
     body-plain     — full plain-text body (fallback if stripped-text is empty)
 

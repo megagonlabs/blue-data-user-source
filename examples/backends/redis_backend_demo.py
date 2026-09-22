@@ -39,7 +39,7 @@ from blue_data_user_source.data.manager import CLS_JSON_REDIS, CLS_KB_MEMORY
 
 DIVIDER = "-" * 60
 _DB = 15  # isolated from the shared instance's default database (0)
-_NAMESPACE = "udb-examples-redis-backend-demo"
+_NAMESPACE = "blue-userdb-examples-redis-backend-demo"
 
 
 def _redis_json_props(namespace: str) -> dict:
@@ -61,7 +61,7 @@ async def main():
     print("1. Create user (Redis-backed registry, metadata, contacts, sessions)")
     print(DIVIDER)
 
-    outer = RedisUserSource("udb", {
+    outer = RedisUserSource("blue-userdb", {
         "connection": {"host": "localhost", "port": 6379, "db": _DB},
         "registry": _redis_json_props(f"{_NAMESPACE}:outer"),
     })
@@ -104,7 +104,7 @@ async def main():
     print("3. Persistence -- reopen with a second RedisUserSource instance")
     print(DIVIDER)
 
-    reopened = RedisUserSource("udb", {
+    reopened = RedisUserSource("blue-userdb", {
         "connection": {"host": "localhost", "port": 6379, "db": _DB},
         "registry": _redis_json_props(f"{_NAMESPACE}:outer"),
     })

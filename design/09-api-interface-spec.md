@@ -116,19 +116,19 @@ UserSource(props: dict)
 
 ```python
 us = UserSource({
-    "store": {"backend": "file", "path": "~/.udb/db.json"},
+    "store": {"backend": "file", "path": "~/.blue-userdb/db.json"},
     "schema": "data/schema.json",
 })
 
 # Create a database — five source props required, doc_source optional
 await us.create_user(
     "alice",
-    registry_props={"backend": "file", "path": "~/.udb/registries/alice.json"},
-    kb_source_props={"backend": "file", "directory": "~/.udb/kb"},
-    metadata_source_props={"backend": "file", "path": "~/.udb/sources/alice.metadata.json"},
-    contact_source_props={"backend": "file", "path": "~/.udb/sources/alice.contacts.json"},
-    session_source_props={"backend": "file", "path": "~/.udb/sources/alice.sessions.json"},
-    doc_source_props={"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "~/.udb/sources/alice/sessions"}},
+    registry_props={"backend": "file", "path": "~/.blue-userdb/registries/alice.json"},
+    kb_source_props={"backend": "file", "directory": "~/.blue-userdb/kb"},
+    metadata_source_props={"backend": "file", "path": "~/.blue-userdb/sources/alice.metadata.json"},
+    contact_source_props={"backend": "file", "path": "~/.blue-userdb/sources/alice.contacts.json"},
+    session_source_props={"backend": "file", "path": "~/.blue-userdb/sources/alice.sessions.json"},
+    doc_source_props={"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "~/.blue-userdb/sources/alice/sessions"}},
 )
 
 # Type 1 — register file source for future queries
@@ -502,33 +502,33 @@ Pass the `session_id` returned by `session_start` as the `session` argument to `
 
 Built with Click (argument parsing) and Rich (output). All commands are thin wrappers over the Python library.
 
-A default database may be configured via `--database` or the `BLUE_DATA_USER_SOURCE_DATABASE` env var, or persisted with `udb database select NAME`.
+A default database may be configured via `--database` or the `BLUE_DATA_USER_SOURCE_DATABASE` env var, or persisted with `blue-userdb database select NAME`.
 
 ### Global options
 
 ```
-udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+blue-userdb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 ```
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database ID |
-| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory for all database files |
+| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory for all database files |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB seeding |
 
 ---
 
-### `udb database`
+### `blue-userdb database`
 
 | Command | Description |
 |---------|-------------|
-| `udb database create NAME` | Create a new database, and select it as active (auto-select-after-create) |
-| `udb database delete NAME [--yes]` | Delete a database and all its data |
-| `udb database select NAME` | Set the active database (persists to `.selected.database`) |
-| `udb database list [--format]` | List all databases |
-| `udb database search KEYWORD [--format]` | Keyword search over database names |
-| `udb database reset [--yes]` | Clear KB data for the active database and reseed schema |
-| `udb database config show [--format]` | Show stored configuration for the active database |
+| `blue-userdb database create NAME` | Create a new database, and select it as active (auto-select-after-create) |
+| `blue-userdb database delete NAME [--yes]` | Delete a database and all its data |
+| `blue-userdb database select NAME` | Set the active database (persists to `.selected.database`) |
+| `blue-userdb database list [--format]` | List all databases |
+| `blue-userdb database search KEYWORD [--format]` | Keyword search over database names |
+| `blue-userdb database reset [--yes]` | Clear KB data for the active database and reseed schema |
+| `blue-userdb database config show [--format]` | Show stored configuration for the active database |
 
 `database create` options:
 
@@ -543,52 +543,52 @@ udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 ---
 
-### `udb session`
+### `blue-userdb session`
 
-A session groups the queries/interactions of one conversation. Commands mirror `udb database`'s create/select/list pattern.
+A session groups the queries/interactions of one conversation. Commands mirror `blue-userdb database`'s create/select/list pattern.
 
 | Command | Description |
 |---------|-------------|
-| `udb session start` | Create a new session for the active database and select it (persists to `.selected.session`) |
-| `udb session select SESSION_ID` | Set the active session |
-| `udb session end [SESSION_ID]` | End a session (defaults to the selected session); clears the selection if it matches |
-| `udb session list [--format]` | List sessions for the active database |
-| `udb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected session) |
+| `blue-userdb session start` | Create a new session for the active database and select it (persists to `.selected.session`) |
+| `blue-userdb session select SESSION_ID` | Set the active session |
+| `blue-userdb session end [SESSION_ID]` | End a session (defaults to the selected session); clears the selection if it matches |
+| `blue-userdb session list [--format]` | List sessions for the active database |
+| `blue-userdb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected session) |
 
-Session selection resolves the same way as `--database`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. **Unlike** database selection, an unresolved session is not an error — `udb data query` falls through to auto-creating a new session (reuse-or-create), and that new session is then auto-selected for the next call.
+Session selection resolves the same way as `--database`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. **Unlike** database selection, an unresolved session is not an error — `blue-userdb data query` falls through to auto-creating a new session (reuse-or-create), and that new session is then auto-selected for the next call.
 
 ---
 
-### `udb data`
+### `blue-userdb data`
 
 All `data` commands require an active database.
 
 | Command | Description |
 |---------|-------------|
-| `udb data query TEXT` | Execute a natural language query |
-| `udb data search QUERY` | Search entities and facts by keyword or semantic similarity |
-| `udb data list` | List all entities, property values, and facts |
-| `udb data import FILE` | Import instance data from `udb data export` output (KG only) |
-| `udb data export` | Export instance data (entities, facts, property values) as JSON |
-| `udb data extract TEXT` | Extract entities/facts from free text via LLM |
-| `udb data source list` | List sources; KG-only entries marked `(*)` |
-| `udb data source add FILE` | Register a file source and optionally extract |
-| `udb data source remove NAME` | Remove a source from the registry (KG data preserved) |
+| `blue-userdb data query TEXT` | Execute a natural language query |
+| `blue-userdb data search QUERY` | Search entities and facts by keyword or semantic similarity |
+| `blue-userdb data list` | List all entities, property values, and facts |
+| `blue-userdb data import FILE` | Import instance data from `blue-userdb data export` output (KG only) |
+| `blue-userdb data export` | Export instance data (entities, facts, property values) as JSON |
+| `blue-userdb data extract TEXT` | Extract entities/facts from free text via LLM |
+| `blue-userdb data source list` | List sources; KG-only entries marked `(*)` |
+| `blue-userdb data source add FILE` | Register a file source and optionally extract |
+| `blue-userdb data source remove NAME` | Remove a source from the registry (KG data preserved) |
 
 `data query` options:
 
 | Option | Description |
 |--------|-------------|
-| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (see `udb session` above), then to auto-create if neither is set |
+| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (see `blue-userdb session` above), then to auto-create if neither is set |
 | `--format table\|json\|nl` | Output format (default: `table`) |
 | `--top-k N` | Max results (default: 10) |
 
-When a query auto-creates a new session (no `--session`, no selected session), the CLI writes it to `.selected.session` so the next `udb data query` call continues the same session automatically.
+When a query auto-creates a new session (no `--session`, no selected session), the CLI writes it to `.selected.session` so the next `blue-userdb data query` call continues the same session automatically.
 
 **Example**
 
 ```
-$ udb --database alice data query "jobs suitable for me" --format table
+$ blue-userdb --database alice data query "jobs suitable for me" --format table
 
  Query                               Results
  What skills does the user have?     Python, SQL, machine learning
@@ -599,11 +599,11 @@ $ udb --database alice data query "jobs suitable for me" --format table
 
 ```bash
 # Type 1 — register source only
-udb data source add resume.txt
+blue-userdb data source add resume.txt
 # Registered source: resume.txt
 
 # Type 2 — register + extract
-udb data source add resume.txt \
+blue-userdb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 # Added source: resume.txt (2 queries)
@@ -611,16 +611,16 @@ udb data source add resume.txt \
 
 ---
 
-### `udb schema`
+### `blue-userdb schema`
 
 All `schema` commands require an active database.
 
 | Command | Description |
 |---------|-------------|
-| `udb schema list [--format]` | List classes, relations, and their properties |
-| `udb schema import FILE` | Import a schema (idempotent) |
-| `udb schema export [-o FILE]` | Export schema as JSON |
-| `udb schema search QUERY` | Search schema elements by keyword or semantic similarity |
+| `blue-userdb schema list [--format]` | List classes, relations, and their properties |
+| `blue-userdb schema import FILE` | Import a schema (idempotent) |
+| `blue-userdb schema export [-o FILE]` | Export schema as JSON |
+| `blue-userdb schema search QUERY` | Search schema elements by keyword or semantic similarity |
 
 ---
 

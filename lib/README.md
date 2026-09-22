@@ -47,7 +47,7 @@ from blue_data_user_source import UserSource
 us = UserSource("user_source", {
     "registry": {
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registry.json"},
     },
     "schema": "data/schema.json",   # optional — used when creating/resetting databases
 })
@@ -72,23 +72,23 @@ async def main() -> None:
         "alice",
         registry_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
         },
         kb_source_props={
             "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-            "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
         },
         metadata_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
         },
         contact_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
         },
         session_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
         },
         # doc_source_props is optional — defaults to a dummy-embedding, in-memory
         # vector backend for per-session interaction transcripts. See "Sessions" below.
@@ -116,23 +116,23 @@ async def main() -> None:
         "alice",
         registry_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
         },
         kb_source_props={
             "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-            "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
         },
         metadata_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
         },
         contact_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
         },
         session_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
         },
     )
 
@@ -209,7 +209,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 # File-backed JSON (registry, metadata, contacts)
 {
     "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-    "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+    "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
 }
 
 # In-memory KB
@@ -221,7 +221,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 # File-backed KB (default for CLI)
 {
     "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-    "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+    "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
 }
 
 # Neo4j KB
@@ -291,9 +291,9 @@ Each user stores preferred contact channels in their contacts source. The agent 
 # Add a contact method
 await us.add_contact_method("alice", "email", "work", {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
     "inbound_provider": "mailgun",   # mailgun | postmark | sendgrid | smtp_server | stdio
 }, preference=1)
@@ -318,7 +318,7 @@ await us.remove_contact_method("alice", "email", "work")
 | Key | Required | Default | Description |
 |---|---|---|---|
 | `url` | yes | — | POST target for outgoing questions |
-| `response_base_url` | yes | — | Base URL of `udb-api` (response_url sent in payload: `{response_base_url}/interactions/{id}/response`) |
+| `response_base_url` | yes | — | Base URL of `blue-userdb-api` (response_url sent in payload: `{response_base_url}/interactions/{id}/response`) |
 | `headers` | no | _(none)_ | Extra HTTP headers for the outgoing POST |
 | `timeout` | no | `300` | Seconds to wait for a response |
 
@@ -342,13 +342,13 @@ await us.add_contact_method("alice", "webhook", "ops", {
 | `smtp_password` | no | `""` | SMTP password |
 | `smtp_use_tls` | no | `True` | Use STARTTLS |
 | `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
-| `response_base_url` | yes¹ | — | Base URL of `udb-api` (link in email body + inbound endpoint) |
+| `response_base_url` | yes¹ | — | Base URL of `blue-userdb-api` (link in email body + inbound endpoint) |
 | `subject` | no | `"A question for you"` | Email subject line |
 | `timeout` | no | `300` | Seconds to wait for a reply |
 
 ¹ Not required when `inbound_provider` is `"stdio"`.
 
-**`inbound_provider: "stdio"`** — development / testing mode. Prints a formatted email block to stdout and reads the reply from stdin. No SMTP connection is made and no `udb-api` is needed.
+**`inbound_provider: "stdio"`** — development / testing mode. Prints a formatted email block to stdout and reads the reply from stdin. No SMTP connection is made and no `blue-userdb-api` is needed.
 
 ```python
 # Minimal stdio setup — useful in tests and local development
@@ -358,7 +358,7 @@ await us.add_contact_method("alice", "email", "dev", {
 })
 ```
 
-**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider parses the email reply and POSTs to `POST /interactions/email/inbound?provider=<name>` on `udb-api`, which resolves the pending Future. Configure your provider's inbound routing to deliver mail sent to `interaction-*@{reply_domain}` to that endpoint.
+**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider parses the email reply and POSTs to `POST /interactions/email/inbound?provider=<name>` on `blue-userdb-api`, which resolves the pending Future. Configure your provider's inbound routing to deliver mail sent to `interaction-*@{reply_domain}` to that endpoint.
 
 **`smtp_server`** — reserved for a future `aiosmtpd`-based listener. Currently raises `NotImplementedError`.
 
@@ -405,7 +405,7 @@ await us.create_user(
     session_source_props={...},
     doc_source_props={
         "embedding_model": "dummy",  # or "openai"
-        "vector_source": {"backend": "file", "directory": "~/.udb/sources/alice/sessions"},
+        "vector_source": {"backend": "file", "directory": "~/.blue-userdb/sources/alice/sessions"},
     },
 )
 ```
@@ -433,46 +433,46 @@ The JSON file is consumed by `KBSource.import_database_schema` (entity and relat
 
 ## CLI
 
-The `udb` CLI exposes all library operations. See [platform/cli/README.md](../platform/cli/README.md) to install it and [docs/cli.md](../docs/cli.md) for the full command reference (including the `metadata` and `contact` groups omitted from the summary below).
+The `blue-userdb` CLI exposes all library operations. See [platform/cli/README.md](../platform/cli/README.md) to install it and [docs/cli.md](../docs/cli.md) for the full command reference (including the `metadata` and `contact` groups omitted from the summary below).
 
 ```
-udb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
+blue-userdb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 
 database commands:
-  udb database create NAME    Create a new database (auto-selects it)
-  udb database delete NAME    Delete a database and all its data
-  udb database select NAME    Set the active database
-  udb database list           List all databases
-  udb database search KEYWORD Search databases by name
-  udb database reset          Clear KB data and reseed schema
-  udb database config show    Show stored configuration
+  blue-userdb database create NAME    Create a new database (auto-selects it)
+  blue-userdb database delete NAME    Delete a database and all its data
+  blue-userdb database select NAME    Set the active database
+  blue-userdb database list           List all databases
+  blue-userdb database search KEYWORD Search databases by name
+  blue-userdb database reset          Clear KB data and reseed schema
+  blue-userdb database config show    Show stored configuration
 
 session commands:
-  udb session start           Create a new session (auto-selects it)
-  udb session select ID       Set the active session
-  udb session end [ID]        End a session (defaults to the selected one)
-  udb session list            List sessions for the active database
-  udb session show [ID]       Show a session's queries and interactions
+  blue-userdb session start           Create a new session (auto-selects it)
+  blue-userdb session select ID       Set the active session
+  blue-userdb session end [ID]        End a session (defaults to the selected one)
+  blue-userdb session list            List sessions for the active database
+  blue-userdb session show [ID]       Show a session's queries and interactions
 
 data commands:
-  udb data query TEXT         Execute a natural language query
-  udb data search QUERY       Search entities and facts
-  udb data list               List all entities and facts
-  udb data import FILE        Import instance data (from udb data export)
-  udb data export             Export instance data as JSON
-  udb data extract TEXT       Extract entities/facts from free text via LLM
-  udb data source list        List data sources
-  udb data source add FILE    Register a file source (optionally extract)
-  udb data source remove NAME Remove a source from the registry
+  blue-userdb data query TEXT         Execute a natural language query
+  blue-userdb data search QUERY       Search entities and facts
+  blue-userdb data list               List all entities and facts
+  blue-userdb data import FILE        Import instance data (from blue-userdb data export)
+  blue-userdb data export             Export instance data as JSON
+  blue-userdb data extract TEXT       Extract entities/facts from free text via LLM
+  blue-userdb data source list        List data sources
+  blue-userdb data source add FILE    Register a file source (optionally extract)
+  blue-userdb data source remove NAME Remove a source from the registry
 
 schema commands:
-  udb schema list             List classes and relations
-  udb schema import FILE      Import a schema
-  udb schema export           Export schema as JSON
-  udb schema search QUERY     Search schema elements
+  blue-userdb schema list             List classes and relations
+  blue-userdb schema import FILE      Import a schema
+  blue-userdb schema export           Export schema as JSON
+  blue-userdb schema search QUERY     Search schema elements
 ```
 
-Database files are stored under `~/.udb/` by default.
+Database files are stored under `~/.blue-userdb/` by default.
 
 ## Running tests
 

@@ -2,7 +2,7 @@
 
 Sendgrid POSTs multipart/form-data. Relevant fields:
 
-    to      — recipient address(es), e.g. interaction-<id>@udb.example.com
+    to      — recipient address(es), e.g. interaction-<id>@blue-userdb.example.com
     text    — plain-text body (Sendgrid does not strip quoted text server-side;
               we use a simple heuristic to remove the quoted portion)
 

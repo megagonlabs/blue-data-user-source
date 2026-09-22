@@ -4,8 +4,8 @@
 
 UDb is distributed in two forms:
 
-- **PyPI package** (`udb`) — the Python library, for embedding UDb in other Python applications
-- **Docker image** (`udb-server`) — packages the REST API and MCP server for standalone deployment
+- **PyPI package** (`blue-userdb`) — the Python library, for embedding UDb in other Python applications
+- **Docker image** (`blue-userdb-server`) — packages the REST API and MCP server for standalone deployment
 
 Production deployments are self-hosted. Operators provision and manage their own storage backends and observability infrastructure. UDb emits to standard interfaces and does not assume any specific platform.
 
@@ -23,20 +23,20 @@ UDb follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Ve
 
 ## 2. PyPI Package
 
-The `udb` package exposes the Python library (`UserSource` and related classes). It does not include the REST API, MCP server, or CLI by default. Those are available as optional extras:
+The `blue-userdb` package exposes the Python library (`UserSource` and related classes). It does not include the REST API, MCP server, or CLI by default. Those are available as optional extras:
 
 ```
-pip install udb               # library only
-pip install udb[server]       # library + REST API + MCP server
-pip install udb[cli]          # library + CLI
-pip install udb[all]          # everything
+pip install blue-userdb               # library only
+pip install blue-userdb[server]       # library + REST API + MCP server
+pip install blue-userdb[cli]          # library + CLI
+pip install blue-userdb[all]          # everything
 ```
 
 ---
 
 ## 3. Docker Image
 
-The `udb-server` image runs both the REST API (Uvicorn/FastAPI) and the MCP server as a combined process. The image is published to a container registry alongside each release.
+The `blue-userdb-server` image runs both the REST API (Uvicorn/FastAPI) and the MCP server as a combined process. The image is published to a container registry alongside each release.
 
 | Port | Service |
 |------|---------|
@@ -66,8 +66,8 @@ A `docker-compose.yml` is provided in the repository root for local development 
 
 ```yaml
 services:
-  udb:
-    image: udb-server:latest
+  blue-userdb:
+    image: blue-userdb-server:latest
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -128,7 +128,7 @@ All configuration is via environment variables. There are no configuration files
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | OpenTelemetry collector endpoint; tracing disabled if unset |
-| `OTEL_SERVICE_NAME` | No | `udb` | Service name reported in traces and metrics |
+| `OTEL_SERVICE_NAME` | No | `blue-userdb` | Service name reported in traces and metrics |
 
 ---
 

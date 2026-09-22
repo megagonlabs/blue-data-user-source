@@ -1,6 +1,6 @@
 {
   "BLUE_DATA_USER_SOURCE_DATA_DIR": {
-    "default": "~/.udb",
+    "default": "~/.blue-userdb",
     "prompt": "Directory where user databases and CLI state are stored",
     "required": true,
     "cast": "directory"
@@ -38,14 +38,14 @@
 
   "BLUE_DATA_USER_SOURCE_LLM_MODEL": {
     "default": null,
-    "prompt": "LLM model for all udb commands (overrides BLUE_DATA_LLM_MODEL)",
+    "prompt": "LLM model for all blue-userdb commands (overrides BLUE_DATA_LLM_MODEL)",
     "required": false,
     "cast": "str",
     "inherits": ["BLUE_DATA_LLM_MODEL"]
   },
   "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL": {
     "default": null,
-    "prompt": "LLM model for `udb data extract`",
+    "prompt": "LLM model for `blue-userdb data extract`",
     "required": false,
     "cast": "str",
     "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL"]

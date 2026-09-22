@@ -34,7 +34,7 @@ async def main():
     )
     us.set_metadata("alice", "identity.name", "Alice")
 
-    tmp = Path(tempfile.mkdtemp(prefix="udb-provenance-demo-"))
+    tmp = Path(tempfile.mkdtemp(prefix="blue-userdb-provenance-demo-"))
 
     print(DIVIDER)
     print("1. Type 1 -- provenance-only registration (no `queries`)")

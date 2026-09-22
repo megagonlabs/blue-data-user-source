@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-udb = "blue_data_user_cli.commands:cli"
+blue-userdb = "blue_data_user_cli.commands:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

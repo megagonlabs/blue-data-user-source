@@ -13,7 +13,7 @@ import asyncio
 from blue_data_user_source import FileUserSource
 
 async def main():
-    us = FileUserSource("us", {"connection": {"path": "~/.udb/registry.json"}})
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb/registry.json"}})
     ...
 
 asyncio.run(main())
@@ -30,23 +30,23 @@ await us.create_user(
     "alice",
     registry_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
     },
     kb_source_props={
         "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-        "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+        "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
     },
     metadata_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
     },
     contact_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
     },
     session_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
     },
 )
 
@@ -143,9 +143,9 @@ Contact methods are stored per user and consulted whenever the reasoning layer n
 ```python
 await us.add_contact_method("alice", "email", "work", {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
     "inbound_provider": "mailgun",   # mailgun | postmark | sendgrid | smtp_server | stdio
 }, preference=1)

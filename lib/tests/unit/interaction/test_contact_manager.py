@@ -284,9 +284,9 @@ async def test_webhook_timeout_raises_interaction_error() -> None:
 
 _EMAIL_DETAILS = {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
 }
 
@@ -337,7 +337,7 @@ async def test_email_includes_reply_to_and_link() -> None:
     msg = sent_msgs[0]
     reply_to = msg.get("Reply-To", "")
     assert reply_to.startswith("interaction-")
-    assert "udb.example.com" in reply_to
+    assert "blue-userdb.example.com" in reply_to
     body = msg.as_string()
     assert "/interactions/" in body
     assert "/respond" in body
@@ -357,8 +357,8 @@ async def test_email_timeout_raises_interaction_error() -> None:
 
 _EMAIL_STDIO_DETAILS = {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
-    "reply_domain": "udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "subject": "A question for you",
     "inbound_provider": "stdio",
 }
@@ -384,10 +384,10 @@ async def test_email_stdio_writes_formatted_email_and_reads_reply(
 
     output = fake_out.getvalue()
     assert "alice@example.com" in output       # To:
-    assert "agent@udb.example.com" in output    # From:
+    assert "agent@blue-userdb.example.com" in output    # From:
     assert "A question for you" in output       # Subject:
     assert "interaction-" in output             # Reply-To:
-    assert "udb.example.com" in output          # reply domain
+    assert "blue-userdb.example.com" in output          # reply domain
     assert "Which delivery address" in output   # message body
 
 

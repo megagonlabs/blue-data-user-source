@@ -121,7 +121,7 @@ async def seed() -> None:
         session_source_props=_MEM_JSON,
     )
     us.set_metadata("alice", "identity.name", "Alice")
-    with tempfile.TemporaryDirectory(prefix="udb-langgraph-direct-demo-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blue-userdb-langgraph-direct-demo-") as tmp:
         bio_path = Path(tmp) / "alice-bio.txt"
         bio_path.write_text(BIO)
         await us.add_source(

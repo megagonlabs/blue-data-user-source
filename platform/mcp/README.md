@@ -29,20 +29,20 @@ pip install -e .
 ## Running
 
 ```bash
-# Default: file-backed store at ~/.udb, stdio transport
-udb-mcp
+# Default: file-backed store at ~/.blue-userdb, stdio transport
+blue-userdb-mcp
 
 # With a specific data directory
-BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data udb-mcp
+BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data blue-userdb-mcp
 
 # With a custom KB schema
-BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data BLUE_DATA_USER_SOURCE_SCHEMA_PATH=/path/to/schema.json udb-mcp
+BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data BLUE_DATA_USER_SOURCE_SCHEMA_PATH=/path/to/schema.json blue-userdb-mcp
 ```
 
-Note: this server does not read the `udb` CLI's `~/.udb/registry.json` if
+Note: this server does not read the `blue-userdb` CLI's `~/.blue-userdb/registry.json` if
 `BLUE_DATA_USER_SOURCE_DATA_DIR` is changed from the default — it owns one independently-configured
 `FileUserSource` for the process lifetime. Pointing both the CLI and this server
-at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.udb`) gives practical continuity.
+at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.blue-userdb`) gives practical continuity.
 
 ---
 
@@ -54,7 +54,7 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
 {
   "mcpServers": {
     "blue-data-user": {
-      "command": "udb-mcp",
+      "command": "blue-userdb-mcp",
       "env": {
         "BLUE_DATA_USER_SOURCE_DATA_DIR": "/path/to/data"
       }
@@ -63,13 +63,13 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
 }
 ```
 
-If `udb-mcp` is not on the system PATH, use the full path:
+If `blue-userdb-mcp` is not on the system PATH, use the full path:
 
 ```json
 {
   "mcpServers": {
     "blue-data-user": {
-      "command": "/path/to/venv/bin/udb-mcp"
+      "command": "/path/to/venv/bin/blue-userdb-mcp"
     }
   }
 }
@@ -83,7 +83,7 @@ All configuration is via environment variables — there is no config file.
 
 | Variable | Default | Description |
 |---|---|---|
-| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | _(packaged `contact_schema.json`)_ | Path to a custom contact schema |
@@ -286,15 +286,15 @@ webhook → {"url": "https://hooks.example.com/incoming",
 | `smtp_password` | no | `""` | SMTP auth password |
 | `smtp_use_tls` | no | `True` | Use STARTTLS |
 | `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
-| `response_base_url` | yes¹ | — | Base URL of `udb-api` (link in email body + inbound endpoint) |
+| `response_base_url` | yes¹ | — | Base URL of `blue-userdb-api` (link in email body + inbound endpoint) |
 | `subject` | no | `"A question for you"` | Email subject |
 | `timeout` | no | `300` | Seconds to wait for reply |
 
 ¹ Not required when `inbound_provider` is `"stdio"`.
 
-**`inbound_provider: "stdio"`** — prints email to stdout and reads reply from stdin. No SMTP or `udb-api` needed. Useful for local development and testing.
+**`inbound_provider: "stdio"`** — prints email to stdout and reads reply from stdin. No SMTP or `blue-userdb-api` needed. Useful for local development and testing.
 
-**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider POSTs the parsed reply to `POST /interactions/email/inbound?provider=<name>` on `udb-api`. Configure your provider to route mail for `interaction-*@{reply_domain}` to that endpoint.
+**Inbound webhook providers** (`mailgun`, `postmark`, `sendgrid`) — the provider POSTs the parsed reply to `POST /interactions/email/inbound?provider=<name>` on `blue-userdb-api`. Configure your provider to route mail for `interaction-*@{reply_domain}` to that endpoint.
 
 For `webhook`, the agent will `POST` to `url` with:
 
@@ -307,7 +307,7 @@ For `webhook`, the agent will `POST` to `url` with:
 ```
 
 The external system posts the user's reply to `response_url`, unblocking the
-waiting agent. `response_base_url` must point to a running `udb-api` instance.
+waiting agent. `response_base_url` must point to a running `blue-userdb-api` instance.
 
 #### `update_contact`
 
@@ -345,9 +345,9 @@ set_metadata("alice", "availability.preferred_channel", "email")
 # 3. Add a contact method (email via Mailgun inbound)
 add_contact("alice", "email", "work", {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
     "inbound_provider": "mailgun",
 }, preference=1)

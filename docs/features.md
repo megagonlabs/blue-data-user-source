@@ -81,9 +81,9 @@ Configurable contact methods let the reasoning layer ask the user directly when 
 ```python
 await us.add_contact_method("alice", "email", "work", {
     "address": "alice@example.com",
-    "from_address": "agent@udb.example.com",
+    "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
-    "reply_domain": "udb.example.com",
+    "reply_domain": "blue-userdb.example.com",
     "response_base_url": "http://localhost:8000",
     "inbound_provider": "mailgun",
 }, preference=1)
@@ -110,12 +110,12 @@ print(us.list_metadata("alice"))                    # full nested dict
 
 ## CLI
 
-A full command-line interface (`udb`) over the library — databases, sessions, data, schema, metadata, and contacts.
+A full command-line interface (`blue-userdb`) over the library — databases, sessions, data, schema, metadata, and contacts.
 
 ```bash
-udb database create alice
-udb data source add resume.txt --query "What skills does the user have?"
-udb data query "What jobs are suitable for me?"
+blue-userdb database create alice
+blue-userdb data source add resume.txt --query "What skills does the user have?"
+blue-userdb data query "What jobs are suitable for me?"
 ```
 
 See [cli.md](cli.md) for the full command reference.
@@ -127,13 +127,13 @@ See [cli.md](cli.md) for the full command reference.
 Exposes the same operations as MCP tools, so Claude and other MCP clients can create users, ingest sources, query, and manage metadata/contacts directly in an agentic session.
 
 ```bash
-udb-mcp
+blue-userdb-mcp
 ```
 
 ```json
 {
   "mcpServers": {
-    "blue-data-user": { "command": "udb-mcp" }
+    "blue-data-user": { "command": "blue-userdb-mcp" }
   }
 }
 ```
@@ -147,7 +147,7 @@ See [mcp.md](mcp.md) for the full tool reference and Claude Desktop configuratio
 An HTTP interface (FastAPI) exposing databases, queries, sessions, sources, metadata, and contacts — plus interaction endpoints so webhook, form-based, and inbound-email replies can resolve a pending clarification.
 
 ```bash
-udb-api
+blue-userdb-api
 curl -X POST http://localhost:8000/alice/query -d '{"query": "What skills does alice have?"}'
 ```
 

@@ -1,4 +1,4 @@
-"""`udb profile` — the command group, and the configuration it drives.
+"""`blue-userdb profile` — the command group, and the configuration it drives.
 
 Mirrors `blue_data_kb_cli`'s test_profile.py: the CLI checklist requires
 `profile` to behave identically across the family, so the two suites are meant
@@ -53,7 +53,7 @@ def test_both_llm_models_inherit_toward_the_family_default():
 
 
 def test_database_creation_defaults_are_declared():
-    """`udb database create` has no `database config set` to change these after
+    """`blue-userdb database create` has no `database config set` to change these after
     the fact, so the profile is the only place a per-environment default can
     live."""
     spec = cli_spec()
@@ -212,16 +212,16 @@ def test_inspect_reports_where_each_value_came_from(runner, data_dir, monkeypatc
 
 
 def test_a_specific_model_falls_back_to_the_udb_wide_one(runner, data_dir):
-    _run(runner, data_dir, ["profile", "config", "BLUE_DATA_USER_SOURCE_LLM_MODEL", "udb-wide"])
+    _run(runner, data_dir, ["profile", "config", "BLUE_DATA_USER_SOURCE_LLM_MODEL", "blue-userdb-wide"])
     out = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])
-    assert out["values"]["BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL"]["value"] == "udb-wide"
+    assert out["values"]["BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL"]["value"] == "blue-userdb-wide"
 
     _run(runner, data_dir, [
         "profile", "config", "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL", "reasoning-only",
     ])
     out = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])
     assert out["values"]["BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL"]["value"] == "reasoning-only"
-    assert out["values"]["BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL"]["value"] == "udb-wide"
+    assert out["values"]["BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL"]["value"] == "blue-userdb-wide"
 
 
 def test_the_profile_supplies_the_data_dir(runner, data_dir, tmp_path, monkeypatch):

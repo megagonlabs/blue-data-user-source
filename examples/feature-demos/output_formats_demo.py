@@ -35,7 +35,7 @@ async def main():
     )
     us.set_metadata("alice", "identity.name", "Alice")
 
-    tmp = Path(tempfile.mkdtemp(prefix="udb-output-formats-"))
+    tmp = Path(tempfile.mkdtemp(prefix="blue-userdb-output-formats-"))
     bio = tmp / "alice_bio.txt"
     bio.write_text("Alice is a data scientist at IBM, based in Austin, Texas.")
     await us.add_source(

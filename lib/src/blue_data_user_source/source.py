@@ -79,7 +79,7 @@ class UserSource(DataSource):
       (default: in-memory). File example::
 
           {"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-           "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"}}
+           "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registry.json"}}
 
     - ``schema`` — path to the KB graph schema JSON (default: ``data/schema.json``).
       Stored as a property of the source record in the DataRegistry.
@@ -93,7 +93,7 @@ class UserSource(DataSource):
         us = UserSource("user_source", {
             "registry": {
                 "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                "connection": {"protocol": "json/file", "path": "~/.udb/registry.json"},
+                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registry.json"},
             },
             "schema": "/path/to/schema.json",           # optional
             "metadata_schema": "/path/to/metadata.json" # optional
@@ -101,19 +101,19 @@ class UserSource(DataSource):
         us.create_database("alice", properties={
             "registry": {
                 "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"},
+                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
             },
             "kb_source": {
                 "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-                "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"},
+                "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
             },
             "metadata_source": {
                 "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"},
+                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
             },
             "contact_source": {
                 "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"},
+                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
             },
         })
         results = us.execute_query("what timezone is alice in?", database="alice")

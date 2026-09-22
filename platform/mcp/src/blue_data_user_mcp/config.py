@@ -77,7 +77,7 @@ def default_user_props(name: str) -> dict[str, Any]:
 
 
 def _build_source() -> tuple[FileUserSource, Path]:
-    d = Path(os.environ.get("BLUE_DATA_USER_SOURCE_DATA_DIR", "~/.udb")).expanduser().resolve()
+    d = Path(os.environ.get("BLUE_DATA_USER_SOURCE_DATA_DIR", "~/.blue-userdb")).expanduser().resolve()
     d.mkdir(parents=True, exist_ok=True)
     props: dict[str, Any] = {"connection": {"path": str(d / "registry.json")}}
     for prop, var in (

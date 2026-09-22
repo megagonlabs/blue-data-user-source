@@ -16,7 +16,7 @@ Landing page for all documentation in `blue-data-user-source` — what to read d
 |---|---|
 | [guide.md](guide.md) | Work through the Python library task by task — users, sources, querying, sessions, contact methods, metadata |
 | [api-reference.md](api-reference.md) | Look up an exact method signature, parameter, or result type |
-| [cli.md](cli.md) | Use the `udb` command-line tool — every command, with a full walkthrough |
+| [cli.md](cli.md) | Use the `blue-userdb` command-line tool — every command, with a full walkthrough |
 | [mcp.md](mcp.md) | Connect Claude or another MCP client to a user's knowledge store — every tool, with Claude Desktop config |
 | [api.md](api.md) | REST API — every endpoint, with request/response bodies |
 

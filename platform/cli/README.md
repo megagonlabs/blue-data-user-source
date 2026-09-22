@@ -1,4 +1,4 @@
-# udb CLI
+# blue-userdb CLI
 
 Command-line interface for the user database — a per-user knowledge store with natural language querying.
 
@@ -27,32 +27,32 @@ export OPENAI_API_KEY=sk-...
 ## Quick start
 
 ```bash
-# Create a database (auto-selects it — saves to ~/.udb/.selected.database)
-udb database create alice
+# Create a database (auto-selects it — saves to ~/.blue-userdb/.selected.database)
+blue-userdb database create alice
 
 # Register a file as a data source (Type 1)
-udb data source add resume.txt
+blue-userdb data source add resume.txt
 
 # Extract and store specific attributes (Type 2)
-udb data source add resume.txt \
+blue-userdb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
 # Query — Rich table (default)
-udb data query "What jobs are suitable for me?"
+blue-userdb data query "What jobs are suitable for me?"
 
 # Query — natural language answer
-udb data query "What jobs are suitable for me?" --format nl
+blue-userdb data query "What jobs are suitable for me?" --format nl
 
 # Query — raw JSON
-udb data query "What jobs are suitable for me?" --format json
+blue-userdb data query "What jobs are suitable for me?" --format json
 
 # Sessions — group multiple queries into one conversation
-udb session start                              # creates and selects a session
-udb data query "What jobs are suitable for me?" # continues the selected session
-udb data query "What about remote roles?"       # same session — has context from the previous query
-udb session show                                # see the session's queries and interactions
-udb session end                                 # done — clears the selection
+blue-userdb session start                              # creates and selects a session
+blue-userdb data query "What jobs are suitable for me?" # continues the selected session
+blue-userdb data query "What about remote roles?"       # same session — has context from the previous query
+blue-userdb session show                                # see the session's queries and interactions
+blue-userdb session end                                 # done — clears the selection
 ```
 
 ## Commands
@@ -60,17 +60,17 @@ udb session end                                 # done — clears the selection
 ### Global options
 
 ```
-udb [--profile NAME] [--database NAME] [--session ID] [--data-dir DIR]
+blue-userdb [--profile NAME] [--database NAME] [--session ID] [--data-dir DIR]
     [--schema-path PATH] [--metadata-schema-path PATH] [--contact-schema-path PATH]
     COMMAND
 ```
 
 | Option | Profile parameter | Default | Description |
 |---|---|---|---|
-| `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.udb/.selected.profile` | Configuration profile |
+| `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
-| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.udb/.selected.session` | Session id for query context |
-| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.blue-userdb/.selected.session` | Session id for query context |
+| `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to the metadata schema |
 | `--contact-schema-path PATH` | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | packaged `contact_schema.json` | Path to the contact schema |
@@ -79,28 +79,28 @@ Each option falls back to the selected profile; exporting the environment variab
 
 ### Profiles and configuration
 
-A **profile** is a named set of configuration values — API keys, models, backend choices — stored as one section of `~/.udb/.profiles`. Everything the CLI reads comes from the selected profile, so switching environments is one command rather than a shell full of exports.
+A **profile** is a named set of configuration values — API keys, models, backend choices — stored as one section of `~/.blue-userdb/.profiles`. Everything the CLI reads comes from the selected profile, so switching environments is one command rather than a shell full of exports.
 
-The first `udb` command creates a `default` profile and selects it, so there is nothing to set up before the CLI works:
+The first `blue-userdb` command creates a `default` profile and selects it, so there is nothing to set up before the CLI works:
 
 ```bash
-$ udb profile config                  # walk through the required parameters
-$ udb profile inspect                 # every value, and where it came from
+$ blue-userdb profile config                  # walk through the required parameters
+$ blue-userdb profile inspect                 # every value, and where it came from
 ```
 
 `add` is for additional profiles:
 
 ```bash
-$ udb profile add staging
-$ udb profile select staging
-$ udb profile config                  # configures staging, now that it is selected
+$ blue-userdb profile add staging
+$ blue-userdb profile select staging
+$ blue-userdb profile config                  # configures staging, now that it is selected
 ```
 
-`udb profile config` has three forms — no arguments walks every required parameter, `PARAM` prompts for one, `PARAM VALUE` sets one directly. Add `--profile NAME` to configure a profile other than the selected one.
+`blue-userdb profile config` has three forms — no arguments walks every required parameter, `PARAM` prompts for one, `PARAM VALUE` sets one directly. Add `--profile NAME` to configure a profile other than the selected one.
 
-**Precedence:** command option > environment variable > profile > default. `udb profile inspect` reports the winning tier for every parameter.
+**Precedence:** command option > environment variable > profile > default. `blue-userdb profile inspect` reports the winning tier for every parameter.
 
-**Secrets** are never accepted as a command-line value — that would put them in your shell history — so `udb profile config OPENAI_API_KEY` always prompts. Enter the key to store it encoded, or `$OPENAI_API_KEY` to store a reference read from the environment at use. `~/.udb/.profiles` is written `0600` and `inspect` masks stored secrets.
+**Secrets** are never accepted as a command-line value — that would put them in your shell history — so `blue-userdb profile config OPENAI_API_KEY` always prompts. Enter the key to store it encoded, or `$OPENAI_API_KEY` to store a reference read from the environment at use. `~/.blue-userdb/.profiles` is written `0600` and `inspect` masks stored secrets.
 
 > The encoded form is obfuscation, not encryption: anyone who can read the file can decode it. The file mode is the real protection, and the `$VAR` reference form keeps the secret off disk entirely.
 
@@ -112,7 +112,7 @@ $ udb profile config                  # configures staging, now that it is selec
 | `BLUE_DATA_LLM_MODEL` | str | `gpt-4o` | ✓ |
 | `BLUE_DATA_CLI_FORMAT` | str | `table` | |
 | `BLUE_DATA_CLI_LOG_LIMIT` | int | `80` | |
-| `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.udb` | ✓ |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.blue-userdb` | ✓ |
 | `BLUE_DATA_USER_SOURCE_DATABASE` | str | — | ✓ |
 | `BLUE_DATA_USER_SOURCE_SESSION` | str | — | |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | file | — | |
@@ -130,49 +130,49 @@ $ udb profile config                  # configures staging, now that it is selec
 | `BLUE_DATA_USER_SOURCE_NEO4J_PORT` | int | `7687` | |
 | `BLUE_DATA_USER_SOURCE_NEO4J_USER` | str | `neo4j` | |
 
-Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to `BLUE_DATA_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `udb database create`, which has no `config set` to change them afterwards.
+Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to `BLUE_DATA_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
 
-`BLUE_DATA_USER_SOURCE_HOME` (default `~/.udb`) is deliberately *not* a profile parameter: it is the directory the profiles themselves live in, so it can only be set in the environment.
+`BLUE_DATA_USER_SOURCE_HOME` (default `~/.blue-userdb`) is deliberately *not* a profile parameter: it is the directory the profiles themselves live in, so it can only be set in the environment.
 
 | Command | Description |
 |---|---|
-| `udb profile add NAME` | Create an additional profile (`default` is created on first use) |
-| `udb profile remove NAME [--confirm]` | Delete a profile and its configuration |
-| `udb profile list [--format table\|json]` | List profiles, marking the selected one |
-| `udb profile select NAME` | Set the default profile |
-| `udb profile inspect [NAME] [--format table\|json]` | Show every value and the tier it came from; secrets masked |
-| `udb profile config [PARAM [VALUE]] [--profile NAME]` | Set configuration; secrets always prompt |
+| `blue-userdb profile add NAME` | Create an additional profile (`default` is created on first use) |
+| `blue-userdb profile remove NAME [--confirm]` | Delete a profile and its configuration |
+| `blue-userdb profile list [--format table\|json]` | List profiles, marking the selected one |
+| `blue-userdb profile select NAME` | Set the default profile |
+| `blue-userdb profile inspect [NAME] [--format table\|json]` | Show every value and the tier it came from; secrets masked |
+| `blue-userdb profile config [PARAM [VALUE]] [--profile NAME]` | Set configuration; secrets always prompt |
 
-`--database` can also be set persistently with `udb database select NAME`, which writes to `~/.udb/.selected.database`.
+`--database` can also be set persistently with `blue-userdb database select NAME`, which writes to `~/.blue-userdb/.selected.database`.
 
 ```bash
 export BLUE_DATA_USER_SOURCE_DATABASE=alice
-udb data query "jobs suitable for me"
+blue-userdb data query "jobs suitable for me"
 ```
 
 ---
 
-### `udb database`
+### `blue-userdb database`
 
 Manage user databases.
 
 | Command | Description |
 |---|---|
-| `udb database list` | List all registered databases |
-| `udb database create NAME` | Create a new database |
-| `udb database delete NAME` | Delete a database and all its data |
-| `udb database select NAME` | Set the active database |
-| `udb database search KEYWORD` | Search databases by name keyword |
-| `udb database reset` | Clear KB data for the active database and reseed the schema |
-| `udb database config show` | Show the database configuration |
+| `blue-userdb database list` | List all registered databases |
+| `blue-userdb database create NAME` | Create a new database |
+| `blue-userdb database delete NAME` | Delete a database and all its data |
+| `blue-userdb database select NAME` | Set the active database |
+| `blue-userdb database search KEYWORD` | Search databases by name keyword |
+| `blue-userdb database reset` | Clear KB data for the active database and reseed the schema |
+| `blue-userdb database config show` | Show the database configuration |
 ```bash
-udb database create alice
-udb database select alice
-udb database list
-udb database search ali
-udb database reset --yes
-udb database config show
-udb database delete alice --yes
+blue-userdb database create alice
+blue-userdb database select alice
+blue-userdb database list
+blue-userdb database search ali
+blue-userdb database reset --yes
+blue-userdb database config show
+blue-userdb database delete alice --yes
 ```
 
 `database create` options:
@@ -188,10 +188,10 @@ udb database delete alice --yes
 
 ```bash
 # File backend (default)
-udb database create alice
+blue-userdb database create alice
 
 # Neo4j backend
-udb database create alice \
+blue-userdb database create alice \
   --kb-backend neo4j \
   --neo4j-host db.example.com \
   --neo4j-port 7687 \
@@ -201,54 +201,54 @@ udb database create alice \
 
 ---
 
-### `udb session`
+### `blue-userdb session`
 
-A session groups the queries and clarification interactions of one conversation. `udb data query` uses whatever session is selected (or auto-creates one if none is — see below), the same way `udb database select` works for databases.
+A session groups the queries and clarification interactions of one conversation. `blue-userdb data query` uses whatever session is selected (or auto-creates one if none is — see below), the same way `blue-userdb database select` works for databases.
 
 | Command | Description |
 |---|---|
-| `udb session start` | Create a session and select it |
-| `udb session select ID` | Set the active session |
-| `udb session end [ID]` | End a session (defaults to the selected one); clears the selection if it matches |
-| `udb session list` | List sessions |
-| `udb session show [ID]` | Show a session's queries and interactions (defaults to the selected one) |
+| `blue-userdb session start` | Create a session and select it |
+| `blue-userdb session select ID` | Set the active session |
+| `blue-userdb session end [ID]` | End a session (defaults to the selected one); clears the selection if it matches |
+| `blue-userdb session list` | List sessions |
+| `blue-userdb session show [ID]` | Show a session's queries and interactions (defaults to the selected one) |
 
 ```bash
-udb session start
-udb data query "What jobs are suitable for me?"
-udb session show
-udb session list
-udb session end
+blue-userdb session start
+blue-userdb data query "What jobs are suitable for me?"
+blue-userdb session show
+blue-userdb session list
+blue-userdb session end
 ```
 
-**Resolution order** for the session used by `udb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and that session is then written to `.selected.session`, so the next query continues it automatically.
+**Resolution order** for the session used by `blue-userdb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and that session is then written to `.selected.session`, so the next query continues it automatically.
 
 ---
 
-### `udb data`
+### `blue-userdb data`
 
-Instance data management. All `data` commands require an active database (via `--database` or `udb database select`).
+Instance data management. All `data` commands require an active database (via `--database` or `blue-userdb database select`).
 
-#### `udb data list`
+#### `blue-userdb data list`
 
 List all entities, property values, and facts in the database.
 
 ```
-udb data list [--show-provenance] [--format (table|json)]
+blue-userdb data list [--show-provenance] [--format (table|json)]
 ```
 
-#### `udb data query`
+#### `blue-userdb data query`
 
 Execute a natural-language query against the database's knowledge graph.
 
 ```
-udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N]
+blue-userdb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N]
                      [--include-expanded] [--verbose] [--log] [--log-limit N]
 ```
 
 | Option | Description |
 |---|---|
-| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`udb session select`/`start`), then auto-creates one if neither is set — see [`udb session`](#udb-session) |
+| `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`blue-userdb session select`/`start`), then auto-creates one if neither is set — see [`blue-userdb session`](#blue-userdb-session) |
 | `--format` | `table` (default) · `json` · `nl` |
 | `--top-k N` | Maximum results (default: 10) |
 | `--include-expanded` | Also print the per-sub-question queries and their raw results, below the main answer |
@@ -257,71 +257,71 @@ udb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N
 | `--log-limit N` | Truncation limit for logged values (default: 80) |
 
 ```bash
-udb --database alice data query "What skills does this user have?"
-udb --database alice data query "What jobs are suitable for me?" --format nl
+blue-userdb --database alice data query "What skills does this user have?"
+blue-userdb --database alice data query "What jobs are suitable for me?" --format nl
 ```
 
-#### `udb data search`
+#### `blue-userdb data search`
 
 Search entities and facts by keyword or semantic similarity.
 
 ```
-udb data search QUERY [--type entity|fact] [--mode keyword|semantic] [--top-k N] [--format (table|json)]
+blue-userdb data search QUERY [--type entity|fact] [--mode keyword|semantic] [--top-k N] [--format (table|json)]
 ```
 
-#### `udb data import`
+#### `blue-userdb data import`
 
-Import instance data previously produced by `udb data export` (KG only). Schema must already exist — run `udb schema import` first.
-
-```
-udb data import INPUT_FILE
-```
-
-#### `udb data export`
-
-Export the database's instance data (entities, facts, property values) as JSON. Does not include schema — use `udb schema export` for that.
+Import instance data previously produced by `blue-userdb data export` (KG only). Schema must already exist — run `blue-userdb schema import` first.
 
 ```
-udb data export [--show-provenance] [--output FILE]
+blue-userdb data import INPUT_FILE
 ```
 
-#### `udb data extract`
+#### `blue-userdb data export`
+
+Export the database's instance data (entities, facts, property values) as JSON. Does not include schema — use `blue-userdb schema export` for that.
+
+```
+blue-userdb data export [--show-provenance] [--output FILE]
+```
+
+#### `blue-userdb data extract`
 
 Extract entities, facts, and property values from free text using an LLM.
 
 Requires `pip install 'blue-data-kb-source[openai]'` and `OPENAI_API_KEY`.
 
 ```
-udb data extract TEXT [--query QUESTION]... [--source NAME] [--model MODEL]
+blue-userdb data extract TEXT [--query QUESTION]... [--source NAME] [--model MODEL]
 ```
 
 ```bash
-udb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
+blue-userdb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
   --query "What role does Alice have?"
 ```
 
 ---
 
-### `udb data source`
+### `blue-userdb data source`
 
 Manage data sources associated with the active database.
 
 | Command | Description |
 |---|---|
-| `udb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
-| `udb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
-| `udb data source remove NAME` | Remove a source, keeping its KB data |
+| `blue-userdb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
+| `blue-userdb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
+| `blue-userdb data source remove NAME` | Remove a source, keeping its KB data |
 **Type 1 — register + ingest for later search**
 
 ```bash
-udb data source add resume.txt
+blue-userdb data source add resume.txt
 # Ingested source: resume.txt
 ```
 
 **Type 2 — also extract and store attributes in the KG**
 
 ```bash
-udb data source add resume.txt \
+blue-userdb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "Does the user prefer remote work?"
 # Ingested source: resume.txt (2 queries extracted to KB)
@@ -330,28 +330,28 @@ udb data source add resume.txt \
 **Listing sources**
 
 ```bash
-udb data source list
+blue-userdb data source list
 ```
 
 Sources that were added to the knowledge graph but subsequently removed from the registry are shown with a `(*)` marker.
 
 ---
 
-### `udb schema`
+### `blue-userdb schema`
 
 Schema management. All `schema` commands require an active database.
 
 | Command | Description |
 |---|---|
-| `udb schema list` | List classes, relations, and properties |
-| `udb schema import INPUT_FILE` | Import a schema (idempotent) |
-| `udb schema export` | Export the schema as JSON |
-| `udb schema search QUERY` | Search classes, relations, and properties |
+| `blue-userdb schema list` | List classes, relations, and properties |
+| `blue-userdb schema import INPUT_FILE` | Import a schema (idempotent) |
+| `blue-userdb schema export` | Export the schema as JSON |
+| `blue-userdb schema search QUERY` | Search classes, relations, and properties |
 ```bash
-udb schema list
-udb schema export --output schema.json
-udb schema import schema.json
-udb schema search "employment" --type class
+blue-userdb schema list
+blue-userdb schema export --output schema.json
+blue-userdb schema import schema.json
+blue-userdb schema search "employment" --type class
 ```
 
 ---
@@ -368,14 +368,14 @@ udb schema search "employment" --type class
 
 ## Storage layout
 
-Data is persisted under `~/.udb/` by default:
+Data is persisted under `~/.blue-userdb/` by default:
 
 ```
-~/.udb/
-├── .profiles                  # configuration profiles (mode 0600, written by 'udb profile config')
-├── .selected.profile          # active profile name (written by 'udb profile select')
-├── .selected.database         # active database name (written by 'udb database select'/'create')
-├── .selected.session           # active session id (written by 'udb session select'/'start', and auto-created sessions)
+~/.blue-userdb/
+├── .profiles                  # configuration profiles (mode 0600, written by 'blue-userdb profile config')
+├── .selected.profile          # active profile name (written by 'blue-userdb profile select')
+├── .selected.database         # active database name (written by 'blue-userdb database select'/'create')
+├── .selected.session           # active session id (written by 'blue-userdb session select'/'start', and auto-created sessions)
 ├── registry.json              # outer DataRegistry store (databases + source properties)
 ├── registries/
 │   └── alice.json             # per-user DataRegistry store (sources registered for alice)
@@ -391,9 +391,9 @@ Data is persisted under `~/.udb/` by default:
 Use `--data-dir` to store databases elsewhere:
 
 ```bash
-udb --data-dir /tmp/demo database create alice
-udb --data-dir /tmp/demo --database alice data source add resume.txt --query "What skills?"
-udb --data-dir /tmp/demo --database alice data query "jobs suitable for me"
+blue-userdb --data-dir /tmp/demo database create alice
+blue-userdb --data-dir /tmp/demo --database alice data source add resume.txt --query "What skills?"
+blue-userdb --data-dir /tmp/demo --database alice data query "jobs suitable for me"
 ```
 
 ---

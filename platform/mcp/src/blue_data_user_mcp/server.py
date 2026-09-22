@@ -24,16 +24,16 @@ Quick start
     pip install -e .
 
     # Run (stdio transport for Claude Desktop / Claude Code)
-    udb-mcp
+    blue-userdb-mcp
 
     # With a specific data directory
-    BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data udb-mcp
+    BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data blue-userdb-mcp
 
 Claude Desktop config (~/.config/claude-desktop/claude_desktop_config.json):
     {
       "mcpServers": {
         "blue-data-user": {
-          "command": "udb-mcp",
+          "command": "blue-userdb-mcp",
           "env": {
             "BLUE_DATA_USER_SOURCE_DATA_DIR": "/path/to/data"
           }

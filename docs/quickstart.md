@@ -1,6 +1,6 @@
 # Quick Start
 
-The fastest way to see it in action is the `udb` CLI — no Python code required. See [installation.md](installation.md) if you haven't installed anything yet.
+The fastest way to see it in action is the `blue-userdb` CLI — no Python code required. See [installation.md](installation.md) if you haven't installed anything yet.
 
 ```bash
 pip install -e ../blue-data/lib
@@ -14,10 +14,10 @@ export OPENAI_API_KEY=sk-...
 
 ## 1. Create a database and select it
 
-Databases (one per user) persist under `~/.udb/` by default (override with `udb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/dir`, or by exporting `BLUE_DATA_USER_SOURCE_DATA_DIR`). `create` auto-selects the new database.
+Databases (one per user) persist under `~/.blue-userdb/` by default (override with `blue-userdb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/dir`, or by exporting `BLUE_DATA_USER_SOURCE_DATA_DIR`). `create` auto-selects the new database.
 
 ```bash
-udb database create alice
+blue-userdb database create alice
 ```
 
 ## 2. Register a data source
@@ -26,10 +26,10 @@ A file is always parsed, chunked, and embedded for later search — that alone i
 
 ```bash
 # Type 1 — register only
-udb data source add resume.txt
+blue-userdb data source add resume.txt
 
 # Type 2 — register + extract
-udb data source add resume.txt \
+blue-userdb data source add resume.txt \
     --query "What skills does the user have?" \
     --query "What is the user's most recent job title?"
 ```
@@ -37,7 +37,7 @@ udb data source add resume.txt \
 ## 3. Query
 
 ```bash
-udb data query "What jobs are suitable for me?"
+blue-userdb data query "What jobs are suitable for me?"
 ```
 
 ```
@@ -49,7 +49,7 @@ udb data query "What jobs are suitable for me?"
 `execute_query` rewrites the query (resolving "me"/"you" to the user's actual name), expands it into schema-grounded sub-questions, retrieves data for each from the knowledge graph and any registered documents, and assesses the combined result for completeness and freshness — asking a clarification question if quality checks fail.
 
 ```bash
-udb data query "What jobs are suitable for me?" --format nl
+blue-userdb data query "What jobs are suitable for me?" --format nl
 ```
 
 ## 4. Group queries into a session
@@ -57,18 +57,18 @@ udb data query "What jobs are suitable for me?" --format nl
 A session ties multiple queries and their clarification interactions into one conversation, giving later queries context from earlier ones.
 
 ```bash
-udb session start
-udb data query "What jobs are suitable for me?"    # continues the selected session
-udb data query "What about remote roles?"          # same session
-udb session show                                    # see queries and interactions
-udb session end
+blue-userdb session start
+blue-userdb data query "What jobs are suitable for me?"    # continues the selected session
+blue-userdb data query "What about remote roles?"          # same session
+blue-userdb session show                                    # see queries and interactions
+blue-userdb session end
 ```
 
 ## 5. Look at what you built
 
 ```bash
-udb data list
-udb data source list
+blue-userdb data list
+blue-userdb data source list
 ```
 
 ---
@@ -82,20 +82,20 @@ import asyncio
 from blue_data_user_source import FileUserSource
 
 async def main():
-    us = FileUserSource("us", {"connection": {"path": "~/.udb/registry.json"}})
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb/registry.json"}})
 
     await us.create_user(
         "alice",
         registry_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                         "connection": {"protocol": "json/file", "path": "~/.udb/registries/alice.json"}},
+                         "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"}},
         kb_source_props={"_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-                          "connection": {"protocol": "kb/file", "directory": "~/.udb/sources/alice"}},
+                          "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"}},
         metadata_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                                "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/metadata.json"}},
+                                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"}},
         contact_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                               "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/contacts.json"}},
+                               "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"}},
         session_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                               "connection": {"protocol": "json/file", "path": "~/.udb/sources/alice/sessions.json"}},
+                               "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"}},
     )
 
     await us.add_source("resume.txt", database="alice")
@@ -117,13 +117,13 @@ To let Claude or another MCP client create users and query their knowledge store
 
 ```bash
 cd platform/mcp && bash scripts/install.sh
-udb-mcp
+blue-userdb-mcp
 ```
 
 ```json
 {
   "mcpServers": {
-    "blue-data-user": { "command": "udb-mcp" }
+    "blue-data-user": { "command": "blue-userdb-mcp" }
   }
 }
 ```
@@ -136,7 +136,7 @@ See [mcp.md](mcp.md) for the Claude Desktop config and full tool reference.
 
 ```bash
 cd platform/api && bash scripts/install.sh
-udb-api
+blue-userdb-api
 ```
 
 ```bash

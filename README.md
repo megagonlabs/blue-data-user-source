@@ -26,13 +26,13 @@ blue-data-user-source/
 │           ├── querying/
 │           └── reasoning/
 ├── platform/
-│   ├── cli/                    # Command-line interface (udb)
+│   ├── cli/                    # Command-line interface (blue-userdb)
 │   │   ├── src/blue_data_user_cli/
 │   │   └── tests/
-│   ├── mcp/                    # MCP server (udb-mcp)
+│   ├── mcp/                    # MCP server (blue-userdb-mcp)
 │   │   ├── src/blue_data_user_mcp/
 │   │   └── tests/
-│   └── api/                    # REST API (udb-api)
+│   └── api/                    # REST API (blue-userdb-api)
 │       ├── src/blue_data_user_api/
 │       └── tests/
 ├── docs/                       # User-facing documentation (start at docs/README.md)
@@ -58,22 +58,22 @@ cd lib && pip install -e . && cd ..
 cd platform/cli && pip install -e . && cd ../..
 
 # Create a database and select it as active
-udb database create alice
-udb database select alice
+blue-userdb database create alice
+blue-userdb database select alice
 
 # Register a file as a data source (Type 1 — source registration only)
-udb data source add resume.txt
+blue-userdb data source add resume.txt
 
 # Extract specific attributes via LLM (Type 2)
-udb data source add resume.txt \
+blue-userdb data source add resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
 # Query — Rich table (default)
-udb data query "What jobs are suitable for me?"
+blue-userdb data query "What jobs are suitable for me?"
 
 # Query — natural language answer
-udb data query "What jobs are suitable for me?" --format nl
+blue-userdb data query "What jobs are suitable for me?" --format nl
 ```
 
 ## Testing
@@ -98,6 +98,6 @@ See [lib/README.md](lib/README.md#running-tests) for full benchmark details.
 | Package | Description |
 |---|---|
 | [lib/](lib/README.md) | `blue-data-user-source` — core Python library |
-| [platform/cli/](platform/cli/README.md) | `blue-data-user-cli` — `udb` CLI |
-| [platform/mcp/](platform/mcp/README.md) | `blue-data-user-mcp` — MCP server (`udb-mcp`) |
-| [platform/api/](platform/api/README.md) | `blue-data-user-api` — REST API (`udb-api`) |
+| [platform/cli/](platform/cli/README.md) | `blue-data-user-cli` — `blue-userdb` CLI |
+| [platform/mcp/](platform/mcp/README.md) | `blue-data-user-mcp` — MCP server (`blue-userdb-mcp`) |
+| [platform/api/](platform/api/README.md) | `blue-data-user-api` — REST API (`blue-userdb-api`) |

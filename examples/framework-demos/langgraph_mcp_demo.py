@@ -19,10 +19,10 @@ Run:
     pip install -e platform/mcp/
     python3 examples/framework-demos/langgraph_mcp_demo.py
 
-The blue-data-user-mcp server (the `udb-mcp` console script installed by
+The blue-data-user-mcp server (the `blue-userdb-mcp` console script installed by
 platform/mcp/) is launched automatically as a subprocess (stdio transport),
 pointed at a scratch directory via BLUE_DATA_USER_SOURCE_DATA_DIR so it never
-touches the default ~/.udb.
+touches the default ~/.blue-userdb.
 """
 import asyncio
 import os
@@ -40,11 +40,11 @@ async def main() -> None:
 
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # Launch blue-data-user-mcp (the udb-mcp console script) as a subprocess,
+    # Launch blue-data-user-mcp (the blue-userdb-mcp console script) as a subprocess,
     # pointed at the scratch directory.
     client = MultiServerMCPClient({
-        "udb": {
-            "command": "udb-mcp",
+        "blue-userdb": {
+            "command": "blue-userdb-mcp",
             "args": [],
             "transport": "stdio",
             "env": {**os.environ, "BLUE_DATA_USER_SOURCE_DATA_DIR": tmp},

@@ -12,7 +12,7 @@ from blue_data_user_source.interaction.email.sendgrid import SendgridAdapter
 from blue_data_user_source.interaction.email.smtp_server import SMTPServerAdapter
 
 _INTERACTION_ID = "abc123-def456"
-_RECIPIENT = f"interaction-{_INTERACTION_ID}@udb.example.com"
+_RECIPIENT = f"interaction-{_INTERACTION_ID}@blue-userdb.example.com"
 _REPLY = "I prefer the home address."
 
 
@@ -104,7 +104,7 @@ def test_mailgun_missing_text_raises() -> None:
 
 
 def test_mailgun_bad_recipient_prefix_raises() -> None:
-    body = _mailgun_body(recipient="unknown@udb.example.com")
+    body = _mailgun_body(recipient="unknown@blue-userdb.example.com")
     with pytest.raises(ValueError, match="does not carry an interaction id"):
         MailgunAdapter().extract(body, "application/x-www-form-urlencoded", {})
 

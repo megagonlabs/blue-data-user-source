@@ -15,7 +15,7 @@ class FileUserSource(UserSource):
 
     Example::
 
-        FileUserSource("us", {"connection": {"path": "~/.udb/registry.json"}})
+        FileUserSource("us", {"connection": {"path": "~/.blue-userdb/registry.json"}})
     """
 
     def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:

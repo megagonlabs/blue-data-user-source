@@ -77,7 +77,7 @@ async def main() -> None:
     print("3. add_source -- extract structured data from a bio into the KB")
     print(DIVIDER)
 
-    with tempfile.TemporaryDirectory(prefix="udb-full-lifecycle-demo-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blue-userdb-full-lifecycle-demo-") as tmp:
         bio_path = Path(tmp) / "carol-bio.txt"
         bio_path.write_text(BIO)
         await us.add_source(

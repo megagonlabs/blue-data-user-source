@@ -86,7 +86,7 @@ async def main() -> None:
     )
     us.set_metadata("alice", "identity.name", "Alice")
 
-    with tempfile.TemporaryDirectory(prefix="udb-clarification-demo-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blue-userdb-clarification-demo-") as tmp:
         bio_path = Path(tmp) / "alice-bio.txt"
         bio_path.write_text(BIO)
         await us.add_source(

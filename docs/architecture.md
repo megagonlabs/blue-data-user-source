@@ -86,11 +86,11 @@
 
 | Component | Entry point | Transport | Status |
 |---|---|---|---|
-| `cli` | `platform/cli/` (`udb`) | Terminal (Click) | Implemented |
-| `mcp` | `platform/mcp/` (`udb-mcp`) | stdio (MCP) | Implemented |
-| `api` | `platform/api/` (`udb-api`) | HTTP (FastAPI) | Implemented |
+| `cli` | `platform/cli/` (`blue-userdb`) | Terminal (Click) | Implemented |
+| `mcp` | `platform/mcp/` (`blue-userdb-mcp`) | stdio (MCP) | Implemented |
+| `api` | `platform/api/` (`blue-userdb-api`) | HTTP (FastAPI) | Implemented |
 
-All three processes are independent — none shares state with another, and each holds its own `FileUserSource` instance configured from `BLUE_DATA_USER_SOURCE_*` environment variables (`cli` also layers `--database`/`--data-dir`/`--schema-path` flags on top). Pointing all three at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the shared `~/.udb` default) gives practical, not automatic, continuity between them — a user created via `udb database create` is visible to `udb-mcp`/`udb-api` reading the same directory.
+All three processes are independent — none shares state with another, and each holds its own `FileUserSource` instance configured from `BLUE_DATA_USER_SOURCE_*` environment variables (`cli` also layers `--database`/`--data-dir`/`--schema-path` flags on top). Pointing all three at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the shared `~/.blue-userdb` default) gives practical, not automatic, continuity between them — a user created via `blue-userdb database create` is visible to `blue-userdb-mcp`/`blue-userdb-api` reading the same directory.
 
 ---
 

@@ -67,7 +67,7 @@ def interact(self, interaction_id: str | None = None) -> InteractionManager:
 
 Each `_*_manager` method builds an `InteractionManager(on_start, on_response, on_stop)` closing over whatever state the protocol needs (an HTTP client, an SMTP connection, a `Future` registered in the shared `pending_interactions` dict for async correlation — see `interaction/pending.py`). `stdio` is the simplest reference (`_stdio_manager`, prints and reads stdin synchronously, no `interaction_id` correlation needed); `_webhook_manager` is the template for an async request/response protocol correlated by `interaction_id`.
 
-To make the new protocol's detail keys self-describing in the CLI (`udb contact add/set/list`) and any tooling that reads it, add an entry to `lib/src/blue_data_user_source/data/contact_schema.json` following the existing shape (`__description__` plus one entry per field with `description`/`type`/`required`/`default`).
+To make the new protocol's detail keys self-describing in the CLI (`blue-userdb contact add/set/list`) and any tooling that reads it, add an entry to `lib/src/blue_data_user_source/data/contact_schema.json` following the existing shape (`__description__` plus one entry per field with `description`/`type`/`required`/`default`).
 
 If the protocol needs an inbound reply channel like email's (a webhook payload from a third-party provider that must resolve a pending `Future`), model it after `interaction/email/adapter.py`'s `InboundEmailAdapter` ABC and its `mailgun.py`/`postmark.py`/`sendgrid.py` implementations, each parsing one provider's webhook payload shape and calling back into the REST API's `POST /interactions/email/inbound` handler (`platform/api/src/blue_data_user_api/`).
 

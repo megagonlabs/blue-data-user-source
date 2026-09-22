@@ -1,7 +1,7 @@
 """Configuration comes from the environment, and only from the environment.
 
-The MCP server shares parameter *names* with the `udb` CLI but none of its
-machinery: it must not read `~/.udb/.profiles` or the selected profile, so a
+The MCP server shares parameter *names* with the `blue-userdb` CLI but none of its
+machinery: it must not read `~/.blue-userdb/.profiles` or the selected profile, so a
 developer's CLI profile cannot silently reconfigure a running server.
 """
 from __future__ import annotations

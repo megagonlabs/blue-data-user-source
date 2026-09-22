@@ -25,21 +25,21 @@ pip install -e .
 ## Running
 
 ```bash
-# Default: file-backed store at ~/.udb, stdio transport
-udb-mcp
+# Default: file-backed store at ~/.blue-userdb, stdio transport
+blue-userdb-mcp
 
 # With a specific data directory
-BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data udb-mcp
+BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data blue-userdb-mcp
 
 # With a custom KB schema
 BLUE_DATA_USER_SOURCE_DATA_DIR=/path/to/data \
 BLUE_DATA_USER_SOURCE_SCHEMA_PATH=/path/to/schema.json \
-    udb-mcp
+    blue-userdb-mcp
 ```
 
 `OPENAI_API_KEY` is required for the `query` tool's rewriting/expansion/assessment prompts and for `add_source` calls that pass `queries`.
 
-Note: this server does **not** read the `udb` CLI's `~/.udb/registry.json` if `BLUE_DATA_USER_SOURCE_DATA_DIR` is changed from the default — it owns one independently-configured `FileUserSource` for the process lifetime. Pointing both the CLI and this server at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.udb`) gives practical continuity.
+Note: this server does **not** read the `blue-userdb` CLI's `~/.blue-userdb/registry.json` if `BLUE_DATA_USER_SOURCE_DATA_DIR` is changed from the default — it owns one independently-configured `FileUserSource` for the process lifetime. Pointing both the CLI and this server at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.blue-userdb`) gives practical continuity.
 
 ---
 
@@ -51,7 +51,7 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
 {
   "mcpServers": {
     "blue-data-user": {
-      "command": "udb-mcp",
+      "command": "blue-userdb-mcp",
       "env": {
         "BLUE_DATA_USER_SOURCE_DATA_DIR": "/path/to/data"
       }
@@ -60,13 +60,13 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
 }
 ```
 
-If `udb-mcp` is not on the system PATH, use the full path:
+If `blue-userdb-mcp` is not on the system PATH, use the full path:
 
 ```json
 {
   "mcpServers": {
     "blue-data-user": {
-      "command": "/path/to/venv/bin/udb-mcp"
+      "command": "/path/to/venv/bin/blue-userdb-mcp"
     }
   }
 }
@@ -77,11 +77,11 @@ If `udb-mcp` is not on the system PATH, use the full path:
 ## Configuration reference
 
 All configuration is via environment variables — there is no config file.
-These share their names with the `udb` CLI's profile parameters but nothing else: the server reads the environment only, never `~/.udb/.profiles` or the selected profile. A CLI profile cannot reconfigure a running server.
+These share their names with the `blue-userdb` CLI's profile parameters but nothing else: the server reads the environment only, never `~/.blue-userdb/.profiles` or the selected profile. A CLI profile cannot reconfigure a running server.
 
 | Variable | Default | Description |
 |---|---|---|
-| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.udb` | Directory where database files are stored |
+| `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to a custom `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | _(packaged `contact_schema.json`)_ | Path to a custom contact schema |
@@ -225,7 +225,7 @@ Common keys: `identity.name`, `identity.timezone`, `preferences.verbosity`, `pre
 | `user` | `str` | User name |
 | `protocol` | `str` | `"email"`, `"webhook"`, `"sms"`, `"messaging"`, `"enterprise"`, `"notification"`, `"session"`, or `"stdio"` |
 | `name` | `str` | Human-readable label |
-| `details` | `dict` | Protocol-specific details (see [cli.md](cli.md#udb-contact) / [api-reference.md](api-reference.md#contactmanager--contactmethod)) |
+| `details` | `dict` | Protocol-specific details (see [cli.md](cli.md#blue-userdb-contact) / [api-reference.md](api-reference.md#contactmanager--contactmethod)) |
 | `preference` | `int` | Ordering priority — lower = higher priority (default 0) |
 
 ```
@@ -306,7 +306,7 @@ blue_data_user_mcp.config   ← singleton FileUserSource factory (BLUE_DATA_USER
    └── FileUserSource         ← file-backed registry + per-user KB/metadata/contacts/sessions
 ```
 
-The server holds a single `FileUserSource` instance per process. All tool calls share that instance; `user` is a plain string argument selecting the logical database (user) within it. Unlike the `udb` CLI, this server does not layer `--database`/`--data-dir` flags — every path is derived from `BLUE_DATA_USER_SOURCE_DATA_DIR` and the user name (see `create_database` above).
+The server holds a single `FileUserSource` instance per process. All tool calls share that instance; `user` is a plain string argument selecting the logical database (user) within it. Unlike the `blue-userdb` CLI, this server does not layer `--database`/`--data-dir` flags — every path is derived from `BLUE_DATA_USER_SOURCE_DATA_DIR` and the user name (see `create_database` above).
 
 ---
 

@@ -1,4 +1,4 @@
-"""Tests for the `udb` CLI.
+"""Tests for the `blue-userdb` CLI.
 
 Every test patches ``blue_data_user_cli.commands._make_source`` with a mock
 UserSource so no real registry/KB/LLM calls happen, and always passes an

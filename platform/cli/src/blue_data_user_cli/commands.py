@@ -25,7 +25,7 @@ from blue_data_user_source.data.manager import (
     CLS_VECTOR_MEMORY,
 )
 
-_DEFAULT_DATA_DIR = Path.home() / ".udb"
+_DEFAULT_DATA_DIR = Path.home() / ".blue-userdb"
 
 
 def _cli_home() -> str:
@@ -33,7 +33,7 @@ def _cli_home() -> str:
 
     Deliberately not a profile parameter — it is the directory the profiles are
     read from, so it can only come from the environment. Defaults to the same
-    ~/.udb the data lives in, so everything sits together unless a profile
+    ~/.blue-userdb the data lives in, so everything sits together unless a profile
     points the data elsewhere.
     """
     return str(Path(
@@ -182,7 +182,7 @@ def _kb_search_props(
 
     For persistent kb_backend values ("file"/"neo4j"), the BM25 corpus is
     written under a directory of its own so it survives across CLI invocations
-    (each `udb` command is a fresh process — an unpersisted, in-memory-only
+    (each `blue-userdb` command is a fresh process — an unpersisted, in-memory-only
     corpus would come back empty every time).
     """
     if kb_search_mode == "none":
@@ -311,7 +311,7 @@ def _get_db(obj: dict, fmt: str | None = None) -> str:
         db = sel_path.read_text().strip()
         if db:
             return db
-    _fail("No database selected. Use --database or run 'udb database select NAME'.", fmt)
+    _fail("No database selected. Use --database or run 'blue-userdb database select NAME'.", fmt)
 
 
 def _selected_session_path(data_dir: Path) -> Path:
@@ -353,20 +353,20 @@ def _get_session(obj: dict, session: str | None) -> str | None:
     envvar="BLUE_DATA_PROFILE",
     default=None,
     help="Configuration profile. Overrides BLUE_DATA_PROFILE. "
-         "Defaults to the selection in ~/.udb/.selected.profile.",
+         "Defaults to the selection in ~/.blue-userdb/.selected.profile.",
 )
 @click.option(
     "--database",
     default=None,
     help="Database (user) name. Defaults to the selection made by "
-         "'udb database select', then the profile's BLUE_DATA_USER_SOURCE_DATABASE.",
+         "'blue-userdb database select', then the profile's BLUE_DATA_USER_SOURCE_DATABASE.",
 )
 @click.option(
     "--session",
     default=None,
     help="Session id for query context. Defaults to the profile's "
          "BLUE_DATA_USER_SOURCE_SESSION, then the selection made by "
-         "'udb session select'.",
+         "'blue-userdb session select'.",
 )
 @click.option(
     "--data-dir",
@@ -407,15 +407,15 @@ def cli(
     metadata_schema_path: Path | None,
     contact_schema_path: Path | None,
 ) -> None:
-    """udb — user database CLI.
+    """blue-userdb — user database CLI.
 
-    Configuration lives in profiles: `udb profile config` to set values,
-    `udb profile inspect` to see them and where each came from.
+    Configuration lives in profiles: `blue-userdb profile config` to set values,
+    `blue-userdb profile inspect` to see them and where each came from.
     """
     home = _cli_home()
 
     # A fresh install gets its `default` profile here, rather than being told to
-    # run `udb profile add` before anything works. Keyed on the profiles file, so
+    # run `blue-userdb profile add` before anything works. Keyed on the profiles file, so
     # a profile removed on purpose is not resurrected on the next command.
     profile_store(home).initialize()
 
@@ -473,7 +473,7 @@ def _log_limit(obj: dict, option: int | None) -> int:
 
 
 # ------------------------------------------------------------------ #
-# udb database                                                        #
+# blue-userdb database                                                        #
 # ------------------------------------------------------------------ #
 
 @cli.group("database")
@@ -793,7 +793,7 @@ def database_config_show(obj: dict, fmt: str) -> None:
 
 
 # ------------------------------------------------------------------ #
-# udb session                                                         #
+# blue-userdb session                                                         #
 # ------------------------------------------------------------------ #
 
 @cli.group("session")
@@ -845,7 +845,7 @@ def session_end(obj: dict, session_id: str | None) -> None:
     data_dir: Path = obj["data_dir"]
     sid = _get_session(obj, session_id)
     if sid is None:
-        err.print("[red]Error:[/red] No session selected. Pass SESSION_ID or run 'udb session select ID'.")
+        err.print("[red]Error:[/red] No session selected. Pass SESSION_ID or run 'blue-userdb session select ID'.")
         sys.exit(1)
     source = _make_source(data_dir)
     try:
@@ -915,7 +915,7 @@ def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
     db = _get_db(obj, fmt)
     sid = _get_session(obj, session_id)
     if sid is None:
-        _fail("No session selected. Pass SESSION_ID or run 'udb session select ID'.", fmt)
+        _fail("No session selected. Pass SESSION_ID or run 'blue-userdb session select ID'.", fmt)
     source = _make_source(obj["data_dir"])
     try:
         record = asyncio.run(source.get_session(db, sid))
@@ -969,7 +969,7 @@ def session_show(obj: dict, session_id: str | None, fmt: str) -> None:
 
 
 # ------------------------------------------------------------------ #
-# udb data                                                            #
+# blue-userdb data                                                            #
 # ------------------------------------------------------------------ #
 
 @cli.group("data")
@@ -1181,7 +1181,7 @@ def data_query(
         _fail(f"{exc}", fmt)
     if not resolved_session:
         # Auto-select-after-auto-create: continue this session on the next query
-        # without requiring an explicit 'udb session select'.
+        # without requiring an explicit 'blue-userdb session select'.
         _selected_session_path(obj["data_dir"]).write_text(session_id)
     answer = results["result"] if isinstance(results, dict) else results
     expanded = results.get("expanded") if isinstance(results, dict) else None
@@ -1289,7 +1289,7 @@ def data_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_k:
 def data_import(obj: dict, input_file) -> None:
     """Import instance data from JSON (KG only).
 
-    Schema must already exist — import it first with `udb schema import`.
+    Schema must already exist — import it first with `blue-userdb schema import`.
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1316,10 +1316,10 @@ def data_import(obj: dict, input_file) -> None:
 def data_export(obj: dict, show_provenance: bool, output) -> None:
     """Export instance data as JSON.
 
-    Writes entities, facts and property values in the shape `udb data import` reads.
+    Writes entities, facts and property values in the shape `blue-userdb data import` reads.
 
-    Does not include schema — use `udb schema export` for that, and import it
-    first so `udb data import` has classes/relations/properties to resolve against.
+    Does not include schema — use `blue-userdb schema export` for that, and import it
+    first so `blue-userdb data import` has classes/relations/properties to resolve against.
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1392,7 +1392,7 @@ def data_extract(
 
 
 # ------------------------------------------------------------------ #
-# udb data source                                                     #
+# blue-userdb data source                                                     #
 # ------------------------------------------------------------------ #
 
 @data_group.group("source")
@@ -1572,7 +1572,7 @@ def source_remove(obj: dict, name: str, yes: bool) -> None:
 
 
 # ------------------------------------------------------------------ #
-# udb schema                                                          #
+# blue-userdb schema                                                          #
 # ------------------------------------------------------------------ #
 
 @cli.group("schema")
@@ -1703,7 +1703,7 @@ def schema_import(obj: dict, input_file) -> None:
 def schema_export(obj: dict, output) -> None:
     """Export the schema as JSON.
 
-    Written in the shape `udb schema import` reads back.
+    Written in the shape `blue-userdb schema import` reads back.
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1770,7 +1770,7 @@ def schema_search(obj: dict, query: str, types: tuple[str, ...], mode: str, top_
 
 
 # ------------------------------------------------------------------ #
-# udb metadata                                                        #
+# blue-userdb metadata                                                        #
 # ------------------------------------------------------------------ #
 
 def _parse_metadata_value(raw: str) -> Any:
@@ -1812,10 +1812,10 @@ def metadata_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) -
     Examples:
 
     \b
-      udb metadata list
-      udb metadata list identity
-      udb metadata list identity --recursive
-      udb metadata list --recursive
+      blue-userdb metadata list
+      blue-userdb metadata list identity
+      blue-userdb metadata list identity --recursive
+      blue-userdb metadata list --recursive
     """
     db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
@@ -1928,8 +1928,8 @@ def metadata_get(obj: dict, path: tuple[str, ...]) -> None:
     Examples:
 
     \b
-      udb metadata get identity name
-      udb metadata get privacy consent_level
+      blue-userdb metadata get identity name
+      blue-userdb metadata get privacy consent_level
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1957,9 +1957,9 @@ def metadata_set(obj: dict, args: tuple[str, ...]) -> None:
     Examples:
 
     \b
-      udb metadata set identity name "Alice"
-      udb metadata set preferences verbosity brief
-      udb metadata set availability preferred_channel email
+      blue-userdb metadata set identity name "Alice"
+      blue-userdb metadata set preferences verbosity brief
+      blue-userdb metadata set availability preferred_channel email
     """
     if len(args) < 2:
         err.print("[red]Error:[/red] Provide at least one key segment and a value.")
@@ -1988,7 +1988,7 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
     Examples:
 
     \b
-      udb metadata delete identity pronouns
+      blue-userdb metadata delete identity pronouns
     """
     key = ".".join(path)
     if not yes:
@@ -2004,7 +2004,7 @@ def metadata_delete(obj: dict, path: tuple[str, ...], yes: bool) -> None:
 
 
 # ------------------------------------------------------------------ #
-# udb contact                                                         #
+# blue-userdb contact                                                         #
 # ------------------------------------------------------------------ #
 
 @cli.group("contact")
@@ -2026,11 +2026,11 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
     Examples:
 
     \b
-      udb contact list
-      udb contact list email
-      udb contact list email work
-      udb contact list email --recursive
-      udb contact list --recursive
+      blue-userdb contact list
+      blue-userdb contact list email
+      blue-userdb contact list email work
+      blue-userdb contact list email --recursive
+      blue-userdb contact list --recursive
     """
     db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
@@ -2180,8 +2180,8 @@ def contact_get(obj: dict, path: tuple[str, ...]) -> None:
     Examples:
 
     \b
-      udb contact get email work address
-      udb contact get sms primary phone
+      blue-userdb contact get email work address
+      blue-userdb contact get sms primary phone
     """
     if len(path) < 2:
         err.print("[red]Error:[/red] Provide at least protocol and name (e.g. email work).")
@@ -2226,9 +2226,9 @@ def contact_set(obj: dict, args: tuple[str, ...]) -> None:
     Examples:
 
     \b
-      udb contact set email work address alice@example.com
-      udb contact set email work preference 0
-      udb contact set sms primary phone +15550123
+      blue-userdb contact set email work address alice@example.com
+      blue-userdb contact set email work preference 0
+      blue-userdb contact set sms primary phone +15550123
     """
     if len(args) < 4:
         err.print("[red]Error:[/red] Provide protocol, name, field, and value.")
@@ -2257,13 +2257,13 @@ def contact_set(obj: dict, args: tuple[str, ...]) -> None:
 def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
     """Add a contact method.
 
-    Set individual fields with `udb contact set` afterwards.
+    Set individual fields with `blue-userdb contact set` afterwards.
 
     Examples:
 
     \b
-      udb contact add email work
-      udb contact add sms primary --preference 1
+      blue-userdb contact add email work
+      blue-userdb contact add sms primary --preference 1
     """
     if protocol not in _contact_schema(obj):
         err.print(f"[red]Error:[/red] Unknown protocol {protocol!r}. "
@@ -2275,7 +2275,7 @@ def contact_add(obj: dict, protocol: str, name: str, preference: int) -> None:
         manager = source._get_manager(db)
         if manager.get_contact(protocol, name) is not None:
             err.print(f"[red]Error:[/red] Contact {protocol!r}/{name!r} already exists. "
-                      "Use `udb contact set` to update fields.")
+                      "Use `blue-userdb contact set` to update fields.")
             sys.exit(1)
         manager.set_contact_field(protocol, name, "preference", preference)
     except (UDbError, Exception) as exc:
@@ -2295,7 +2295,7 @@ def contact_remove(obj: dict, protocol: str, name: str, yes: bool) -> None:
     Examples:
 
     \b
-      udb contact remove email personal
+      blue-userdb contact remove email personal
     """
     if not yes:
         click.confirm(f"Remove contact {protocol!r}/{name!r}?", abort=True)

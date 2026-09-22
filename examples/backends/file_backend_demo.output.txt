@@ -1,4 +1,4 @@
-Working directory: /tmp/udb-file-backend-demo-4v_ynctk
+Working directory: /tmp/blue-userdb-file-backend-demo-4v_ynctk
 
 ------------------------------------------------------------
 1. Create user (file-backed registry, KB, metadata, contacts, sessions)
@@ -35,5 +35,5 @@ Query executed: What degree does Alice have?
 Query executed: What skills does Alice have?
 Answer (session 69624322-8ca1-4750-84da-e96b6a2dae89): Alice is a data scientist who works at IBM.
 
-Cleaned up /tmp/udb-file-backend-demo-4v_ynctk
+Cleaned up /tmp/blue-userdb-file-backend-demo-4v_ynctk
 Demo complete.
