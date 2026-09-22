@@ -318,7 +318,7 @@ await us.remove_contact_method("alice", "email", "work")
 | Key | Required | Default | Description |
 |---|---|---|---|
 | `url` | yes | — | POST target for outgoing questions |
-| `response_base_url` | yes | — | Base URL of `blue-userdb-api` (response_url sent in payload: `{response_base_url}/interactions/{id}/response`) |
+| `response_base_url` | yes | — | Base URL of `blue-userdb-api` (response_url sent in payload: `{response_base_url}/interactions/{interaction_id}/response`) |
 | `headers` | no | _(none)_ | Extra HTTP headers for the outgoing POST |
 | `timeout` | no | `300` | Seconds to wait for a response |
 
@@ -485,7 +485,7 @@ cd lib
 pytest tests/unit/
 ```
 
-145 tests, ~2 s.
+231 tests, ~50 s.
 
 ### Benchmarks
 

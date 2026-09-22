@@ -72,6 +72,10 @@ async def main():
         metadata_source_props=_redis_json_props(f"{_NAMESPACE}:alice-metadata"),
         contact_source_props=_redis_json_props(f"{_NAMESPACE}:alice-contacts"),
         session_source_props=_redis_json_props(f"{_NAMESPACE}:alice-sessions"),
+        # These demos are non-interactive: create_user onboards by default,
+        # which would prompt on stdin and make the captured output unreproducible.
+        onboard=False,
+        onboard_metadata=False,
     )
     seeded = outer.list_metadata("alice")
     print(f"Metadata categories present after seeding: {list(seeded.keys())}")

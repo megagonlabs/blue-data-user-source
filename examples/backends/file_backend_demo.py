@@ -54,6 +54,10 @@ async def main():
         metadata_source_props=_file_json_props(tmp / "sources" / "alice" / "metadata.json"),
         contact_source_props=_file_json_props(tmp / "sources" / "alice" / "contacts.json"),
         session_source_props=_file_json_props(tmp / "sources" / "alice" / "sessions.json"),
+        # These demos are non-interactive: create_user onboards by default,
+        # which would prompt on stdin and make the captured output unreproducible.
+        onboard=False,
+        onboard_metadata=False,
     )
     seeded = outer.list_metadata("alice")
     print(f"Metadata auto-seeded from schema: {list(seeded.keys())} categories")

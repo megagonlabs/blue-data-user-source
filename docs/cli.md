@@ -131,6 +131,7 @@ Manage user databases.
 | `blue-userdb database delete NAME [--yes]` | Delete a database and all its data |
 | `blue-userdb database select NAME` | Set the active database |
 | `blue-userdb database search KEYWORD [--format]` | Keyword search over database names |
+| `blue-userdb database onboard [--no-metadata-onboard]` | Ask the user onboarding questions to seed KB data and metadata |
 | `blue-userdb database reset [--yes]` | Clear KB data for the active database and reseed the schema |
 | `blue-userdb database config show [--format]` | Show the database configuration |
 `database create` options:

@@ -248,12 +248,12 @@ The external system posts Alice's reply back to `response_url`, unblocking the w
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/interactions/{id}/response` | Resolve a pending interaction via JSON (webhook / REST) |
-| `GET` | `/interactions/{id}/respond` | HTML form for responding (link in email body) |
-| `POST` | `/interactions/{id}/respond` | Submit the HTML form response |
+| `POST` | `/interactions/{interaction_id}/response` | Resolve a pending interaction via JSON (webhook / REST) |
+| `GET` | `/interactions/{interaction_id}/respond` | HTML form for responding (link in email body) |
+| `POST` | `/interactions/{interaction_id}/respond` | Submit the HTML form response |
 | `POST` | `/interactions/email/inbound` | Inbound email webhook — resolves a pending email interaction |
 
-**`POST /interactions/{id}/response`** (used by webhooks and direct API callers):
+**`POST /interactions/{interaction_id}/response`** (used by webhooks and direct API callers):
 
 ```json
 {"text": "Use the home address please."}
@@ -261,7 +261,7 @@ The external system posts Alice's reply back to `response_url`, unblocking the w
 
 Returns `404` if the interaction ID is unknown or has already timed out, `409` if already resolved.
 
-**`GET /interactions/{id}/respond`** — HTML form served to users who click the link in an email. No API key required; the interaction ID acts as a bearer token. Returns `404` if the interaction has expired.
+**`GET /interactions/{interaction_id}/respond`** — HTML form served to users who click the link in an email. No API key required; the interaction ID acts as a bearer token. Returns `404` if the interaction has expired.
 
 **`POST /interactions/email/inbound?provider=<name>`** — accepts inbound email webhooks and resolves the corresponding pending interaction. No API key required.
 
@@ -279,7 +279,7 @@ Configure your inbound email provider to route mail addressed to `interaction-*@
 
 Requires `pip install -e '../../lib[email]'` (`aiosmtplib`).
 
-When the agent needs to contact a user, it sends an SMTP email with a `Reply-To: interaction-{id}@{reply_domain}` header (so a direct reply routes back through the inbound webhook) and a clickable link to `{response_base_url}/interactions/{id}/respond` as a fallback.
+When the agent needs to contact a user, it sends an SMTP email with a `Reply-To: interaction-{id}@{reply_domain}` header (so a direct reply routes back through the inbound webhook) and a clickable link to `{response_base_url}/interactions/{interaction_id}/respond` as a fallback.
 
 | Key | Required | Default | Description |
 |---|---|---|---|

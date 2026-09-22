@@ -51,6 +51,10 @@ async def main() -> None:
         metadata_source_props=_MEM_JSON,
         contact_source_props=_MEM_JSON,
         session_source_props=_MEM_JSON,
+        # These demos are non-interactive: create_user onboards by default,
+        # which would prompt on stdin and make the captured output unreproducible.
+        onboard=False,
+        onboard_metadata=False,
     )
     us.set_metadata("bob", "identity.name", "Bob")
     print("Created user 'bob'")

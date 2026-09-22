@@ -124,7 +124,7 @@ class ContactMethod:
             url               — POST target for outgoing questions
             response_base_url — base URL of the user source REST API
                                 (response_url sent in payload:
-                                 {response_base_url}/interactions/{id}/response)
+                                 {response_base_url}/interactions/{interaction_id}/response)
 
         Optional detail keys:
             headers           — extra HTTP headers for the outgoing POST
