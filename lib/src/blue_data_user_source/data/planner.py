@@ -14,7 +14,14 @@ class SubqueryPlan:
 
 
 class UserDataPlanner:
-    """Decomposes a query into subqueries mapped to registered sources."""
+    """Placeholder for query planning over a user's sources; not used by the query path.
+
+    ``plan`` returns the query unchanged, once per registered source. Query
+    decomposition is done by ``UserQueryReasoner.expand_query``, and every
+    sub-question is answered from the same fixed stores (see
+    ``UserDataManager.execute_query``). Real source selection is future work
+    (#128).
+    """
 
     def __init__(self, registry: DataRegistry) -> None:
         self._registry = registry

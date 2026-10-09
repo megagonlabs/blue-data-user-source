@@ -339,6 +339,8 @@ A query is executed over the imported source by the Reasoning Layer via the DML.
 
 ### Query Planner
 
+> **Status in 1.0:** not implemented as designed. `UserDataPlanner.plan` returns the query unchanged, once per registered source, and the query path does not call it: `UserQueryReasoner.expand_query` decomposes the query into LLM sub-questions, and `UserDataManager.execute_query` answers each from the KB, `session_content` and `external_documents`. See #128.
+
 Interprets an incoming query, discovers relevant sources, and produces an execution plan.
 
 **Responsibilities**

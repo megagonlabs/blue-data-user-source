@@ -196,7 +196,9 @@ UserDataPlanner(registry: DataRegistry)
 
 | Method | Returns | Description |
 |---|---|---|
-| `await plan(query)` | `list[SubqueryPlan]` | Decompose a query into subquery plans over the sources registered in the registry |
+| `await plan(query)` | `list[SubqueryPlan]` | One `SubqueryPlan(query, source)` per source registered in the registry — the query is not decomposed |
+
+Not used by the query path in 1.0: `plan` returns the query unchanged, once per registered source, and `UserSource` never calls it. Query decomposition is done by `UserQueryReasoner.expand_query` (LLM sub-questions), and every sub-question is answered from the same fixed set of stores. Real source selection is future work (#128).
 
 ---
 

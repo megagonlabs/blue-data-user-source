@@ -219,7 +219,7 @@ Executes a query against user data.
 
 **Algorithm**
 
-1. Call `UserDataPlanner.plan(query, database)` to decompose the query into subqueries and identify relevant sources for each
+1. Call `UserDataPlanner.plan(query, database)` to decompose the query into subqueries and identify relevant sources for each (not so in 1.0 — see the status note under [UserDataPlanner](#userdataplannerdataplanner))
 2. For each `(subquery, source)` pair in the plan: call `UserDataRegistry.execute(subquery, source)` to retrieve results
 3. Aggregate and normalize results into `(q, d, md)` tuples, where `md` includes provenance (source, timestamp, confidence)
 4. Return result set
@@ -238,6 +238,8 @@ Creates a new virtual user database: initializes `JSONSource` and `VectorSource`
 ---
 
 ## UserDataPlanner(DataPlanner)
+
+> **Status in 1.0:** not implemented as designed. `UserDataPlanner.plan` returns the query unchanged, once per registered source, and the query path does not call it: `UserQueryReasoner.expand_query` decomposes the query into LLM sub-questions, and `UserDataManager.execute_query` answers each from the KB, `session_content` and `external_documents`. See #128.
 
 Produces an execution plan for a query by decomposing it into subqueries and mapping each to relevant sources in the registry.
 

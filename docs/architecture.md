@@ -54,7 +54,7 @@
 | `UserQueryReasoner` | `reasoning/reasoner.py` | Query rewriting, expansion, metric assessment, and the interaction loop |
 | `UserDataMetric` | `reasoning/metric.py` | `CompletenessMetric`, `FreshnessMetric`, `PrivacyMetric` — one quality dimension each |
 | `UserDataManager` | `data/manager.py` | Owns the per-user `DataRegistry`; builds/connects/resets/destroys its sources; executes per-sub-question retrieval |
-| `UserDataPlanner` | `data/planner.py` | Decomposes a query into subquery plans over registered sources |
+| `UserDataPlanner` | `data/planner.py` | Placeholder, not on the query path in 1.0 — see below |
 | `ContactManager` / `ContactMethod` | `interaction/contact.py` | Contact-method CRUD and channel selection; per-protocol interaction setup |
 | `SessionManager` | `interaction/session.py` | Session/query/interaction record lifecycle |
 | `InteractionManager` | `interaction/manager.py` | Drives one interaction's start/send/stop lifecycle for a chosen channel |
@@ -123,7 +123,7 @@ UserDataManager.execute_query(query, session_id)
     "source": "session_content" | "external_documents"
 ```
 
-`UserDataPlanner.plan(query)` decomposes a query into `SubqueryPlan`s over the sources registered for a user; `UserDataManager` is the concrete executor for one such subquery.
+`UserDataManager` is the executor for one sub-question: it always searches the KB, `session_content` and `external_documents`, as above. There is no per-source planning. `UserDataPlanner` exists but is a placeholder: not used by the query path in 1.0: `plan` returns the query unchanged, once per registered source, and `UserSource` never calls it. Query decomposition is done by `UserQueryReasoner.expand_query` (LLM sub-questions), and every sub-question is answered from the same fixed set of stores. Real source selection is future work (#128).
 
 ---
 
