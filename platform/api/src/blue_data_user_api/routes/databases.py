@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import re
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from blue_data_user_api.auth import require_api_key
 from blue_data_user_api.source import _default_user_props
-
-# The name becomes a directory and file name under the data directory, so it
-# must not be able to climb out of it ("..") or nest (".", "/").
-_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+from blue_data_user_source import QueryError, validate_user_name
 
 router = APIRouter(prefix="/databases", tags=["databases"], dependencies=[Depends(require_api_key)])
 
@@ -34,11 +29,11 @@ async def list_databases(request: Request) -> list[str]:
 
 @router.post("/{name}", status_code=status.HTTP_201_CREATED, summary="Create user")
 async def create_database(name: str, request: Request, body: CreateDatabaseRequest | None = None) -> dict:
-    if not _NAME_RE.fullmatch(name):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Database name must be 1-64 letters, digits, '_' or '-', starting with a letter or digit",
-        )
+    # Checked before the defaults are built from it: the name becomes paths (#134).
+    try:
+        validate_user_name(name)
+    except QueryError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     props = _default_user_props(name, request.app.state.data_dir)
     await request.app.state.source.create_user(
         name,

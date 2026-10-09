@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,21 @@ from blue_data_user_source.interaction.contact import ContactManager, ContactMet
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import QueryError, QueryResult, UserNotFoundError
+
+# A user's name becomes file and directory names under the data directory, so it
+# must be a plain path segment. Same rule as blue-data-kb-source's database names.
+_USER_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}")
+
+
+def validate_user_name(name: Any) -> str:
+    """Return *name* if it is a valid user (database) name, else raise ``QueryError``."""
+    if not isinstance(name, str) or not _USER_NAME.fullmatch(name):
+        raise QueryError(
+            f"invalid database name {name!r}: use 1-64 letters, digits, '_' or '-', "
+            "starting with a letter, digit or '_'"
+        )
+    return name
+
 
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
@@ -583,7 +599,10 @@ class UserSource(DataSource):
         their data and metadata. ``onboard_metadata`` (default True) controls
         whether that onboarding also asks structured metadata questions —
         set to False to only seed the KB.
+
+        Raises ``QueryError`` for an invalid name before anything is written.
         """
+        validate_user_name(name)
         manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
         await manager.build(
             schema_path=self._registry.get_source_property(self.name, "schema"),
