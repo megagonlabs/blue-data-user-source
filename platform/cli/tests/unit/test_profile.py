@@ -289,3 +289,54 @@ def test_the_metadata_schema_path_comes_from_the_profile(runner, data_dir, tmp_p
     assert out["values"]["BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH"] == {
         "value": str(schema), "source": "profile:default",
     }
+
+
+# ------------------------------------------------------------------ #
+# which database commands act on (#121)                               #
+# ------------------------------------------------------------------ #
+
+def _db_used(runner, data_dir: Path, args: list[str] = ()) -> str:
+    """The database `metadata get` reads from, with the library stubbed out."""
+    with patch("blue_data_user_cli.commands._make_source") as make_source:
+        make_source.return_value.get_metadata.return_value = "x"
+        _run(runner, data_dir, [*args, "metadata", "get", "identity", "name"])
+    return make_source.return_value.get_metadata.call_args.args[0]
+
+
+def _marked(runner, data_dir: Path) -> list[str]:
+    """The databases `database list` marks as selected."""
+    with patch("blue_data_user_cli.commands._make_source") as make_source:
+        make_source.return_value.list_users.return_value = ["alice", "bob"]
+        make_source.return_value.get_user.return_value = {}
+        rows = _json(runner, data_dir, ["database", "list", "--format", "json"])
+    return [r["name"] for r in rows if r["selected"]]
+
+
+def test_the_selection_outranks_the_profile_s_database(runner, data_dir):
+    """`database select` (and `database create`) must win over a profile value,
+    or every command silently acts on the profile's database while `list` marks
+    another."""
+    _run(runner, data_dir, ["profile", "config", "BLUE_DATA_USER_SOURCE_DATABASE", "alice"])
+    (data_dir / ".selected.database").write_text("bob")
+    assert _db_used(runner, data_dir) == "bob"
+    assert _marked(runner, data_dir) == ["bob"]
+
+
+def test_the_profile_s_database_applies_when_nothing_is_selected(runner, data_dir):
+    _run(runner, data_dir, ["profile", "config", "BLUE_DATA_USER_SOURCE_DATABASE", "alice"])
+    assert _db_used(runner, data_dir) == "alice"
+    assert _marked(runner, data_dir) == ["alice"]
+
+
+def test_an_exported_database_outranks_the_selection(runner, data_dir, monkeypatch):
+    (data_dir / ".selected.database").write_text("bob")
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_DATABASE", "alice")
+    assert _db_used(runner, data_dir) == "alice"
+    assert _marked(runner, data_dir) == ["alice"]
+
+
+def test_the_database_option_outranks_everything(runner, data_dir, monkeypatch):
+    _run(runner, data_dir, ["profile", "config", "BLUE_DATA_USER_SOURCE_DATABASE", "alice"])
+    (data_dir / ".selected.database").write_text("bob")
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_DATABASE", "carol")
+    assert _db_used(runner, data_dir, ["--database", "dave"]) == "dave"

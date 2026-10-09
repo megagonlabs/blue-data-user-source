@@ -328,15 +328,28 @@ def _fail(message: str, fmt: str | None = None) -> NoReturn:
     sys.exit(1)
 
 
-def _get_db(obj: dict, fmt: str | None = None) -> str:
-    db = obj.get("database")
-    if db:
-        return db
+def _active_db(obj: dict) -> str | None:
+    """The database commands act on: `--database` or an exported
+    BLUE_DATA_USER_SOURCE_DATABASE, then the `.selected.database` file (written by
+    `database select` and `database create`), then the profile's value.
+
+    The profile comes after the selection so that selecting a database works
+    even when the profile names one (#121).
+    """
+    if obj.get("database"):
+        return obj["database"]
     sel_path = _selected_db_path(obj["data_dir"])
     if sel_path.exists():
         db = sel_path.read_text().strip()
         if db:
             return db
+    return obj.get("profile_database")
+
+
+def _get_db(obj: dict, fmt: str | None = None) -> str:
+    db = _active_db(obj)
+    if db:
+        return db
     _fail("No database selected. Use --database or run 'blue-userdb database select NAME'.", fmt)
 
 
@@ -455,7 +468,12 @@ def cli(
     ctx.obj["home"] = home
     ctx.obj["profile"] = resolver.profile
     ctx.obj["config"] = resolver
-    ctx.obj["database"] = database or resolver.get("BLUE_DATA_USER_SOURCE_DATABASE")
+    # An exported variable ranks with --database; a profile value ranks below the
+    # `database select` selection (see _active_db), so it goes in its own slot.
+    db_exported = resolver.source_of("BLUE_DATA_USER_SOURCE_DATABASE") == "environment"
+    db_resolved = resolver.get("BLUE_DATA_USER_SOURCE_DATABASE")
+    ctx.obj["database"] = database or (db_resolved if db_exported else None)
+    ctx.obj["profile_database"] = None if db_exported else db_resolved
     ctx.obj["session"] = session or resolver.get("BLUE_DATA_USER_SOURCE_SESSION")
     ctx.obj["data_dir"] = Path(
         data_dir or resolver.get("BLUE_DATA_USER_SOURCE_DATA_DIR") or _DEFAULT_DATA_DIR
@@ -519,8 +537,7 @@ def database_list(obj: dict, fmt: str) -> None:
     """List registered user databases."""
     source = _make_source(obj["data_dir"])
     names = source.list_users()
-    sel_path = _selected_db_path(obj["data_dir"])
-    selected = sel_path.read_text().strip() if sel_path.exists() else None
+    selected = _active_db(obj)
     if fmt == "json":
         rows = []
         for n in names:
@@ -746,8 +763,7 @@ def database_search(obj: dict, keyword: str, fmt: str) -> None:
     if not matches:
         console.print("[dim](no matches)[/dim]")
         return
-    sel_path = _selected_db_path(obj["data_dir"])
-    selected = sel_path.read_text().strip() if sel_path.exists() else None
+    selected = _active_db(obj)
     t = Table(show_header=True, header_style="bold")
     t.add_column("Name", style="bold")
     t.add_column("Registry", style="dim")

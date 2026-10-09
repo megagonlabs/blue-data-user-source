@@ -68,7 +68,7 @@ blue-userdb [--profile NAME] [--database NAME] [--session ID] [--data-dir DIR]
 | Option | Profile parameter | Default | Description |
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
-| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
+| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | the selection in `~/.blue-userdb/.selected.database`, then the profile | Active database (user) name |
 | `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.blue-userdb/.selected.session` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
@@ -98,7 +98,7 @@ $ blue-userdb profile config                  # configures staging, now that it 
 
 `blue-userdb profile config` has three forms — no arguments walks every required parameter, `PARAM` prompts for one, `PARAM VALUE` sets one directly. Add `--profile NAME` to configure a profile other than the selected one.
 
-**Precedence:** command option > environment variable > profile > default. `blue-userdb profile inspect` reports the winning tier for every parameter.
+**Precedence:** command option > environment variable > profile > default. The database is the one exception: the selection written by `database select` / `database create` sits between the environment variable and the profile — **`--database` > environment variable > `.selected.database` > profile** — so selecting a database works even when the profile names one. `blue-userdb profile inspect` reports the winning tier for every parameter.
 
 **Secrets** are never accepted as a command-line value — that would put them in your shell history — so `blue-userdb profile config OPENAI_API_KEY` always prompts. Enter the key to store it encoded, or `$OPENAI_API_KEY` to store a reference read from the environment at use. `~/.blue-userdb/.profiles` is written `0600` and `inspect` masks stored secrets.
 

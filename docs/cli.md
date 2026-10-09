@@ -56,14 +56,14 @@ blue-userdb [--database NAME] [--session ID] [--data-dir DIR] [--schema-path PAT
 | Option | Env var | Default | Description |
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
-| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | — | Active database (user) name |
+| `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | the selection in `~/.blue-userdb/.selected.database`, then the profile | Active database (user) name |
 | `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.blue-userdb/.selected.session` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to a custom metadata schema |
 | `--contact-schema-path PATH` | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | packaged `contact_schema.json` | Path to a custom contact schema |
 
-Every option falls back to the selected profile (`blue-userdb profile config`); an exported environment variable of the same name still overrides it. Precedence: **command option > environment variable > profile > default**. The full parameter table is in [platform/cli/README.md](../platform/cli/README.md#profiles-and-configuration).
+Every option falls back to the selected profile (`blue-userdb profile config`); an exported environment variable of the same name still overrides it. Precedence: **command option > environment variable > profile > default**. The database is the one exception: the selection written by `database select` / `database create` sits between the environment variable and the profile — **`--database` > environment variable > `.selected.database` > profile** — so selecting a database works even when the profile names one. The full parameter table is in [platform/cli/README.md](../platform/cli/README.md#profiles-and-configuration).
 
 `--database` can also be set persistently with `blue-userdb database select NAME`, which writes to `~/.blue-userdb/.selected.database`.
 
