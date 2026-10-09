@@ -305,24 +305,21 @@ curl -X POST http://localhost:8000/alice/contacts \
 
 ## Error responses
 
-All errors use a consistent envelope. FastAPI exception handlers catch `UDbError` subtypes and map them to these responses — no error-handling logic lives in route handlers.
+Errors use FastAPI's standard body, a `detail` string (or, for request validation, FastAPI's list of field errors):
 
 ```json
-{
-  "error": {
-    "code": "query_error",
-    "message": "No database specified and no default configured."
-  }
-}
+{"detail": "User not found: 'nobody'"}
 ```
 
-| HTTP status | `code` | Condition |
-|---|---|---|
-| 400 | `invalid_request` | Malformed request body |
-| 404 | `database_not_found` | Specified database does not exist |
-| 422 | `query_error` | Query could not be processed |
-| 422 | `import_error` | Import failed |
-| 500 | `internal_error` | Unexpected failure |
+| HTTP status | Condition |
+|---|---|
+| 400 | Unknown inbound-email provider, or an interaction response that is missing its answer |
+| 401 | Missing or wrong API key, when `BLUE_DATA_USER_SOURCE_API_KEY` is set |
+| 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session, source or pending interaction does not |
+| 409 | The interaction was already answered |
+| 422 | Request validation: a malformed body, an unknown body key, an invalid database name, or an inbound email the adapter cannot parse |
+| 502 | The language model could not be reached or gave an unusable reply (`LLMError`) |
+| 500 | Anything else — a bug; please report it |
 
 ---
 

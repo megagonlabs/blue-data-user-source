@@ -18,6 +18,10 @@ class QueryError(UDbError):
     """Raised when a query cannot be processed or no database is available."""
 
 
+class UserNotFoundError(QueryError):
+    """Raised when an operation names a user (database) that is not registered."""
+
+
 class ImportError(UDbError):  # noqa: A001
     """Raised when a source import fails."""
 

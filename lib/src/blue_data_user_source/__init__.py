@@ -11,6 +11,7 @@ from blue_data_user_source.types import (
     QueryError,
     QueryResult,
     UDbError,
+    UserNotFoundError,
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "QueryResult",
     "RedisUserSource",
     "UDbError",
+    "UserNotFoundError",
     "UserSource",
     "sanitize_registry_name",
 ]

@@ -18,7 +18,7 @@ from blue_data_user_source.data.manager import (
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
-from blue_data_user_source.types import QueryError, QueryResult
+from blue_data_user_source.types import QueryError, QueryResult, UserNotFoundError
 
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
@@ -887,7 +887,7 @@ class UserSource(DataSource):
         if name not in self._managers:
             db_props = self.get_user(name)
             if db_props is None:
-                raise QueryError(f"User not found: {name!r}")
+                raise UserNotFoundError(f"User not found: {name!r}")
             registry_props = db_props.get("registry") or {
                 "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
             }
