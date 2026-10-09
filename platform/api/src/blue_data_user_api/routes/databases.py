@@ -1,23 +1,30 @@
 from __future__ import annotations
 
-from typing import Any
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from blue_data_user_api.auth import require_api_key
 from blue_data_user_api.source import _default_user_props
+
+# The name becomes a directory and file name under the data directory, so it
+# must not be able to climb out of it ("..") or nest (".", "/").
+_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
 router = APIRouter(prefix="/databases", tags=["databases"], dependencies=[Depends(require_api_key)])
 
 
 class CreateDatabaseRequest(BaseModel):
-    registry: dict[str, Any] | None = None
-    kb_source: dict[str, Any] | None = None
-    metadata_source: dict[str, Any] | None = None
-    contact_source: dict[str, Any] | None = None
-    session_source: dict[str, Any] | None = None
-    doc_source: dict[str, Any] | None = None
+    """No fields: every store goes under ``BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/``.
+
+    Callers used to be able to pass a ``_class`` and a ``connection`` for each
+    store, which let any REST caller make the server import a class of their
+    choosing and later delete files anywhere it could write (#134). Unknown
+    keys are rejected so such a request fails loudly instead of being ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 @router.get("", summary="List users")
@@ -26,19 +33,14 @@ async def list_databases(request: Request) -> list[str]:
 
 
 @router.post("/{name}", status_code=status.HTTP_201_CREATED, summary="Create user")
-async def create_database(name: str, body: CreateDatabaseRequest, request: Request) -> dict:
-    source = request.app.state.source
-    data_dir = request.app.state.data_dir
-    defaults = _default_user_props(name, data_dir)
-    props: dict[str, Any] = {
-        "registry": body.registry or defaults["registry"],
-        "kb_source": body.kb_source or defaults["kb_source"],
-        "metadata_source": body.metadata_source or defaults["metadata_source"],
-        "contact_source": body.contact_source or defaults["contact_source"],
-        "session_source": body.session_source or defaults["session_source"],
-        "doc_source": body.doc_source or defaults["doc_source"],
-    }
-    await source.create_user(
+async def create_database(name: str, request: Request, body: CreateDatabaseRequest | None = None) -> dict:
+    if not _NAME_RE.fullmatch(name):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Database name must be 1-64 letters, digits, '_' or '-', starting with a letter or digit",
+        )
+    props = _default_user_props(name, request.app.state.data_dir)
+    await request.app.state.source.create_user(
         name,
         registry_props=props["registry"],
         kb_source_props=props["kb_source"],

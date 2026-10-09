@@ -103,20 +103,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
 | `POST` | `/databases/{name}/reset` | Clear a user's KB data, metadata, contacts and sessions, and reseed the schemas; the user stays registered |
 
-`POST /databases/{name}` accepts an optional JSON body to override the default file paths:
-
-```json
-{
-  "registry":        {"_class": "...", "connection": {...}},
-  "kb_source":       {"_class": "...", "connection": {...}},
-  "metadata_source": {"_class": "...", "connection": {...}},
-  "contact_source":  {"_class": "...", "connection": {...}},
-  "session_source":  {"_class": "...", "connection": {...}},
-  "doc_source":      {"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "..."}}
-}
-```
-
-Omit any key to use the file-backend default derived from `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`. `doc_source` configures the vector backend used for per-session interaction transcripts (see [Sessions](#sessions) below).
+`POST /databases/{name}` takes no body (an empty `{}` is accepted): every store is a file under `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`, and any other key is rejected with `422`. `name` must be 1–64 letters, digits, `_` or `-`, starting with a letter or digit. Other backends (Redis, Neo4j) are configured through the library or the CLI, not over REST.
 
 ### Query
 

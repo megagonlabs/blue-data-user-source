@@ -327,20 +327,7 @@ Remove a source from the DataRegistry. KG data is preserved.
 
 ### `POST /databases/{name}`
 
-Create a new database. All fields optional — omitted ones fall back to file-backend defaults derived from the server's data directory.
-
-**Request** (`application/json`)
-
-```json
-{
-  "registry": {"backend": "file", "path": "..."},
-  "kb_source": {"backend": "file", "directory": "..."},
-  "metadata_source": {"backend": "file", "path": "..."},
-  "contact_source": {"backend": "file", "path": "..."},
-  "session_source": {"backend": "file", "path": "..."},
-  "doc_source": {"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "..."}}
-}
-```
+Create a new database. No request body (an empty `{}` is accepted); every store is a file-backend default derived from the server's data directory, and any other key is rejected with `422`. Accepting store configs over REST let a caller choose the class the server imports and the paths it later deletes (#134).
 
 **Response `201 Created`**
 
