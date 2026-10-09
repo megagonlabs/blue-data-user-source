@@ -309,7 +309,7 @@ Manage data sources associated with the active database.
 
 | Command | Description |
 |---|---|
-| `blue-userdb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
+| `blue-userdb data source list` | List the sources added to the database, with the id `source remove` accepts |
 | `blue-userdb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
 | `blue-userdb data source remove NAME` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept |
 **Type 1 — register + ingest for later search**
@@ -334,7 +334,7 @@ blue-userdb data source add resume.txt \
 blue-userdb data source list
 ```
 
-Sources that were added to the knowledge graph but subsequently removed from the registry are shown with a `(*)` marker.
+Each source is listed with its id; `data source remove` takes the name or the id, and needs the id when two sources share a name.
 
 ---
 

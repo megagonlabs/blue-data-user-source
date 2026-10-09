@@ -44,7 +44,6 @@ def _cli_home() -> str:
     ).expanduser())
 _SELECTED_DB_FILE = ".selected.database"
 _SELECTED_SESSION_FILE = ".selected.session"
-_INTERNAL_SOURCES = {"kb", "metadata", "contacts", "sessions", "session_content", "external_documents"}
 
 console = Console()
 err = Console(stderr=True)
@@ -1465,55 +1464,26 @@ def source_group() -> None:
 )
 @click.pass_obj
 def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
-    """List data sources.
-
-    Shows user-added sources only (excludes internal kb/metadata/contacts sources).
-    Sources present in the KG but removed from the registry are marked (*).
-    """
+    """List the sources added to the database, with the id `source remove` accepts."""
     db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
-        manager = source._get_manager(db)
-        reg_records = [
-            r for r in (manager._registry.list_records(record_type="source", scope="/") or [])
-            if r.get("name") not in _INTERNAL_SOURCES
-        ]
-        kg_sources = asyncio.run(manager.list_sources())
+        sources = asyncio.run(source.list_sources(db))
     except (UDbError, Exception) as exc:
         _fail(f"{exc}", fmt)
 
-    # Build lookup maps from KG source nodes
-    ks_by_id:   dict[str, dict] = {ks.get("id", ""): ks for ks in kg_sources}
-    ks_by_name: dict[str, dict] = {ks.get("name", ks.get("id", "")): ks for ks in kg_sources}
-    reg_names:  set[str]        = {r.get("name") for r in reg_records}
-
-    rows: list[dict] = []
-    for r in reg_records:
-        props    = r.get("properties") or {}
-        sid      = props.get("source_id", "")
-        ks       = ks_by_id.get(sid) or ks_by_name.get(r.get("name", "")) or {}
-        rows.append({
-            "name":        r.get("name", ""),
-            "location":    props.get("connection", {}).get("path", ""),
-            "description": r.get("description", ""),
-            "original":    ks.get("original", ""),
-            "created":     ks.get("created", ""),
-            "modified":    ks.get("modified", ""),
-            "in_registry": True,
-        })
-    for ks in kg_sources:
-        name = ks.get("name", ks.get("id", ""))
-        if name not in reg_names:
-            rows.append({
-                "name":        name,
-                "location":    ks.get("source", ks.get("location", "")),
-                "description": ks.get("description", ""),
-                "original":    ks.get("original", ""),
-                "created":     ks.get("created", ""),
-                "modified":    ks.get("modified", ""),
-                "in_registry": False,
-            })
-
+    rows = [
+        {
+            "id":          s.get("id", ""),
+            "name":        s.get("name") or s.get("id", ""),
+            "location":    s.get("source", ""),
+            "description": s.get("description") or "",
+            "original":    s.get("original") or "",
+            "created":     s.get("created", ""),
+            "modified":    s.get("modified", ""),
+        }
+        for s in sources
+    ]
     if fmt == "json":
         console.print_json(json.dumps(rows))
         return
@@ -1522,19 +1492,17 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
         return
     t = Table(show_header=True, header_style="bold")
     t.add_column("Name",        style="bold")
+    t.add_column("ID",          style="dim")
     t.add_column("Location",    style="dim")
     t.add_column("Description", style="dim")
     t.add_column("Original",    style="dim")
     if show_detailed:
         t.add_column("Created",  style="dim")
         t.add_column("Modified", style="dim")
-    t.add_column("", max_width=5)
     for row in rows:
-        marker = "[dim](*)[/dim]" if not row["in_registry"] else ""
-        cells  = [row["name"], row["location"], row["description"], row["original"]]
+        cells = [row["name"], row["id"], row["location"], row["description"], row["original"]]
         if show_detailed:
             cells += [_humanize_date(row["created"]), _humanize_date(row["modified"])]
-        cells.append(marker)
         t.add_row(*cells)
     console.print(t)
 

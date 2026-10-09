@@ -712,6 +712,47 @@ def test_source_add_missing_file_exits_with_code_2(runner: CliRunner, data_dir: 
     assert result.exit_code == 2
 
 
+_SOURCES = [
+    {"id": "s1", "name": "resume", "source": "/home/a/resume.txt", "description": "CV",
+     "original": None, "created": "2026-10-01T00:00:00+00:00", "modified": "2026-10-01T00:00:00+00:00"},
+]
+
+
+def test_source_list_shows_each_source_with_its_id(runner: CliRunner, data_dir: Path) -> None:
+    """#149: no "(*)" marker — since #95 no source is in the registry, so it marked every one."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=_SOURCES)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "list"])
+    assert result.exit_code == 0, result.output
+    assert "resume" in result.output and "s1" in result.output
+    assert "(*)" not in result.output
+    mock.list_sources.assert_awaited_once_with("alice")
+
+
+def test_source_list_json_has_no_registry_flag(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=_SOURCES)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "list", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    [row] = json.loads(result.output)
+    assert row["id"] == "s1" and row["name"] == "resume" and row["location"] == "/home/a/resume.txt"
+    assert "in_registry" not in row
+
+
+def test_source_list_empty(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=[])
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "list"])
+    assert result.exit_code == 0
+    assert "(no sources)" in result.output
+
+
 def test_source_remove_removes_and_reports_the_chunks(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()

@@ -558,7 +558,7 @@ All `data` commands require an active database.
 | `blue-userdb data import FILE` | Import instance data from `blue-userdb data export` output (KG only) |
 | `blue-userdb data export` | Export instance data (entities, facts, property values) as JSON |
 | `blue-userdb data extract TEXT` | Extract entities/facts from free text via LLM |
-| `blue-userdb data source list` | List sources; KG-only entries marked `(*)` |
+| `blue-userdb data source list` | List sources (KG `SOURCE` nodes) with their ids |
 | `blue-userdb data source add FILE` | Register a file source and optionally extract |
 | `blue-userdb data source remove NAME` | Remove a source from the registry (KG data preserved) |
 
