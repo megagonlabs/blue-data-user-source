@@ -15,12 +15,21 @@ blue-data-user-source/
 
 `platform/cli`, `platform/mcp`, and `platform/api` are independent of each other — each depends only on `lib`, not on one another. Install whichever subset you need.
 
-**Editable install (development), in dependency order:**
+**Install scripts.** Each installs, editable and in dependency order, what it needs from the sibling repos (cloned beside this one) and this repo:
 
 ```bash
-# Sibling dependencies (local checkouts, not yet published)
+bash scripts/install.sh                    # everything: siblings, lib, CLI, MCP server, REST API
+bash lib/scripts/install.sh                # siblings + the library (with its email/webhook/dev extras)
+bash platform/cli/scripts/install.sh       # the above + the blue-userdb CLI
+```
+
+**Editable install by hand, in dependency order:**
+
+```bash
+# Sibling dependencies (local checkouts, not yet published). The KB needs its
+# openai extra for every query and extraction, and search for BM25 KB search.
 pip install -e ../blue-data/lib
-pip install -e ../blue-data-kb-source/lib
+pip install -e "../blue-data-kb-source/lib[openai,search]"
 pip install -e ../blue-data-doc-source/lib
 
 # This library
@@ -39,7 +48,7 @@ cd platform/mcp && bash scripts/install.sh
 cd platform/api && bash scripts/install.sh
 ```
 
-`platform/cli` has no `scripts/` directory — install it directly with `pip install -e .`.
+`platform/cli/scripts/install.sh` also installs the siblings and the library first (see above).
 
 **Build distributable packages:**
 

@@ -3,11 +3,8 @@
 The fastest way to see it in action is the `blue-userdb` CLI — no Python code required. See [installation.md](installation.md) if you haven't installed anything yet.
 
 ```bash
-pip install -e ../blue-data/lib
-pip install -e ../blue-data-kb-source/lib
-pip install -e ../blue-data-doc-source/lib
-cd lib && pip install -e . && cd ..
-cd platform/cli && pip install -e . && cd ../..
+# The sibling repos (cloned beside this one), the library and the CLI
+bash platform/cli/scripts/install.sh       # or scripts/install.sh for the MCP server and REST API too
 
 export OPENAI_API_KEY=sk-...
 ```

@@ -57,3 +57,8 @@ Thumbs.db
 # User database files
 *.udb
 ~/.blue-userdb/
+
+# Local, per-machine tooling (not part of the repo)
+.python-version
+.lavish/
+treehouse.toml
