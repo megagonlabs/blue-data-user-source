@@ -485,7 +485,7 @@ cd lib
 pytest tests/unit/
 ```
 
-231 tests, ~50 s.
+299 tests, ~5 s. `tests/unit/conftest.py` fails any test that opens a connection or resolves a host outside loopback, so a test that would reach OpenAI fails at once rather than silently spending tokens.
 
 ### Benchmarks
 

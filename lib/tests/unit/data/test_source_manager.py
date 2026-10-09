@@ -315,13 +315,25 @@ async def test_add_source_ingests_even_without_queries(manager: UserDataManager,
 
 
 async def test_add_source_with_queries_still_imports_into_kb(manager: UserDataManager, tmp_path: Path) -> None:
+    """With queries, the document's text goes to the KB's extraction, tied to the new SOURCE.
+
+    Asserted on the hand-off rather than on extracted facts: the extraction
+    itself is the KB's LLM pipeline, which a unit test must not call (#148).
+    End-to-end extraction quality is measured by tests/benchmarks/extraction.
+    """
     f = tmp_path / "resume.txt"
     f.write_text("Alice knows Python.\n")
-    await manager.add_source(f, queries=["what skills does alice have"])
-
     kb = manager._ensure_kb_source()
-    data = await kb.fetch_database_data(manager._database, compact=True)
-    assert data
+    with patch.object(kb, "import_text", AsyncMock()) as mock_import:
+        await manager.add_source(f, queries=["what skills does alice have"])
+
+    mock_import.assert_awaited_once()
+    database, text = mock_import.await_args.args
+    assert database == manager._database
+    assert "Alice knows Python." in text
+    assert mock_import.await_args.kwargs["queries"] == ["what skills does alice have"]
+    [source] = await manager.list_sources()
+    assert mock_import.await_args.kwargs["source_id"] == source["id"]
 
 
 async def test_add_source_extraction_text_keeps_section_headings(
