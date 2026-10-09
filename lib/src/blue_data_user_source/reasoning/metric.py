@@ -113,7 +113,14 @@ class FreshnessMetric(UserDataMetric):
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
                 age_days = (now - ts).days
-                node_age_lines.append(f"- {node_id}: {age_days} day(s) old")
+                # Source and content let the model tell a user's fresh
+                # confirmation from unrelated new data (#125).
+                line = f"- {node_id}: {age_days} day(s) old"
+                if m.get("source"):
+                    line += f" (source: {m['source']})"
+                if m.get("extraction"):
+                    line += f" — {str(m['extraction'])[:200]}"
+                node_age_lines.append(line)
             except ValueError:
                 pass
 
@@ -128,6 +135,8 @@ class FreshnessMetric(UserDataMetric):
             f"Data node ages:\n{nodes_section}\n"
             "On a scale of 0.0 to 1.0, how fresh is this data for answering the query? "
             "Consider that data older than one year is typically stale. "
+            "An answer the user has just given that confirms or corrects the information "
+            "makes it current, however old the other data is. "
             'Reply with a JSON object: {"score": <float>, "reasoning": <string>}'
         )
         parsed = await _llm_complete(prompt, properties={"response_format": "json_object"})

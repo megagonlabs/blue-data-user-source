@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -318,6 +319,20 @@ class UserQueryReasoner:
         context = f"Question: {query}\nUser Response: {response}"
         await self._manager.store_data(context, queries=[query])
 
+        # The reply is new evidence, so it gets provenance of its own: without
+        # it, reassessment saw only the old entries, and a clarification could
+        # fix completeness but never freshness (#125). A blank reply adds none.
+        if response.strip():
+            now = datetime.now(timezone.utc).isoformat()
+            metadata = {
+                **metadata,
+                f"user-reply:{interaction_id}": {
+                    "source": f"user via {channel.protocol}",
+                    "extraction": f"The user answered {user_question!r}: {response}",
+                    "created": now,
+                    "modified": now,
+                },
+            }
         return list(data) + [response], metadata
 
     async def resolve_via_interaction(
