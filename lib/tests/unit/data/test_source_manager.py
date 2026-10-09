@@ -505,3 +505,24 @@ async def test_reset_reseeds_default_user_entity(manager: UserDataManager) -> No
     entities = [n for n in data["nodes"] if n["label"] == "ENTITY"]
     assert len(entities) == 1
     assert entities[0]["properties"]["name"] == manager._database
+
+
+async def test_build_passes_namespace_to_metadata_contacts_and_sessions(tmp_path: Path) -> None:
+    """Top-level keys like Redis's "namespace" must reach each per-user store (#136).
+
+    Dropping them put every user's stores under the backend's default keys, so
+    users read and overwrote each other's metadata and contacts.
+    """
+    mgr = UserDataManager("alice", _MEM_JSON)
+    await mgr.build(
+        schema_path=_SCHEMA,
+        kb_source_props=_MEM_KB,
+        metadata_schema_path=None,
+        metadata_source_props={**_MEM_JSON, "namespace": "alice:metadata"},
+        contact_schema_path=None,
+        contact_source_props={**_MEM_JSON, "namespace": "alice:contacts"},
+        session_source_props={**_MEM_JSON, "namespace": "alice:sessions"},
+    )
+    for store in ("metadata", "contacts", "sessions"):
+        assert mgr._registry.get_source_properties(store)["namespace"] == f"alice:{store}"
+        assert mgr._registry.connect_source(store).properties["namespace"] == f"alice:{store}"

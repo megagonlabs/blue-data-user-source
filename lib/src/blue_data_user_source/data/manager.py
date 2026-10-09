@@ -219,38 +219,22 @@ class UserDataManager:
         await self.seed_kb_source_schema(schema_path)
         await self.seed_user_entity()
 
-        # Metadata source
-        meta_enriched = _enrich_props(metadata_source_props, "json")
-        meta_conn = meta_enriched.get("connection", {})
-        if "path" in meta_conn:
-            Path(meta_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
-        meta_source = DataSource.instantiate(
-            meta_enriched["_class"], "metadata", properties={"connection": meta_conn},
-        )
+        # Metadata, contacts and sessions go through _build_json_source so that
+        # top-level keys such as Redis's "namespace" reach the store; without it
+        # every user's stores share the backend's default keys (#136).
+        meta_source = _build_json_source("metadata", metadata_source_props)
         self._registry.register_source(meta_source)
         if metadata_schema_path:
             self.seed_metadata_schema(metadata_schema_path)
 
         # Contacts source
-        cont_enriched = _enrich_props(contact_source_props, "json")
-        cont_conn = cont_enriched.get("connection", {})
-        if "path" in cont_conn:
-            Path(cont_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
-        cont_source = DataSource.instantiate(
-            cont_enriched["_class"], "contacts", properties={"connection": cont_conn},
-        )
+        cont_source = _build_json_source("contacts", contact_source_props)
         self._registry.register_source(cont_source)
         if contact_schema_path:
             self.seed_contact_schema(contact_schema_path)
 
         # Sessions source — no fixed schema; session records are created on demand.
-        sess_enriched = _enrich_props(session_source_props, "json")
-        sess_conn = sess_enriched.get("connection", {})
-        if "path" in sess_conn:
-            Path(sess_conn["path"]).parent.mkdir(parents=True, exist_ok=True)
-        sess_source = DataSource.instantiate(
-            sess_enriched["_class"], "sessions", properties={"connection": sess_conn},
-        )
+        sess_source = _build_json_source("sessions", session_source_props)
         self._registry.register_source(sess_source)
 
     def connect(self) -> None:
