@@ -189,7 +189,7 @@ Returns `{"user": "...", "session_id": "...", "ended": true}`.
 | Parameter | Type | Description |
 |---|---|---|
 | `user` | `str` | User name |
-| `source` | `str` | Free text or file path identifying the source |
+| `source` | `str` | Path to the file to ingest, on the machine running the MCP server |
 | `name` | `str \| None` | Human-readable label (optional) |
 | `description` | `str \| None` | Optional description |
 | `original` | `str \| None` | Source's own date, e.g. publication date |

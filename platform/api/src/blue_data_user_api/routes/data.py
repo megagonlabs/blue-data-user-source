@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from blue_data_user_api.auth import require_api_key
 
@@ -11,7 +14,9 @@ router = APIRouter(tags=["data"], dependencies=[Depends(require_api_key)])
 
 
 class AddSourceRequest(BaseModel):
-    source: Any
+    # The source's text. Never read as a path: that let any caller have the
+    # server ingest, and then return, any file it could read (#133).
+    source: str = Field(min_length=1)
     name: str | None = None
     description: str | None = None
     original: str | None = None
@@ -41,7 +46,14 @@ async def add_source(name: str, body: AddSourceRequest, request: Request) -> dic
         props["original"] = body.original
     if body.queries:
         props["queries"] = body.queries
-    await request.app.state.source.add_source(body.source, database=name, optional_properties=props)
+    props.setdefault("name", "text")
+    # The ingest pipeline reads files, so the text goes into a file this
+    # request owns; its chunks are stored by the time add_source returns.
+    file_stem = re.sub(r"[^A-Za-z0-9_-]", "_", props["name"])[:64] or "text"
+    with tempfile.TemporaryDirectory(prefix="blue-userdb-source-") as tmp:
+        path = Path(tmp) / f"{file_stem}.txt"
+        path.write_text(body.source, encoding="utf-8")
+        await request.app.state.source.add_source(str(path), database=name, optional_properties=props)
     return {"database": name, "added": True}
 
 

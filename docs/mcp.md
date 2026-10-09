@@ -160,7 +160,7 @@ See [10-data-model.md](../design/10-data-model.md) §6 for the full query/intera
 | Parameter | Type | Description |
 |---|---|---|
 | `user` | `str` | User name |
-| `source` | `str` | Free text or file path identifying the source |
+| `source` | `str` | Path to the file to ingest, on the machine running the MCP server |
 | `name` | `str \| None` | Human-readable label (optional) |
 | `description` | `str \| None` | Optional description |
 | `original` | `str \| None` | Source's own date, e.g. publication date |

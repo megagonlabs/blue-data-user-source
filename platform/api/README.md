@@ -169,7 +169,7 @@ curl -X POST http://localhost:8000/alice/sessions/$SID/end
 | `POST` | `/{name}/sources` | Add a source and optionally extract attributes |
 | `DELETE` | `/{name}/sources/{source_name}` | Remove a source from the registry (KB data preserved) |
 
-`POST /{name}/sources` body:
+`POST /{name}/sources` body — `source` is the text to add (required); it is never read as a path on the server:
 
 ```json
 {

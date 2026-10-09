@@ -302,7 +302,7 @@ async def add_source(
 
     Args:
         user:        User name.
-        source:      Free text or a file path identifying the source.
+        source:      Path to the file to ingest, on the machine running this server.
         name:        Human-readable source label (defaults to source).
         description: Optional description.
         original:    The source's own date (e.g. publication date).
