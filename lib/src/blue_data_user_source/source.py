@@ -87,6 +87,10 @@ class UserSource(DataSource):
       (default: ``data/metadata_schema.json``). Stored as a source property.
     - ``contact_schema`` — path to the contact schema JSON
       (default: ``data/contact_schema.json``). Stored as a source property.
+    - ``console`` — whether the user is at this process's console (default: True).
+      Servers pass False: clarification and onboarding then never ask on stdin/stdout,
+      and are skipped when no other contact method can reach the user. Describes the
+      running process, so it is not stored in the registry.
 
     Usage::
 
@@ -182,7 +186,7 @@ class UserSource(DataSource):
                 scope="/",
                 description=f"{name} user data source",
                 properties={
-                    **self.properties,
+                    **{k: v for k, v in self.properties.items() if k != "console"},
                     "_class": f"{cls.__module__}.{cls.__qualname__}",
                     "schema": self.properties.get("schema") or _DEFAULT_SCHEMA_PATH,
                     "metadata_schema": self.properties.get("metadata_schema") or _DEFAULT_METADATA_SCHEMA_PATH,
@@ -193,6 +197,11 @@ class UserSource(DataSource):
             for key in ("connection", "registry", "schema", "metadata_schema", "contact_schema"):
                 if self.properties.get(key):
                     self._registry.set_source_property(name, key, self.properties[key])
+
+    @property
+    def console(self) -> bool:
+        """Whether the user is at this process's console; see the ``console`` prop."""
+        return bool(self.properties.get("console", True))
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #
@@ -715,7 +724,9 @@ class UserSource(DataSource):
     # ------------------------------------------------------------------ #
 
     def _contact_manager(self, database: str) -> ContactManager:
-        return ContactManager(database=database, data_manager=self._get_manager(database))
+        return ContactManager(
+            database=database, data_manager=self._get_manager(database), console=self.console
+        )
 
     async def add_contact_method(
         self,

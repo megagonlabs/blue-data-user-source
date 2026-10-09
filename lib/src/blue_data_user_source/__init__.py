@@ -6,6 +6,7 @@ from blue_data_user_source.source import UserSource
 from blue_data_user_source.types import (
     ImportError,
     InteractionError,
+    NoContactMethodError,
     QueryError,
     QueryResult,
     UDbError,
@@ -16,6 +17,7 @@ __all__ = [
     "ImportError",
     "InteractionError",
     "MemoryUserSource",
+    "NoContactMethodError",
     "QueryError",
     "QueryResult",
     "RedisUserSource",

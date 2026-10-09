@@ -20,6 +20,8 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 `properties["registry"]` is a `JSONSource` config (`_class` + `connection`) for the outer registry's backing store; each subclass fills this in automatically from `properties["connection"]` if omitted (e.g. `FileUserSource` derives it from `connection.path`).
 
+`properties["console"]` (default `True`) says whether the user is at this process's console. Servers pass `False` — the REST and MCP servers do — so clarification and onboarding never ask on stdin/stdout: console methods (`stdio`, and `email` with `inbound_provider: "stdio"`) are never selected, and when no other method can reach the user, a query returns what it retrieved without asking and onboarding is skipped. It describes the running process, so it is not stored in the registry; read it back as `UserSource.console`.
+
 ### Database (user) management
 
 | Method | Returns | Description |
@@ -201,7 +203,7 @@ UserDataPlanner(registry: DataRegistry)
 ## `ContactManager` / `ContactMethod`
 
 ```python
-ContactManager(database: str, data_manager: UserDataManager)
+ContactManager(database: str, data_manager: UserDataManager, console: bool = True)
 ```
 
 | Method | Returns | Description |
@@ -213,7 +215,7 @@ ContactManager(database: str, data_manager: UserDataManager)
 | `await list_contact_methods(protocol=None)` | `list[ContactMethod]` | All methods, optionally filtered |
 | `await list_protocols()` | `list[str]` | Distinct protocols with at least one entry |
 | `await list_named_entries(protocol)` | `dict[str, dict]` | All entries under one protocol |
-| `await identify_contact_method(topic=None)` | `ContactMethod` | The sole method if only one is registered; otherwise an LLM choice — see [architecture.md](architecture.md#interaction-layer) |
+| `await identify_contact_method(topic=None)` | `ContactMethod \| None` | The sole method if only one is registered; otherwise an LLM choice — see [architecture.md](architecture.md#interaction-layer). With nothing registered: `stdio` when there is a console, else `None` |
 
 ```python
 ContactMethod(protocol: str, name: str, details: dict[str, Any])
@@ -280,7 +282,7 @@ class QueryResult:
 ## Exceptions
 
 ```python
-from blue_data_user_source import UDbError, QueryError, ImportError, InteractionError
+from blue_data_user_source import UDbError, QueryError, ImportError, InteractionError, NoContactMethodError
 ```
 
 All inherit from `UDbError`.
@@ -290,5 +292,6 @@ All inherit from `UDbError`.
 | `QueryError` | A query cannot be processed, or no database/data manager is available |
 | `ImportError` | A source import fails |
 | `InteractionError` | User interaction fails (channel unavailable, timeout, etc.) |
+| `NoContactMethodError` | Subclass of `InteractionError`: no contact method can reach the user from this process (no console, and nothing else registered). The query path catches it and answers without asking |
 
 `ImportError` shadows the Python builtin within this package's namespace (`# noqa: A001` in `types.py`) — import it explicitly from `blue_data_user_source` rather than relying on it resolving to the builtin.

@@ -48,6 +48,9 @@ async def create_database(name: str, request: Request, body: CreateDatabaseReque
         contact_source_props=props["contact_source"],
         session_source_props=props["session_source"],
         doc_source_props=props["doc_source"],
+        # Onboarding is an interview; a REST call has nobody to interview.
+        onboard=False,
+        onboard_metadata=False,
     )
     return {"name": name}
 

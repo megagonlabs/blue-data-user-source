@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Any, Literal
@@ -9,6 +10,8 @@ from typing import Any, Literal
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
+
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ #
 # Class paths for DataSource.instantiate                               #
@@ -453,7 +456,7 @@ class UserDataManager:
             self._search_doc_source(external_doc_source, query, "external_documents", metadata)
         )
 
-        print(f"Query executed: {query}")
+        logger.debug("Query executed: %s", query)
         return data, metadata
 
     def _search_doc_source(

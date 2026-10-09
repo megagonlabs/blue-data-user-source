@@ -85,6 +85,13 @@ class ContactMethod:
     def is_async(self) -> bool:
         return self.protocol in self.ASYNC_PROTOCOLS
 
+    @property
+    def uses_console(self) -> bool:
+        """True when this method asks on the process's own stdout and reads stdin."""
+        return self.protocol == "stdio" or (
+            self.protocol == "email" and self.details.get("inbound_provider") == "stdio"
+        )
+
     def interact(self, interaction_id: str | None = None) -> InteractionManager:
         """Build an InteractionManager for this contact method.
 
@@ -111,7 +118,7 @@ class ContactMethod:
         async def _respond(message: str) -> str:
             sys.stdout.write(f"\n{message}\n> ")
             sys.stdout.flush()
-            return sys.stdin.readline().rstrip("\n")
+            return (await asyncio.to_thread(sys.stdin.readline)).rstrip("\n")
 
         async def _stop() -> None:
             pass
@@ -212,7 +219,7 @@ class ContactMethod:
                 f"Reply: "
             )
             sys.stdout.flush()
-            return sys.stdin.readline().rstrip("\n")
+            return (await asyncio.to_thread(sys.stdin.readline)).rstrip("\n")
 
         async def _stop() -> None:
             pass
@@ -322,9 +329,16 @@ class ContactMethod:
 class ContactManager:
     """Manages contact methods stored as contacts.{protocol}.{name} in the contact JSONSource."""
 
-    def __init__(self, database: str, data_manager: Any) -> None:
+    def __init__(self, database: str, data_manager: Any, console: bool = True) -> None:
+        """``console`` says whether this process has a console the user is at.
+
+        Servers pass False: their stdin/stdout are not the user's (for the MCP
+        stdio transport, stdout is the protocol stream), so methods that ask on
+        the console are never selected there.
+        """
         self._database = database
         self._data_manager = data_manager
+        self._console = console
 
     def _store(self) -> Any:
         return self._data_manager.get_contact_source()
@@ -398,15 +412,23 @@ class ContactManager:
     # Preferred channel                                                    #
     # ------------------------------------------------------------------ #
 
-    async def identify_contact_method(self, topic: str | None = None) -> ContactMethod:
+    async def identify_contact_method(self, topic: str | None = None) -> ContactMethod | None:
         """Pick a contact method, optionally scoped to a project/topic.
 
         ``topic`` looks up ``availability.by_topic.<topic>`` overrides
         (``working_hours``, ``preferred_channel``, ``out_of_office``) layered
         on top of the general ``availability.*`` settings.
+
+        With no registered methods, falls back to the console (``stdio``) when
+        there is one. Returns ``None`` when nothing can reach the user: no
+        console and no method that does not need one.
         """
         methods = await self.list_contact_methods()
+        if not self._console:
+            methods = [m for m in methods if not m.uses_console]
         if not methods:
+            if not self._console:
+                return None
             return ContactMethod(protocol="stdio", name="default", details={})
         if len(methods) == 1:
             return methods[0]

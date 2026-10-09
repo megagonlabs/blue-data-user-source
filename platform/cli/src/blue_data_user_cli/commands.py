@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -9,6 +11,7 @@ from typing import Any, NoReturn
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from blue_data_user_source import FileUserSource, UDbError, sanitize_registry_name
@@ -73,6 +76,29 @@ def _status_tool_callbacks(
         console.print(f"[dim]{label}… ({name}) -> {result_str}[/dim]")
 
     return on_tool_call, on_tool_result
+
+
+class _ConsoleLogHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        console.print(f"[dim]{escape(self.format(record))}[/dim]")
+
+
+@contextlib.contextmanager
+def _library_log(enabled: bool) -> Any:
+    """Under --log, also show the library's debug lines (sub-queries run, quality-metric scores)."""
+    if not enabled:
+        yield
+        return
+    lib_logger = logging.getLogger("blue_data_user_source")
+    handler = _ConsoleLogHandler(logging.DEBUG)
+    previous = lib_logger.level
+    lib_logger.addHandler(handler)
+    lib_logger.setLevel(logging.DEBUG)
+    try:
+        yield
+    finally:
+        lib_logger.removeHandler(handler)
+        lib_logger.setLevel(previous)
 
 
 def _humanize_date(iso_str: str | None) -> str:
@@ -1150,7 +1176,7 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
          "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL.",
 )
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
-@click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
+@click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result, each sub-query and each quality-metric score on its own line.")
 @click.option("--log-limit", "log_limit", default=None, type=int, help="Truncation limit for logged values. Default: the profile's BLUE_DATA_CLI_LOG_LIMIT.")
 @click.pass_obj
 def data_query(
@@ -1169,7 +1195,7 @@ def data_query(
     if include_expanded:
         props["include_expanded"] = True
     try:
-        with console.status("Querying…") as status:
+        with console.status("Querying…") as status, _library_log(log):
             on_tool_call, on_tool_result = _status_tool_callbacks(
                 status, "Querying", verbose=verbose, log=log, log_limit=_log_limit(obj, log_limit)
             )

@@ -189,7 +189,7 @@ Instance data management. All `data` commands require an active database.
 | `--format table\|json\|nl` | Output format (default `table`) |
 | `--top-k N` | Max results (default 10) |
 | `--verbose` / `-v` | Show tool-call arguments in the status line |
-| `--log` / `-l` | Also print each tool call and result on its own persistent line |
+| `--log` / `-l` | Also print each tool call and result, each sub-query and each quality-metric score on its own persistent line |
 | `--log-limit N` | Truncation length for verbose/log output (default 80) |
 
 `data search` options: `--type entity|fact` (repeatable), `--mode keyword|semantic`, `--top-k N`, `--format table|json`.

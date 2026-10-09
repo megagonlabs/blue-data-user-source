@@ -24,3 +24,7 @@ class ImportError(UDbError):  # noqa: A001
 
 class InteractionError(UDbError):
     """Raised when user interaction fails (channel unavailable, timeout, etc.)."""
+
+
+class NoContactMethodError(InteractionError):
+    """Raised when no contact method can reach the user from this process."""

@@ -309,7 +309,7 @@ await us.remove_contact_method("alice", "email", "work")
 
 | Protocol | Trigger | Notes |
 |---|---|---|
-| `stdio` | Prompts stdout / reads stdin | Default when no contact methods are registered |
+| `stdio` | Prompts stdout / reads stdin | Default when no contact methods are registered, if the process has a console (`console` prop; servers set it to `False`) |
 | `email` | Sends SMTP email; awaits inbound reply | Requires `[email]` extra; see detail keys below |
 | `webhook` | POSTs JSON to a URL; awaits REST response | Requires `[webhook]` extra |
 

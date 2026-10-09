@@ -79,7 +79,9 @@ def default_user_props(name: str) -> dict[str, Any]:
 def _build_source() -> tuple[FileUserSource, Path]:
     d = Path(os.environ.get("BLUE_DATA_USER_SOURCE_DATA_DIR", "~/.blue-userdb")).expanduser().resolve()
     d.mkdir(parents=True, exist_ok=True)
-    props: dict[str, Any] = {"connection": {"path": str(d / "registry.json")}}
+    # A server's stdin/stdout are not the user's (for the stdio transport, stdout
+    # is the protocol stream), so it must never ask the user on them.
+    props: dict[str, Any] = {"connection": {"path": str(d / "registry.json")}, "console": False}
     for prop, var in (
         ("schema", "BLUE_DATA_USER_SOURCE_SCHEMA_PATH"),
         ("metadata_schema", "BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH"),

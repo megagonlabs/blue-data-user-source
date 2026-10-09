@@ -46,7 +46,8 @@ def create_source(
     metadata_schema_path: str = "",
     contact_schema_path: str = "",
 ) -> FileUserSource:
-    props: dict[str, Any] = {"connection": {"path": str(data_dir / "registry.json")}}
+    # The server's stdin/stdout are not the user's, so it must never ask the user on them.
+    props: dict[str, Any] = {"connection": {"path": str(data_dir / "registry.json")}, "console": False}
     for prop, value in (
         ("schema", schema_path),
         ("metadata_schema", metadata_schema_path),

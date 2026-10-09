@@ -48,6 +48,14 @@ def test_create_puts_every_store_under_the_data_directory(client, source, tmp_pa
     assert Path(kwargs["doc_source_props"]["vector_source"]["directory"]) == user_dir / "sessions"
 
 
+def test_create_does_not_onboard(client, source):
+    """Onboarding is an interview on the console; a REST call has nobody to interview (#120)."""
+    assert client.post("/databases/alice").status_code == 201
+    kwargs = source.create_user.await_args.kwargs
+    assert kwargs["onboard"] is False
+    assert kwargs["onboard_metadata"] is False
+
+
 @pytest.mark.parametrize("key", ["registry", "kb_source", "metadata_source", "contact_source",
                                  "session_source", "doc_source"])
 def test_create_rejects_store_overrides(client, source, key):

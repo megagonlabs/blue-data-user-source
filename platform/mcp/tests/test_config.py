@@ -76,3 +76,8 @@ def test_the_server_does_not_import_the_cli():
                 imported.add(node.module)
 
     assert not [m for m in imported if m.startswith("blue_data_user_cli")]
+
+
+def test_the_server_has_no_console(tmp_path, monkeypatch):
+    """stdout is the JSON-RPC stream and stdin the client's, so the user is never asked on them (#132)."""
+    assert _props(tmp_path, monkeypatch)["console"] is False

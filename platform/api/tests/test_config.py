@@ -83,3 +83,8 @@ def test_the_server_does_not_import_the_cli():
                 imported.add(node.module)
 
     assert not [m for m in imported if m.startswith("blue_data_user_cli")]
+
+
+def test_the_server_has_no_console(tmp_path):
+    """Its stdin/stdout are the operator's, so the user is never asked on them (#132)."""
+    assert create_source(tmp_path).console is False

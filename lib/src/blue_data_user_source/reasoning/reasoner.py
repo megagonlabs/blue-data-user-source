@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from blue_data_user_source.interaction.contact import ContactMethod
     from blue_data_user_source.source import UserSource
     from blue_data_user_source.types import QueryResult
+
+logger = logging.getLogger(__name__)
 
 
 def _summarize_schema_facets(schema: dict) -> str:
@@ -211,7 +214,7 @@ class UserQueryReasoner:
         user_data_metric_evaluation: list[MetricEvaluation],
     ) -> bool:
         for m in user_data_metric_evaluation:
-            print(f"Metric {m.name}: score={m.score}, passes={m.passes}, reasoning={m.reasoning}")
+            logger.debug("Metric %s: score=%s, passes=%s, reasoning=%s", m.name, m.score, m.passes, m.reasoning)
         return any(not m.passes for m in user_data_metric_evaluation)
 
     async def request_user_interaction(
@@ -223,7 +226,7 @@ class UserQueryReasoner:
         topic: str | None = None,
     ) -> tuple[list[Any], dict[str, Any]]:
         from blue_data_user_source.interaction import ContactManager, SessionManager
-        from blue_data_user_source.types import InteractionError, QueryError
+        from blue_data_user_source.types import InteractionError, NoContactMethodError, QueryError
 
         if self._manager is None:
             raise QueryError("No data manager available for user clarification")
@@ -238,9 +241,13 @@ class UserQueryReasoner:
         query_id = self._query_id or await session_manager.create_query(session_id, query)
 
         contact_manager = ContactManager(
-            database=self._manager._database, data_manager=self._manager
+            database=self._manager._database, data_manager=self._manager, console=self._source.console
         )
         channel = await contact_manager.identify_contact_method(topic=topic)
+        if channel is None:
+            raise NoContactMethodError(
+                f"No contact method can reach user {self._manager._database!r} from this process"
+            )
 
         failing_names = [m.name for m in metrics if not m.passes]
         raw_question = (
@@ -322,14 +329,21 @@ class UserQueryReasoner:
         Returns only the newly collected user responses, in round order (empty if
         no interaction was needed).
         """
+        from blue_data_user_source.types import NoContactMethodError
+
         new_items: list[Any] = []
         metrics = await self.assess_query_results(assessment_query, data, metadata)
         for _ in range(max_rounds):
             if not await self.assess_user_interaction(assessment_query, data, metadata, metrics):
                 break
-            data, metadata = await self.request_user_interaction(
-                query, data, metadata, metrics, topic=topic
-            )
+            try:
+                data, metadata = await self.request_user_interaction(
+                    query, data, metadata, metrics, topic=topic
+                )
+            except NoContactMethodError as exc:
+                # Nobody to ask: answer with what was retrieved instead of blocking.
+                logger.info("Skipping clarification: %s", exc)
+                break
             new_items.append(data[-1])
             metrics = await self.assess_query_results(assessment_query, data, metadata)
         return new_items
@@ -378,11 +392,16 @@ class UserQueryReasoner:
         if not name_needed and not kb_questions and not metadata_questions:
             return
 
+        contact_manager = ContactManager(
+            database=self._manager._database, data_manager=self._manager, console=self._source.console
+        )
+        channel = await contact_manager.identify_contact_method(topic="onboarding")
+        if channel is None:
+            logger.info("Skipping onboarding: no contact method can reach user %r", self._manager._database)
+            return
+
         session_manager = SessionManager(database=self._manager._database, data_manager=self._manager)
         session_id = self._session_id or await session_manager.create_session()
-
-        contact_manager = ContactManager(database=self._manager._database, data_manager=self._manager)
-        channel = await contact_manager.identify_contact_method(topic="onboarding")
 
         if name_needed:
             await self._ask_name_question(session_manager, session_id, channel)
