@@ -194,7 +194,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | `list_users()` | Return list of database names |
 | `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
 | `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
-| `reset_user(name)` *(async)* | Wipe KB data + imported registry entries, then reseed schema |
+| `reset_user(name)` *(async)* | Wipe KB data, metadata, contacts, sessions and imported registry entries, then reseed the schemas |
 | `delete_user(name)` *(async)* | Destroy all backing files and remove from the outer registry |
 
 **Source properties format** — all source configs use `_class` + `connection`:
@@ -444,7 +444,7 @@ database commands:
   blue-userdb database select NAME    Set the active database
   blue-userdb database list           List all databases
   blue-userdb database search KEYWORD Search databases by name
-  blue-userdb database reset          Clear KB data and reseed schema
+  blue-userdb database reset          Clear the database and reseed its schema
   blue-userdb database config show    Show stored configuration
 
 session commands:

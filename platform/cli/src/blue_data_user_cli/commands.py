@@ -740,7 +740,7 @@ def database_reset(obj: dict, yes: bool) -> None:
     """Clear the database and reseed its schema."""
     db = _get_db(obj)
     if not yes:
-        click.confirm(f"Reset database '{db}'? This will clear all KB data.", abort=True)
+        click.confirm(f"Reset database '{db}'? This deletes its KB data, metadata, contacts and sessions.", abort=True)
     source = _seeding_source(obj)
     try:
         asyncio.run(source.reset_user(db))

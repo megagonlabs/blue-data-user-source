@@ -108,7 +108,7 @@ Creates a new user with file-backed storage under `BLUE_DATA_USER_SOURCE_DATA_DI
 
 #### `reset_database`
 
-`name` — clears KB data for the user and reseeds the schema. Metadata and contacts are preserved.
+`name` — clears the user's KB data, metadata, contact methods and session history, and reseeds the schemas. The user stays registered. This cannot be undone.
 
 ---
 

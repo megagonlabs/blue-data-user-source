@@ -130,7 +130,9 @@ async def delete_database(name: str) -> str:
 
 @mcp.tool()
 async def reset_database(name: str) -> str:
-    """Clear a user's KB data and reseed the schema. Metadata and contacts are preserved.
+    """Delete a user's KB data, metadata, contacts and sessions, and reseed the schemas.
+
+    This cannot be undone. The user itself stays registered.
 
     Args:
         name: User name to reset.
