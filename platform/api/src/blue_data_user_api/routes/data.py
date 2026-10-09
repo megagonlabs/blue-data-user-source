@@ -36,8 +36,9 @@ async def list_sources(name: str, source_id: str | None = None, request: Request
     return {"database": name, "sources": entries}
 
 
-@router.post("/{name}/sources", status_code=status.HTTP_201_CREATED, summary="Add a source")
+@router.post("/{name}/sources", status_code=status.HTTP_201_CREATED, summary="Add a source from text")
 async def add_source(name: str, body: AddSourceRequest, request: Request) -> dict:
+    """Add `source` as a text document. Text only: file uploads are not supported over REST in 1.0."""
     props: dict[str, Any] = {}
     if body.name:
         props["name"] = body.name

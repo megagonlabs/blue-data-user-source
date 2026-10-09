@@ -166,10 +166,10 @@ curl -X POST http://localhost:8000/alice/sessions/$SID/end
 |---|---|---|
 | `GET` | `/{name}/data` | List all ingested data entries |
 | `GET` | `/{name}/sources` | List registered sources; optional `?source_id=` filter |
-| `POST` | `/{name}/sources` | Add a source and optionally extract attributes |
+| `POST` | `/{name}/sources` | Add a source from text (no file uploads in 1.0) and optionally extract attributes |
 | `DELETE` | `/{name}/sources/{source_name}` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{database, id, name, chunks_removed}`; `404` if no source, or more than one, matches |
 
-`POST /{name}/sources` body — `source` is the text to add (required); it is never read as a path on the server:
+`POST /{name}/sources` takes **text only** — `source` is the text to add (required), and it is never read as a path on the server. File uploads are not supported over REST in 1.0; add files with the CLI (`blue-userdb data source add FILE`) or the MCP `add_source` tool. Body:
 
 ```json
 {

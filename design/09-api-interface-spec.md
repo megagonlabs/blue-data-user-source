@@ -271,44 +271,23 @@ Execute a natural language query.
 
 ---
 
-### `POST /sources`
+### `POST /{name}/sources`
 
-Register a file source or extract data from it.
+Add a source and optionally extract attributes from it.
 
-#### File source (`multipart/form-data`)
+> **1.0: text only.** The request carries the source's text; the server writes it to a temporary file it owns, ingests that, and deletes it. Nothing in the request is ever read as a path on the server (#133). File uploads (`multipart/form-data`, as originally specified here) and session sources are not implemented over REST; add files with the CLI (`blue-userdb data source add FILE`) or the MCP `add_source` tool. File uploads are tracked in #147.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `file` | file | yes | File to add as source |
-| `database` | string | no | Database ID; uses server default if omitted |
-| `queries` | string (JSON array) | no | Extraction queries (Type 2); omit for Type 1 |
-
-```
-POST /sources
-Content-Type: multipart/form-data
-
-file=<binary>
-database=alice
-queries=["What skills does the user have?"]
-```
-
-#### Session source (`application/json`)
-
-```json
-{
-  "source_type": "session",
-  "source_id": "session-id",
-  "database": "alice"
-}
-```
+**Request** (`application/json`)
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `source_type` | `"session"` | yes | Identifies a session source |
-| `source_id` | string | yes | Session ID to register |
-| `database` | string | no | Database ID; uses server default if omitted |
+| `source` | string | yes | The text to add (non-empty) |
+| `name` | string | no | Label for the source (default `"text"`) |
+| `description` | string | no | Description |
+| `original` | string | no | The source's own date |
+| `queries` | string[] | no | Extraction queries (Type 2); omit for Type 1 |
 
-**Response `204 No Content`** (both shapes)
+**Response `201 Created`** — `{"database": "...", "added": true}`
 
 ---
 
