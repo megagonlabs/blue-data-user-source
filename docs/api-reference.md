@@ -215,7 +215,7 @@ ContactManager(database: str, data_manager: UserDataManager, console: bool = Tru
 | `await list_contact_methods(protocol=None)` | `list[ContactMethod]` | All methods, optionally filtered |
 | `await list_protocols()` | `list[str]` | Distinct protocols with at least one entry |
 | `await list_named_entries(protocol)` | `dict[str, dict]` | All entries under one protocol |
-| `await identify_contact_method(topic=None)` | `ContactMethod \| None` | The sole method if only one is registered; otherwise an LLM choice — see [architecture.md](architecture.md#interaction-layer). With nothing registered: `stdio` when there is a console, else `None` |
+| `await identify_contact_method(topic=None)` | `ContactMethod \| None` | Among methods with a transport (`stdio`, `email`, `webhook`): the sole one, or an LLM choice — see [architecture.md](architecture.md#interaction-layer). With none: `stdio` when there is a console, else `None` |
 
 ```python
 ContactMethod(protocol: str, name: str, details: dict[str, Any])

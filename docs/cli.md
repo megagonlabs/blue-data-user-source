@@ -283,7 +283,7 @@ blue-userdb contact get email work address
 blue-userdb contact remove email work
 ```
 
-Protocols: `email`, `webhook`, `sms`, `messaging`, `enterprise`, `notification`, `session`, `stdio` — see [api-reference.md](api-reference.md#contactmanager--contactmethod) for detail keys per protocol. Only `stdio`, `email`, and `webhook` have a working `interact()` implementation today; the rest can be recorded via this command but aren't yet reachable by the interaction layer.
+Protocols: `email`, `webhook`, `sms`, `messaging`, `enterprise`, `notification`, `session`, `stdio` — see [api-reference.md](api-reference.md#contactmanager--contactmethod) for detail keys per protocol. Only `stdio`, `email` and `webhook` have a transport in this release. The rest can be recorded with this command, but are never used to contact the user — contact selection skips them; `contact list` marks them "Recorded only".
 
 ---
 

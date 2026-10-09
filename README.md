@@ -8,7 +8,7 @@ A per-user personal data store with natural language querying, LLM-based data ex
 
 - **Import** documents and extract structured data from them using LLM-based extraction keyed by schema-style attribute names.
 - **Query** the store in natural language; results are assessed for completeness and freshness and the user is prompted for clarification when needed. Queries and their clarification interactions are grouped into sessions.
-- **Interact** via configurable contact channels (stdio, email, SMS, etc.) to verify stale data or fill in missing information, with responses persisted back to the store and to the session's record.
+- **Interact** via configurable contact channels (the terminal, email, or a webhook) to verify stale data or fill in missing information, with responses persisted back to the store and to the session's record.
 - **Output** query results as structured JSON, a Rich table, or a synthesized natural language answer.
 
 See [docs/features.md](docs/features.md) for the full list with examples, or [examples/](examples/README.md) for runnable scripts.

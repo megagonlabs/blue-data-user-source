@@ -24,31 +24,31 @@
     "preference":         { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },
   "sms": {
-    "__description__": "SMS / text-message contact methods.",
+    "__description__": "SMS / text-message contact methods. Recorded only: no built-in transport in this release, so the system never contacts the user through it.",
     "phone":      { "description": "Phone number in E.164 format (e.g. +15550123).", "type": "str", "required": true,  "default": null },
     "preference": { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },
   "messaging": {
-    "__description__": "Instant-messaging contact methods (Slack, Teams, Discord, …).",
+    "__description__": "Instant-messaging contact methods (Slack, Teams, Discord, …). Recorded only: no built-in transport in this release, so the system never contacts the user through it.",
     "handle":     { "description": "Username or handle on the platform.", "type": "str", "required": true,  "default": null },
     "platform":   { "description": "Platform name (e.g. slack, teams, discord).", "type": "str", "required": true,  "default": null },
     "workspace":  { "description": "Workspace, server, or org name.",   "type": "str", "required": false, "default": null },
     "preference": { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },
   "enterprise": {
-    "__description__": "Enterprise directory contact methods (LDAP, Active Directory, …).",
+    "__description__": "Enterprise directory contact methods (LDAP, Active Directory, …). Recorded only: no built-in transport in this release, so the system never contacts the user through it.",
     "handle":     { "description": "Directory handle or UPN.",   "type": "str", "required": true,  "default": null },
     "platform":   { "description": "Directory platform (e.g. active_directory, ldap).", "type": "str", "required": true, "default": null },
     "preference": { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },
   "notification": {
-    "__description__": "Push-notification contact methods (webhook, push token, …).",
+    "__description__": "Push-notification contact methods (webhook, push token, …). Recorded only: no built-in transport in this release, so the system never contacts the user through it.",
     "endpoint":   { "description": "Notification endpoint URL or push token.", "type": "str", "required": true,  "default": null },
     "platform":   { "description": "Platform name (e.g. apns, fcm, webhook).", "type": "str", "required": false, "default": null },
     "preference": { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },
   "session": {
-    "__description__": "In-session / interactive contact methods.",
+    "__description__": "In-session / interactive contact methods. Recorded only: no built-in transport in this release, so the system never contacts the user through it.",
     "session_id": { "description": "Session identifier (omit to use the active session).", "type": "str", "required": false, "default": null },
     "preference": { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },

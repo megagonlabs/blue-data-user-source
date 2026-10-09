@@ -259,7 +259,7 @@ reasoning/interaction logic.
 | Parameter | Type | Description |
 |---|---|---|
 | `user` | `str` | User name |
-| `protocol` | `str` | `"stdio"`, `"email"`, or `"webhook"` (interaction handlers exist for these three). `"sms"`, `"session"`, `"messaging"`, `"enterprise"`, and `"notification"` can also be registered but have no interaction handler wired up yet — using one to actually contact a user raises an error |
+| `protocol` | `str` | `"stdio"`, `"email"`, or `"webhook"` (interaction handlers exist for these three). `"sms"`, `"session"`, `"messaging"`, `"enterprise"`, and `"notification"` can also be recorded, but are never used to contact the user — contact selection skips them |
 | `name` | `str` | Human-readable label |
 | `details` | `dict` | Protocol-specific details (see below) |
 | `preference` | `int` | Ordering priority — lower = higher priority (default 0) |

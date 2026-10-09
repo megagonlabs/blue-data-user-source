@@ -12,7 +12,7 @@ from blue_data_user_source.data.manager import UserDataManager
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
-from blue_data_user_source.types import InteractionError
+from blue_data_user_source.types import InteractionError, LLMError
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def test_contact_method_stdio_interact_returns_interaction_manager() -> None:
 def test_contact_method_unimplemented_protocol_interact_raises() -> None:
     # Protocols that are registered but have no manager implementation raise.
     method = ContactMethod(protocol="sms", name="x", details={})
-    with pytest.raises(InteractionError, match="requires a registered handler"):
+    with pytest.raises(InteractionError, match="no built-in transport"):
         method.interact()
 
 
@@ -134,14 +134,15 @@ async def test_identify_returns_stdio_when_no_methods(contact_manager: ContactMa
 
 async def test_identify_picks_lowest_preference(contact_manager: ContactManager) -> None:
     await contact_manager.create_contact_method("email", "work", {}, preference=5)
-    await contact_manager.create_contact_method("sms", "mobile", {}, preference=1)
-    # Simulate an LLM failure (real code returns {} on error) so the deterministic
+    await contact_manager.create_contact_method("webhook", "mobile", {}, preference=1)
+    # Simulate an LLM failure (LLMError, #117) so the deterministic
     # lowest-preference fallback is what's under test, not a live model call.
     with patch(
-        "blue_data_user_source.reasoning.reasoner._llm_complete", new=AsyncMock(return_value={})
+        "blue_data_user_source.reasoning.reasoner._llm_complete",
+        new=AsyncMock(side_effect=LLMError("down")),
     ):
         method = await contact_manager.identify_contact_method()
-    assert method.protocol == "sms"
+    assert method.protocol == "webhook"
     assert method.preference == 1
 
 
@@ -161,13 +162,13 @@ async def test_identify_uses_llm_choice_among_multiple_methods(
     contact_manager: ContactManager,
 ) -> None:
     await contact_manager.create_contact_method("email", "work", {}, preference=1)
-    await contact_manager.create_contact_method("sms", "mobile", {}, preference=5)
-    mock_llm = AsyncMock(return_value={"protocol": "sms", "name": "mobile"})
+    await contact_manager.create_contact_method("webhook", "mobile", {}, preference=5)
+    mock_llm = AsyncMock(return_value={"protocol": "webhook", "name": "mobile"})
     with patch(
         "blue_data_user_source.reasoning.reasoner._llm_complete", new=mock_llm
     ):
         method = await contact_manager.identify_contact_method()
-    assert method.protocol == "sms"
+    assert method.protocol == "webhook"
     assert method.name == "mobile"
     mock_llm.assert_awaited_once()
 
@@ -176,7 +177,7 @@ async def test_identify_falls_back_when_llm_choice_is_invalid(
     contact_manager: ContactManager,
 ) -> None:
     await contact_manager.create_contact_method("email", "work", {}, preference=1)
-    await contact_manager.create_contact_method("sms", "mobile", {}, preference=5)
+    await contact_manager.create_contact_method("webhook", "mobile", {}, preference=5)
     mock_llm = AsyncMock(return_value={"protocol": "webhook", "name": "nonexistent"})
     with patch(
         "blue_data_user_source.reasoning.reasoner._llm_complete", new=mock_llm
@@ -437,3 +438,28 @@ async def test_email_stdio_strips_trailing_newline(monkeypatch: pytest.MonkeyPat
     method = ContactMethod(protocol="email", name="work", details=_EMAIL_STDIO_DETAILS)
     response = await method.interact().send("q?")
     assert not response.endswith("\n")
+
+
+# ── recorded-only protocols (#129) ────────────────────────────────────────────
+
+@pytest.mark.parametrize("protocol", ["sms", "messaging", "enterprise", "notification", "session"])
+def test_recorded_only_protocols_have_no_transport(protocol: str) -> None:
+    assert not ContactMethod(protocol=protocol, name="x", details={}).has_transport
+
+
+@pytest.mark.parametrize("protocol", ["stdio", "email", "webhook"])
+def test_transport_protocols(protocol: str) -> None:
+    assert ContactMethod(protocol=protocol, name="x", details={}).has_transport
+
+
+async def test_a_recorded_only_method_is_never_chosen(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("sms", "phone", {"number": "+15550100"}, preference=0)
+    await contact_manager.create_contact_method("email", "work", {"address": "a@example.com"}, preference=5)
+    channel = await contact_manager.identify_contact_method()  # one usable candidate: no LLM choice
+    assert (channel.protocol, channel.name) == ("email", "work")
+
+
+async def test_only_recorded_methods_falls_back_like_none_registered(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("sms", "phone", {"number": "+15550100"})
+    channel = await contact_manager.identify_contact_method()
+    assert (channel.protocol, channel.name) == ("stdio", "default")

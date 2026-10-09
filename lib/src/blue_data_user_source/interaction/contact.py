@@ -66,6 +66,10 @@ class ContactMethod:
         {"session", "email", "sms", "stdio", "messaging", "enterprise", "notification", "webhook"}
     )
 
+    # Protocols this release can actually reach the user through. The others
+    # can be recorded (the contact schema describes them) but are never used.
+    TRANSPORT_PROTOCOLS = frozenset({"stdio", "email", "webhook"})
+
     # Protocols that don't expect an immediate reply — favored when the user
     # is out of office or outside their stated working hours.
     ASYNC_PROTOCOLS = frozenset({"email", "webhook", "notification"})
@@ -84,6 +88,11 @@ class ContactMethod:
     @property
     def is_async(self) -> bool:
         return self.protocol in self.ASYNC_PROTOCOLS
+
+    @property
+    def has_transport(self) -> bool:
+        """True when this release can contact the user through this method (#129)."""
+        return self.protocol in self.TRANSPORT_PROTOCOLS
 
     @property
     def uses_console(self) -> bool:
@@ -108,7 +117,8 @@ class ContactMethod:
         if self.protocol == "email":
             return self._email_manager(interaction_id)
         raise InteractionError(
-            f"Contact protocol '{self.protocol}' requires a registered handler."
+            f"Contact protocol '{self.protocol}' has no built-in transport in this release; "
+            "only stdio, email and webhook can reach the user."
         )
 
     def _stdio_manager(self, interaction_id: str | None = None) -> InteractionManager:  # noqa: ARG002 — stdio has no async correlation to key
@@ -423,7 +433,9 @@ class ContactManager:
         there is one. Returns ``None`` when nothing can reach the user: no
         console and no method that does not need one.
         """
-        methods = await self.list_contact_methods()
+        # Recorded-only protocols (sms, messaging, ...) cannot carry a question,
+        # so they are never candidates (#129).
+        methods = [m for m in await self.list_contact_methods() if m.has_transport]
         if not self._console:
             methods = [m for m in methods if not m.uses_console]
         if not methods:

@@ -223,7 +223,7 @@ Common keys: `identity.name`, `identity.timezone`, `preferences.verbosity`, `pre
 | Parameter | Type | Description |
 |---|---|---|
 | `user` | `str` | User name |
-| `protocol` | `str` | `"email"`, `"webhook"`, `"sms"`, `"messaging"`, `"enterprise"`, `"notification"`, `"session"`, or `"stdio"` |
+| `protocol` | `str` | `"stdio"`, `"email"` or `"webhook"` — the protocols with a transport. `"sms"`, `"messaging"`, `"enterprise"`, `"notification"` and `"session"` can be recorded but are never used to contact the user — contact selection skips them |
 | `name` | `str` | Human-readable label |
 | `details` | `dict` | Protocol-specific details (see [cli.md](cli.md#blue-userdb-contact) / [api-reference.md](api-reference.md#contactmanager--contactmethod)) |
 | `preference` | `int` | Ordering priority — lower = higher priority (default 0) |

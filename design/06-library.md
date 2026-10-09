@@ -291,7 +291,7 @@ Stores metadata for one contact channel and provides access to an `InteractionMa
 ContactMethod(details, protocol)
 ```
 
-Supported protocols: `session`, `email`, `sms`, `stdio`, messaging applications, enterprise messaging systems, notifications.
+Protocols with a transport in 1.0: `stdio`, `email`, `webhook`. Recognized by the contact schema but recorded only (never selected for contact): `sms`, `messaging`, `enterprise`, `notification`, `session`.
 
 ### Methods
 
