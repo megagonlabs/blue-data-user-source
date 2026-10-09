@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from blue_data_user_source import FileUserSource, UDbError, sanitize_registry_name
+from blue_data_user_source import FileUserSource, UDbError
 from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
 
 from blue_data_user_cli.profile import profile_group, profile_store, resolver_for
@@ -1552,7 +1552,8 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    label = sanitize_registry_name(name or str(file))
+    # What `source list` shows and `source remove` takes: the SOURCE node's own name.
+    label = name or str(file)
     if queries:
         n = len(queries)
         console.print(f"Ingested source: [bold]{label}[/bold] ({n} {'query' if n == 1 else 'queries'} extracted to KB)")
