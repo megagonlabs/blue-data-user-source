@@ -88,7 +88,7 @@ class UserSource(DataSource):
         optional_properties: dict | None = None,
     ) -> None: ...
 
-    def remove_source(self, database: str, source_name: str) -> None: ...
+    async def remove_source(self, database: str, source_name: str) -> dict: ...
 
     # ---- data access ----
 
@@ -314,14 +314,14 @@ queries=["What skills does the user have?"]
 
 ### `DELETE /sources/{source_name}`
 
-Remove a source from the DataRegistry. KG data is preserved.
+Remove a source by name or id: its chunks are deleted from `external_documents` and its KB SOURCE node is deleted; facts extracted from it are kept. `404` when no source, or more than one, matches.
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `source_name` | string | Source name to remove |
+| `source_name` | string | Source name or id to remove |
 | `database` | string (query) | Database ID |
 
-**Response `204 No Content`**
+**Response `200 OK`** — `{"database", "id", "name", "chunks_removed"}`
 
 ---
 
@@ -463,14 +463,14 @@ Pass the `session_id` returned by `session_start` as the `session` argument to `
 ```json
 {
   "name": "remove_source",
-  "description": "Remove a source from the user's DataRegistry. KG data extracted from the source is preserved.",
+  "description": "Remove a source: its document leaves search and query answers. KG facts extracted from the source are kept.",
   "inputSchema": {
     "type": "object",
     "required": ["source_name", "database"],
     "properties": {
       "source_name": {
         "type": "string",
-        "description": "Name of the source to remove from the registry"
+        "description": "Name or id of the source to remove"
       },
       "database": {
         "type": "string",

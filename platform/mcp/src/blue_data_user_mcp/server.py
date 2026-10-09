@@ -326,22 +326,19 @@ async def add_source(
 
 @mcp.tool()
 async def remove_source(user: str, source_name: str) -> str:
-    """Remove a source from the user's registry. KB data is preserved.
+    """Remove a source: its document leaves search and query answers.
+
+    Facts extracted from the source are kept; only their link to it is removed.
+    Fails when no source, or more than one, has that name — then pass the id
+    from list_sources.
 
     Args:
         user:        User name.
-        source_name: Name of the source to remove.
+        source_name: Name or id of the source to remove.
     """
     try:
-        source = get_source()
-        # UserDataManager.remove_source returns silently when nothing matches,
-        # so without this the tool reports removed:True for a source that was
-        # never there.
-        known = {s.get("name") for s in await source.list_sources(user)}
-        if source_name not in known:
-            raise ValueError(f"Source '{source_name}' is not registered for user '{user}'.")
-        source.remove_source(user, source_name)
-        return _ok({"user": user, "source": source_name, "removed": True})
+        removed = await get_source().remove_source(user, source_name)
+        return _ok({"user": user, "source": source_name, "removed": True, **removed})
     except Exception as e:
         return _err(e)
 

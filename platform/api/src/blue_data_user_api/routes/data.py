@@ -5,10 +5,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from blue_data_user_api.auth import require_api_key
+from blue_data_user_source import QueryError
 
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_key)])
 
@@ -57,6 +58,11 @@ async def add_source(name: str, body: AddSourceRequest, request: Request) -> dic
     return {"database": name, "added": True}
 
 
-@router.delete("/{name}/sources/{source_name}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove a source")
-async def remove_source(name: str, source_name: str, request: Request) -> None:
-    request.app.state.source.remove_source(name, source_name)
+@router.delete("/{name}/sources/{source_name}", summary="Remove a source")
+async def remove_source(name: str, source_name: str, request: Request) -> dict:
+    """Remove a source by name or id; facts extracted from it are kept."""
+    try:
+        removed = await request.app.state.source.remove_source(name, source_name)
+    except QueryError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return {"database": name, **removed}

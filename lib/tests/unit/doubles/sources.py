@@ -10,4 +10,5 @@ def make_mock_kb(result: list[Any] | str | None = None, metadata: dict | None = 
     kb = AsyncMock()
     kb.answer = AsyncMock(return_value=(result if result is not None else [], metadata or {}))
     kb.import_text = AsyncMock()
+    kb.add_source = AsyncMock(return_value="source-1")  # KBSource returns the new SOURCE node's id
     return kb

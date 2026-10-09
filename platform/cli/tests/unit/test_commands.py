@@ -685,27 +685,51 @@ def test_source_add_missing_file_exits_with_code_2(runner: CliRunner, data_dir: 
     assert result.exit_code == 2
 
 
-def test_source_remove_deregisters(runner: CliRunner, data_dir: Path) -> None:
+def test_source_remove_removes_and_reports_the_chunks(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.list_sources = AsyncMock(return_value=[{"name": "resume.txt"}])
+    mock.list_sources = AsyncMock(return_value=[{"id": "s1", "name": "resume.txt"}])
+    mock.remove_source = AsyncMock(return_value={"id": "s1", "name": "resume.txt", "chunks_removed": 4})
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "source", "remove", "resume.txt", "--yes"])
-    assert result.exit_code == 0
-    mock.remove_source.assert_called_once_with("alice", "resume.txt")
+    assert result.exit_code == 0, result.output
+    mock.remove_source.assert_awaited_once_with("alice", "resume.txt")
+    assert "Removed source: resume.txt (4 document chunks)" in result.output
+
+
+def test_source_remove_accepts_an_id(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=[{"id": "s1", "name": "resume.txt"}])
+    mock.remove_source = AsyncMock(return_value={"id": "s1", "name": "resume.txt", "chunks_removed": 1})
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "remove", "s1", "--yes"])
+    assert result.exit_code == 0, result.output
+    mock.remove_source.assert_awaited_once_with("alice", "s1")
+
+
+def test_source_remove_warns_when_chunks_cannot_be_located(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.list_sources = AsyncMock(return_value=[{"id": "s1", "name": "old.txt"}])
+    mock.remove_source = AsyncMock(return_value={"id": "s1", "name": "old.txt", "chunks_removed": None})
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "remove", "old.txt", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "could not be" in result.output and "database reset" in result.output
 
 
 def test_source_remove_unknown_source_errors(runner: CliRunner, data_dir: Path) -> None:
-    """remove_source returns silently when nothing matches, so the command has
-    to check first or it reports a removal that never happened."""
+    """Checked before the confirmation prompt, so a wrong name asks nothing."""
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.list_sources = AsyncMock(return_value=[{"name": "resume.txt"}])
+    mock.list_sources = AsyncMock(return_value=[{"id": "s1", "name": "resume.txt"}])
+    mock.remove_source = AsyncMock()
     with _patched(mock):
-        result = _invoke(runner, data_dir, ["data", "source", "remove", "nonexistent", "--yes"])
+        result = _invoke(runner, data_dir, ["data", "source", "remove", "nonexistent"])
     assert result.exit_code == 1
-    assert "not registered" in result.output
-    mock.remove_source.assert_not_called()
+    assert "No source 'nonexistent'" in result.output
+    mock.remove_source.assert_not_awaited()
 
 
 # ── schema group ───────────────────────────────────────────────────────────────

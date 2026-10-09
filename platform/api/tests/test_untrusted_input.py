@@ -124,3 +124,21 @@ def test_add_source_rejects_non_text(client, source, value):
     resp = client.post("/alice/sources", json={"source": value})
     assert resp.status_code == 422
     source.add_source.assert_not_awaited()
+
+
+# ── DELETE /{name}/sources/{source_name} (#118) ───────────────────────────────
+
+def test_remove_source_reports_what_it_removed(client, source):
+    source.remove_source = AsyncMock(return_value={"id": "s1", "name": "resume", "chunks_removed": 3})
+    resp = client.delete("/alice/sources/resume")
+    assert resp.status_code == 200
+    assert resp.json() == {"database": "alice", "id": "s1", "name": "resume", "chunks_removed": 3}
+
+
+def test_remove_source_unknown_is_404_not_a_silent_success(client, source):
+    from blue_data_user_source import QueryError
+
+    source.remove_source = AsyncMock(side_effect=QueryError("No source 'nope' for user 'alice'."))
+    resp = client.delete("/alice/sources/nope")
+    assert resp.status_code == 404
+    assert "No source 'nope'" in resp.json()["detail"]

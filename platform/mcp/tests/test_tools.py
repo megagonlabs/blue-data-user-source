@@ -195,6 +195,8 @@ async def test_remove_source_removes_a_registered_source(tmp_path):
 
     result = json.loads(await remove_source(USER, "resume"))
     assert result["removed"] is True
+    assert result["chunks_removed"] >= 1
+    assert "resume" not in [s.get("name") for s in json.loads(await list_sources(USER))]
 
 
 # ---------------------------------------------------------------------------

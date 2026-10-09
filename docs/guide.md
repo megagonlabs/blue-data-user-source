@@ -74,7 +74,7 @@ await us.add_source(
     optional_properties={"queries": ["What skills does the user have?"]},
 )
 
-us.remove_source("alice", "resume.txt")   # removes registry entry; KG data preserved
+await us.remove_source("alice", "resume.txt")   # document leaves search; extracted facts kept
 ```
 
 ---

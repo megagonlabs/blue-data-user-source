@@ -1585,32 +1585,42 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.pass_obj
 def source_remove(obj: dict, name: str, yes: bool) -> None:
-    """Remove a source, keeping its KB data."""
+    """Remove a source by name or id, keeping the facts extracted from it."""
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
 
-    # UserDataManager.remove_source returns silently when no record matches, so
-    # without this the command reports a removal that never happened. Checked
-    # before the prompt, so there is nothing to confirm when the name is wrong.
+    # Checked before the prompt, so there is nothing to confirm when the name is wrong.
     try:
-        known = {s.get("name") for s in asyncio.run(source.list_sources(db))}
+        matches = [s for s in asyncio.run(source.list_sources(db)) if name in (s.get("id"), s.get("name"))]
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    if name not in known:
-        err.print(f"[red]Error:[/red] Source '{name}' is not registered for database '{db}'.")
+    if not matches:
+        err.print(f"[red]Error:[/red] No source '{name}' for database '{db}'.")
         sys.exit(1)
 
     if not yes:
         click.confirm(
-            f"Remove source '{name}' from registry? KG data will be preserved.", abort=True
+            f"Remove source '{name}'? Its document leaves search and query answers; "
+            "facts extracted from it are kept.",
+            abort=True,
         )
     try:
-        source.remove_source(db, name)
+        removed = asyncio.run(source.remove_source(db, name))
     except (UDbError, Exception) as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    console.print(f"Removed source from registry: [bold]{name}[/bold]")
+    if removed["chunks_removed"] is None:
+        console.print(f"Removed source: [bold]{removed['name']}[/bold]")
+        err.print(
+            "[yellow]Warning:[/yellow] its document chunks predate tracking and could not be "
+            "located; they stay searchable until 'blue-userdb database reset'."
+        )
+    else:
+        n = removed["chunks_removed"]
+        console.print(
+            f"Removed source: [bold]{removed['name']}[/bold] ({n} document chunk{'' if n == 1 else 's'})"
+        )
 
 
 # ------------------------------------------------------------------ #

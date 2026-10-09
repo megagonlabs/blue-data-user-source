@@ -677,9 +677,12 @@ class UserSource(DataSource):
             source, queries, name=name, description=description, original=original, effort=effort,
         )
 
-    def remove_source(self, database: str, source_name: str) -> None:
-        """Remove a source from the user's DataRegistry without touching KB data."""
-        self._get_manager(database).remove_source(source_name)
+    async def remove_source(self, database: str, source_name: str) -> dict[str, Any]:
+        """Remove a source by name or id: its document chunks and its KB SOURCE node.
+
+        Facts extracted from it are kept. See ``UserDataManager.remove_source``.
+        """
+        return await self._get_manager(database).remove_source(source_name)
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #

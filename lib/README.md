@@ -147,8 +147,8 @@ async def main() -> None:
         optional_properties={"queries": ["What skills does the user have?"]},
     )
 
-    # Remove a source from the registry (KG data is preserved)
-    us.remove_source("alice", "resume.txt")
+    # Remove a source: its document leaves search; facts extracted from it are kept
+    await us.remove_source("alice", "resume.txt")
 
     # Query — returns (list[QueryResult], session_id). Omitting "session" auto-creates
     # a new single-query session; pass the returned session_id back in to continue it.
@@ -242,7 +242,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | Method | Description |
 |---|---|
 | `add_source(source, database, optional_properties)` *(async)* | Register a source in the KB and optionally extract content |
-| `remove_source(database, source_name)` | Remove a source from the DataRegistry (KG data preserved) |
+| `remove_source(database, source_name)` *(async)* | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept |
 
 `add_source` accepts:
 
@@ -463,7 +463,7 @@ data commands:
   blue-userdb data extract TEXT       Extract entities/facts from free text via LLM
   blue-userdb data source list        List data sources
   blue-userdb data source add FILE    Register a file source (optionally extract)
-  blue-userdb data source remove NAME Remove a source from the registry
+  blue-userdb data source remove NAME Remove a source (extracted facts are kept)
 
 schema commands:
   blue-userdb schema list             List classes and relations

@@ -200,7 +200,7 @@ Without `queries`, registers the source for provenance only (Type 1). With
 
 #### `remove_source`
 
-`user`, `source_name` — removes a source from the registry; KB data is preserved.
+`user`, `source_name` (name or id) — removes the source: its document leaves search and query answers; facts extracted from it are kept. Errors when no source, or more than one, has that name.
 
 ---
 

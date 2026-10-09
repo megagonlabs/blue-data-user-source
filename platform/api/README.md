@@ -167,7 +167,7 @@ curl -X POST http://localhost:8000/alice/sessions/$SID/end
 | `GET` | `/{name}/data` | List all ingested data entries |
 | `GET` | `/{name}/sources` | List registered sources; optional `?source_id=` filter |
 | `POST` | `/{name}/sources` | Add a source and optionally extract attributes |
-| `DELETE` | `/{name}/sources/{source_name}` | Remove a source from the registry (KB data preserved) |
+| `DELETE` | `/{name}/sources/{source_name}` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{database, id, name, chunks_removed}`; `404` if no source, or more than one, matches |
 
 `POST /{name}/sources` body — `source` is the text to add (required); it is never read as a path on the server:
 

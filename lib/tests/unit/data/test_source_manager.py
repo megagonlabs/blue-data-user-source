@@ -4,12 +4,15 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
     CLS_KB_MEMORY,
     UserDataManager,
     sanitize_registry_name
 )
+from blue_data_user_source.types import QueryError
 
 _SCHEMA = str(Path(__file__).parent.parent.parent.parent / "src" / "blue_data_user_source" / "data" / "schema.json")
 _MEM_JSON = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
@@ -163,6 +166,74 @@ async def test_a_reset_that_keeps_the_kb_keeps_ingested_documents(tmp_path: Path
 
     assert documents_dir.exists()
     assert _canary_found(mgr)
+
+
+# ── remove_source (#118) ──────────────────────────────────────────────────────
+
+async def test_remove_source_takes_the_document_out_of_search(tmp_path: Path, user_id: str) -> None:
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    [added] = await mgr.list_sources()
+    # As in a later process: the doc store's own path index is per-process and
+    # empty there, so removal must not depend on it.
+    mgr._external_doc_source = None
+
+    removed = await mgr.remove_source(added["name"])
+
+    assert removed["id"] == added["id"]
+    assert removed["chunks_removed"] >= 1
+    assert await mgr.list_sources() == []
+    assert not _canary_found(mgr)
+
+
+async def test_remove_source_accepts_the_id(tmp_path: Path, user_id: str) -> None:
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    [added] = await mgr.list_sources()
+    await mgr.remove_source(added["id"])
+    assert await mgr.list_sources() == []
+
+
+async def test_remove_source_unknown_name_raises(tmp_path: Path, user_id: str) -> None:
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    with pytest.raises(QueryError, match="No source 'nope'"):
+        await mgr.remove_source("nope")
+    assert _canary_found(mgr)
+
+
+async def test_remove_source_cannot_reach_the_internal_stores(tmp_path: Path, user_id: str) -> None:
+    """"kb" used to match the user's own KB record and deregister it."""
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    for internal in ("kb", "metadata", "contacts", "sessions", "external_documents"):
+        with pytest.raises(QueryError):
+            await mgr.remove_source(internal)
+    assert mgr._registry.get_source_properties("kb")
+    assert _canary_found(mgr)
+
+
+async def test_remove_source_ambiguous_name_asks_for_the_id(tmp_path: Path, user_id: str) -> None:
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    other = tmp_path / "other.txt"
+    other.write_text("Something else entirely.\n")
+    [first] = await mgr.list_sources()
+    await mgr.add_source(str(other), name=first["name"])
+    with pytest.raises(QueryError, match="remove one by id"):
+        await mgr.remove_source(first["name"])
+    assert len(await mgr.list_sources()) == 2
+
+
+async def test_remove_source_without_a_document_record_still_removes_the_source(
+    tmp_path: Path, user_id: str,
+) -> None:
+    """A source added before documents were recorded: the SOURCE node goes, and
+    the caller is told the chunks could not be located."""
+    mgr, _ = await _manager_with_a_document(tmp_path, user_id)
+    for record in mgr._registry.list_records(record_type="document", scope="/"):
+        mgr._registry.deregister(record)
+    [added] = await mgr.list_sources()
+
+    removed = await mgr.remove_source(added["id"])
+
+    assert removed["chunks_removed"] is None
+    assert await mgr.list_sources() == []
 
 
 async def test_destroy_removes_session_content_directory(

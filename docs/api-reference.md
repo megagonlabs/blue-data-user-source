@@ -66,7 +66,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | Method | Returns | Description |
 |---|---|---|
 | `await add_source(source, database, optional_properties=None)` | `None` | Register a source; `optional_properties["queries"]` drives Type 2 extraction |
-| `remove_source(database, source_name)` | `None` | Remove from the registry — KB data preserved |
+| `await remove_source(database, source_name)` | `dict` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{id, name, chunks_removed}`; raises `QueryError` if no source, or more than one, matches |
 | `await import_data(source, collection, database="default", entity=None, mode="append", options=None)` | `dict` | Lower-level `KBSource.import_data` passthrough |
 
 `add_source`'s `optional_properties`:
@@ -174,7 +174,7 @@ Owns one user's `DataRegistry` and its five built-in sources (`kb`, `metadata`, 
 | `destroy()` | `None` | Delete all backing files, if file-backed |
 | `await execute_query(query, on_tool_call=None, on_tool_result=None, session_id=None)` | `tuple[list, dict]` | Answer against `kb`, then merge top-`5` `DOCUMENT.SEARCH` hits from `session_content` and `external_documents`, each tagged `"source"` |
 | `await add_source(source, queries=None, name=None, description=None, original=None)` | `None` | Ingest into `external_documents`; optionally run one `import_text` per query |
-| `remove_source(source_name)` | `None` | Remove from the registry |
+| `await remove_source(source_name)` | `dict` | Delete the source's `external_documents` chunks and its KB SOURCE node (facts kept); `chunks_removed` is `None` for a source added before documents were recorded |
 | `await list_data()` | `list[dict]` | Raw KB data entries |
 | `await list_sources(source_id=None)` | `list[dict]` | KB `SOURCE` nodes |
 | `await store_data(text, queries=None)` | — | Store free text (used internally to persist interaction responses) |

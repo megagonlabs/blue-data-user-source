@@ -69,6 +69,10 @@ DOC_SEARCH_TOP_K = 5
 # it happens not to corrupt the key. Strip both so registered names are
 # always safe, flat, single-segment keys.
 _NAME_SEPARATOR_REPLACEMENT = "__SEP__"
+
+# Registry record type that maps a KB SOURCE id to its document in
+# "external_documents" (document_id + chunk_count) — see add_source.
+_DOCUMENT_RECORD = "document"
 _UNSAFE_NAME_CHARS = ("/", "\\", ".")
 
 
@@ -518,6 +522,15 @@ class UserDataManager:
         # default_collection ("documents"), matching the index created by
         # ensure_external_documents_source().
         chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": location})
+        if chunks:
+            # The doc store can delete a document from another process only by
+            # id + chunk count (its path index is per-process), so keep both,
+            # keyed by the SOURCE node, for remove_source.
+            self._registry.register_record(
+                name=sanitize_registry_name(source_id), type=_DOCUMENT_RECORD, scope="/",
+                description=f"external_documents chunks of {name or location}",
+                properties={"document_id": chunks[0]["document_id"], "chunk_count": len(chunks)},
+            )
 
         if queries:
             # Headings live in "section_title", not in the chunk body — a resume's
@@ -537,13 +550,46 @@ class UserDataManager:
                 self._database, text, queries=queries, source_id=source_id, effort=effort
             )
 
-    def remove_source(self, source_name: str) -> None:
-        """Remove a source from the DataRegistry without touching KB data."""
-        records = self._registry.list_records(record_type="source", scope="/") or []
-        for record in records:
-            if record.get("name") == source_name:
-                self._registry.deregister(record)
-                return
+    async def remove_source(self, source_name: str) -> dict[str, Any]:
+        """Remove a source added with :meth:`add_source`, by its name or id.
+
+        Deletes its chunks from "external_documents", so it no longer reaches
+        searches or query answers, and its KB SOURCE node with the extraction
+        records under it. Facts extracted from it stay in the KB; only their
+        link to this source goes. Raises ``QueryError`` when no source, or more
+        than one, has that name.
+
+        Returns ``{"id", "name", "chunks_removed"}``. ``chunks_removed`` is None
+        for a source added before its document was recorded: its chunks cannot
+        be located, and only a reset of the KB removes them.
+        """
+        from blue_data_user_source.types import QueryError
+
+        matches = [s for s in await self.list_sources() if source_name in (s.get("id"), s.get("name"))]
+        if not matches:
+            raise QueryError(f"No source {source_name!r} for user {self._database!r}.")
+        if len(matches) > 1:
+            ids = ", ".join(str(s.get("id")) for s in matches)
+            raise QueryError(
+                f"{len(matches)} sources are named {source_name!r} for user {self._database!r}; "
+                f"remove one by id ({ids})."
+            )
+        source_id = matches[0]["id"]
+
+        chunks_removed: int | None = None
+        record = self._registry.get_record(sanitize_registry_name(source_id), _DOCUMENT_RECORD)
+        if record:
+            props = record.get("properties") or {}
+            self.ensure_external_documents_source().execute_query({
+                "op": "DOCUMENT.DELETE",
+                "document_id": props["document_id"],
+                "chunk_count": props["chunk_count"],
+            })
+            chunks_removed = int(props["chunk_count"])
+            self._registry.deregister(record)
+
+        await self._ensure_kb_source().delete_source(self._database, source_id)
+        return {"id": source_id, "name": matches[0].get("name"), "chunks_removed": chunks_removed}
 
     async def list_data(self) -> list[dict[str, Any]]:
         data = await self._ensure_kb_source().fetch_database_data(self._database, compact=True)
@@ -794,6 +840,8 @@ class UserDataManager:
         if directory is not None and directory.exists():
             shutil.rmtree(directory)
         self._external_doc_source = None
+        for record in self._registry.list_records(record_type=_DOCUMENT_RECORD, scope="/") or []:
+            self._registry.deregister(record)
 
     def save_session_transcript(self, session_id: str, file_name: str, text: str) -> Path | None:
         """Persist raw interaction-transcript text as a ``.txt`` file on disk.

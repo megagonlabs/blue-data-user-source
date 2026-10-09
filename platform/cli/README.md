@@ -311,7 +311,7 @@ Manage data sources associated with the active database.
 |---|---|
 | `blue-userdb data source list` | List registry sources and KG SOURCE nodes; KG-only entries are marked `(*)` |
 | `blue-userdb data source add FILE` | Register a file (.txt/.pdf/.docx) as a source — always parsed, chunked, and embedded into the shared `external_documents` DocumentDataSource, and optionally extracted into the KG |
-| `blue-userdb data source remove NAME` | Remove a source, keeping its KB data |
+| `blue-userdb data source remove NAME` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept |
 **Type 1 — register + ingest for later search**
 
 ```bash

@@ -208,7 +208,7 @@ blue-userdb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
 |---|---|
 | `blue-userdb data source list [--show-detailed] [--format]` | List registry sources and KG `SOURCE` nodes; KG-only entries marked `(*)` |
 | `blue-userdb data source add FILE [options]` | Register a file as a source — always ingested into `external_documents`; optionally extracted into the KG |
-| `blue-userdb data source remove NAME [--yes]` | Remove a source from the registry (KG data preserved) |
+| `blue-userdb data source remove NAME [--yes]` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept |
 
 `source add` options: `--query QUESTION` (repeatable — presence triggers Type 2), `--name`, `--description`, `--original`.
 
