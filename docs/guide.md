@@ -51,7 +51,7 @@ await us.create_user(
 )
 
 print(us.list_users())          # ["alice"]
-await us.reset_user("alice")    # clear KB data, metadata, contacts and sessions; reseed schemas
+await us.reset_user("alice")    # clear KB data, documents, metadata, contacts, sessions; reseed
 us.remove_user("alice")         # remove from outer registry only — backing files kept
 await us.delete_user("alice")   # remove from outer registry AND wipe all backing files
 ```

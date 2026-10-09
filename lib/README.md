@@ -194,7 +194,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | `list_users()` | Return list of database names |
 | `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
 | `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
-| `reset_user(name)` *(async)* | Wipe KB data, metadata, contacts, sessions and imported registry entries, then reseed the schemas |
+| `reset_user(name)` *(async)* | Wipe KB data, ingested documents, metadata, contacts, sessions and imported registry entries, then reseed the schemas |
 | `delete_user(name)` *(async)* | Destroy all backing files and remove from the outer registry |
 
 **Source properties format** — all source configs use `_class` + `connection`:

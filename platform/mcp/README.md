@@ -119,7 +119,7 @@ Deletes the user and all their backing data files.
 |---|---|---|
 | `name` | `str` | User name to reset |
 
-Clears the user's KB data, metadata, contact methods and session history, and
+Clears the user's KB data, ingested documents, metadata, contact methods and session history, and
 reseeds the schemas. The user stays registered. This cannot be undone.
 
 ---

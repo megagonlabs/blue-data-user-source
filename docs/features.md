@@ -9,7 +9,7 @@ await us.create_user("alice", registry_props=..., kb_source_props=..., metadata_
                       contact_source_props=..., session_source_props=...)
 
 print(us.list_users())        # ["alice"]
-await us.reset_user("alice")  # clear KB data, metadata, contacts and sessions; reseed schemas
+await us.reset_user("alice")  # clear KB data, documents, metadata, contacts, sessions; reseed
 await us.delete_user("alice") # remove from registry and wipe all backing files
 ```
 

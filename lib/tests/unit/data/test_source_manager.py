@@ -129,6 +129,42 @@ async def test_reset_removes_session_transcripts_and_vector_store(
     assert not documents_path.exists()
 
 
+# ── ingested documents and reset (#144) ───────────────────────────────────────
+
+async def _manager_with_a_document(tmp_path: Path, user_id: str) -> tuple[UserDataManager, Path]:
+    mgr = await _build_file_backed_manager(tmp_path, user_id, tmp_path / "sessions")
+    doc = tmp_path / "notes.txt"
+    doc.write_text("PRIVATE-CANARY: the bank PIN hint is the name of the first dog.\n")
+    await mgr.add_source(str(doc))
+    return mgr, tmp_path / "external_documents"
+
+
+def _canary_found(mgr: UserDataManager) -> bool:
+    hits = mgr.ensure_external_documents_source().execute_query(
+        {"op": "DOCUMENT.SEARCH", "query": "bank PIN hint", "top_k": 5}
+    )
+    return "PRIVATE-CANARY" in str(hits)
+
+
+async def test_resetting_the_kb_removes_ingested_documents(tmp_path: Path, user_id: str) -> None:
+    mgr, documents_dir = await _manager_with_a_document(tmp_path, user_id)
+    assert _canary_found(mgr)
+
+    await mgr.reset(sources={"kb"})
+
+    assert not documents_dir.exists()
+    assert not _canary_found(mgr)  # rebuilt from disk, as the next query would
+
+
+async def test_a_reset_that_keeps_the_kb_keeps_ingested_documents(tmp_path: Path, user_id: str) -> None:
+    mgr, documents_dir = await _manager_with_a_document(tmp_path, user_id)
+
+    await mgr.reset(sources={"metadata"})
+
+    assert documents_dir.exists()
+    assert _canary_found(mgr)
+
+
 async def test_destroy_removes_session_content_directory(
     tmp_path: Path, user_id: str,
 ) -> None:

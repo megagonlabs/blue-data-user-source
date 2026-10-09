@@ -255,6 +255,9 @@ class UserDataManager:
 
         if "kb" in sources:
             await self.clear_kb()
+            # Ingested documents go with the KB that records them (its SOURCE
+            # nodes): left on disk, they came back in the next query (#144).
+            self._clear_external_documents()
             if schema_path:
                 await self.seed_kb_source_schema(schema_path)
                 await self.seed_user_entity()
@@ -779,6 +782,18 @@ class UserDataManager:
         for path in directory.glob("*.json"):
             path.unlink(missing_ok=True)
         self._session_doc_source = None
+
+    def _clear_external_documents(self) -> None:
+        """Remove the persisted external_documents store (chunks of every added file).
+
+        It lives outside the per-user registry, so deregistering its record
+        leaves the files behind, and the next ``ensure_external_documents_source``
+        reloads them. No-op when the vector backend is in-memory.
+        """
+        directory = self._external_documents_directory()
+        if directory is not None and directory.exists():
+            shutil.rmtree(directory)
+        self._external_doc_source = None
 
     def save_session_transcript(self, session_id: str, file_name: str, text: str) -> Path | None:
         """Persist raw interaction-transcript text as a ``.txt`` file on disk.

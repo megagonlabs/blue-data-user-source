@@ -101,7 +101,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`) |
 | `GET` | `/databases/{name}` | Get user info and registry properties |
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
-| `POST` | `/databases/{name}/reset` | Clear a user's KB data, metadata, contacts and sessions, and reseed the schemas; the user stays registered |
+| `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered |
 
 `POST /databases/{name}` takes no body (an empty `{}` is accepted): every store is a file under `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`, and any other key is rejected with `422`. `name` must be 1–64 letters, digits, `_` or `-`, starting with a letter or digit. Other backends (Redis, Neo4j) are configured through the library or the CLI, not over REST.
 
