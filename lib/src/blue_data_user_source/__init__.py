@@ -6,6 +6,7 @@ from blue_data_user_source.source import UserSource
 from blue_data_user_source.types import (
     ImportError,
     InteractionError,
+    LLMError,
     NoContactMethodError,
     QueryError,
     QueryResult,
@@ -16,6 +17,7 @@ __all__ = [
     "FileUserSource",
     "ImportError",
     "InteractionError",
+    "LLMError",
     "MemoryUserSource",
     "NoContactMethodError",
     "QueryError",

@@ -22,6 +22,16 @@ class ImportError(UDbError):  # noqa: A001
     """Raised when a source import fails."""
 
 
+class LLMError(UDbError):
+    """Raised when the language model cannot be reached or returns an unusable reply.
+
+    Covers authentication, network, rate-limit, timeout and unknown-model errors
+    from the OpenAI SDK, a missing ``openai`` package, and a JSON-mode reply that
+    is not a JSON object. Callers must not turn it into an empty result: an
+    outage would then look like a user with no data (#117).
+    """
+
+
 class InteractionError(UDbError):
     """Raised when user interaction fails (channel unavailable, timeout, etc.)."""
 

@@ -68,28 +68,43 @@ async def _llm_complete(
     object response.  The OpenAI ``response_format`` parameter is set
     accordingly and the returned value is a parsed ``dict`` rather than a
     string.  For plain-text calls the return value is ``str``.
+
+    Raises ``LLMError`` when the model cannot be reached (any OpenAI SDK error:
+    authentication, network, rate limit, timeout, unknown model), when the
+    ``openai`` package is missing, or when a JSON-mode reply is not a JSON
+    object. It never stands in an empty value for a failure: callers turned
+    that into "no results", so an outage looked like a user with no data
+    (#117). Errors from our own code are not caught here.
     """
+    from blue_data_user_source.types import LLMError
+
     props = properties or {}
     want_json = props.get("response_format") == "json_object"
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI()
-        kwargs: dict = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        if want_json:
-            kwargs["response_format"] = {"type": "json_object"}
-        resp = await client.chat.completions.create(**kwargs)
-        content = resp.choices[0].message.content or ""
-        if want_json:
-            try:
-                return json.loads(_strip_json_fences(content))
-            except (json.JSONDecodeError, ValueError):
-                return {}
+        import openai
+    except ImportError as exc:
+        raise LLMError("The 'openai' package is required for LLM calls; install it.") from exc
+
+    kwargs: dict = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if want_json:
+        kwargs["response_format"] = {"type": "json_object"}
+    try:
+        resp = await openai.AsyncOpenAI().chat.completions.create(**kwargs)
+    except openai.OpenAIError as exc:
+        raise LLMError(f"LLM call to {model!r} failed: {exc}") from exc
+    content = resp.choices[0].message.content or ""
+    if not want_json:
         return content
-    except Exception:
-        return {} if want_json else ""
+    try:
+        parsed = json.loads(_strip_json_fences(content))
+    except ValueError as exc:  # json.JSONDecodeError is a ValueError
+        raise LLMError(f"LLM {model!r} returned invalid JSON: {content[:200]!r}") from exc
+    if not isinstance(parsed, dict):
+        raise LLMError(f"LLM {model!r} returned JSON that is not an object: {content[:200]!r}")
+    return parsed
 
 
 class UserQueryReasoner:

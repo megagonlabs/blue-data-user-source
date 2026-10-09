@@ -282,7 +282,7 @@ class QueryResult:
 ## Exceptions
 
 ```python
-from blue_data_user_source import UDbError, QueryError, ImportError, InteractionError, NoContactMethodError
+from blue_data_user_source import UDbError, QueryError, ImportError, InteractionError, NoContactMethodError, LLMError
 ```
 
 All inherit from `UDbError`.
@@ -292,6 +292,7 @@ All inherit from `UDbError`.
 | `QueryError` | A query cannot be processed, or no database/data manager is available |
 | `ImportError` | A source import fails |
 | `InteractionError` | User interaction fails (channel unavailable, timeout, etc.) |
+| `LLMError` | The language model cannot be reached (authentication, network, rate limit, timeout, unknown model — any OpenAI SDK error), the `openai` package is missing, or a JSON-mode reply is not a JSON object. Raised rather than returning an empty result; the REST API maps it to `502` |
 | `NoContactMethodError` | Subclass of `InteractionError`: no contact method can reach the user from this process (no console, and nothing else registered). The query path catches it and answers without asking |
 
 `ImportError` shadows the Python builtin within this package's namespace (`# noqa: A001` in `types.py`) — import it explicitly from `blue_data_user_source` rather than relying on it resolving to the builtin.

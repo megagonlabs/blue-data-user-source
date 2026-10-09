@@ -101,12 +101,32 @@ def test_database_create_onboards_by_default(runner: CliRunner, data_dir: Path) 
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "create", "alice"])
     assert result.exit_code == 0
     assert "alice" in result.output
-    assert mock.create_user.await_args.kwargs["onboard"] is True
-    assert mock.create_user.await_args.kwargs["onboard_metadata"] is True
+    assert mock.create_user.await_args.kwargs["onboard"] is False  # onboarded as its own step
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True)
+
+
+def test_database_create_keeps_the_database_when_onboarding_fails(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    """An unreachable LLM fails onboarding, not the creation that already happened (#117)."""
+    from blue_data_user_source import LLMError
+
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(side_effect=LLMError("LLM call to 'gpt-4o' failed: down"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])
+    assert result.exit_code == 0, result.output
+    assert "Created database: alice (selected)" in result.output
+    assert "onboarding did not run" in result.output and "database onboard" in result.output
+    assert (data_dir / ".selected.database").read_text() == "alice"
 
 
 def test_database_create_no_onboard_flag_disables_onboarding(
@@ -115,10 +135,12 @@ def test_database_create_no_onboard_flag_disables_onboarding(
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-onboard"])
     assert result.exit_code == 0
     assert mock.create_user.await_args.kwargs["onboard"] is False
+    mock.onboard_user.assert_not_called()
 
 
 def test_database_create_no_metadata_onboard_flag(
@@ -127,10 +149,11 @@ def test_database_create_no_metadata_onboard_flag(
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-metadata-onboard"])
     assert result.exit_code == 0
-    assert mock.create_user.await_args.kwargs["onboard_metadata"] is False
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False)
 
 
 def test_database_create_already_exists_exits_with_code_1(
@@ -174,6 +197,7 @@ def test_database_create_defaults_kb_search_mode_to_bm25(runner: CliRunner, data
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "create", "alice"])
     assert result.exit_code == 0
@@ -188,6 +212,7 @@ def test_database_create_kb_search_mode_none_omits_search_key(
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(
             runner, data_dir, ["database", "create", "alice", "--kb-search-mode", "none"]
@@ -205,6 +230,7 @@ def test_database_create_kb_search_bm25_omits_index_dir_for_memory_backend(
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(
             runner, data_dir, ["database", "create", "alice", "--kb-backend", "memory"]
@@ -220,6 +246,7 @@ def test_database_create_kb_search_mode_semantic_builds_vector_and_embedding_con
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(
             runner, data_dir,
@@ -1125,6 +1152,7 @@ def test_database_create_registers_the_configured_schema_paths(
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
     with patch("blue_data_user_cli.commands._make_source", return_value=mock) as make_source:
         result = runner.invoke(cli, [
             "--data-dir", str(data_dir),

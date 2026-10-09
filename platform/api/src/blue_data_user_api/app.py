@@ -5,7 +5,9 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from blue_data_user_source import LLMError
 
 from blue_data_user_api.config import settings
 from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query, sessions
@@ -47,6 +49,12 @@ app.include_router(metadata.router)
 app.include_router(contacts.router)
 app.include_router(interactions.router)
 app.include_router(sessions.router)
+
+
+@app.exception_handler(LLMError)
+async def llm_error(request: Request, exc: LLMError) -> JSONResponse:
+    """The model behind a query could not answer: an upstream failure, not ours (#117)."""
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.get("/health", tags=["health"])

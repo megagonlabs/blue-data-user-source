@@ -673,14 +673,26 @@ def database_create(
             _user_contact_props(data_dir, name),
             _user_session_props(data_dir, name),
             _user_doc_source_props(data_dir, name, doc_backend),
-            onboard=onboard,
-            onboard_metadata=metadata_onboard,
+            # Onboarded below, once the database exists and is selected, so a
+            # failed interview (e.g. the LLM is unreachable) cannot leave a
+            # database that was created but reported as an error.
+            onboard=False,
+            onboard_metadata=False,
         ))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     _selected_db_path(data_dir).write_text(name)
     console.print(f"Created database: [bold]{name}[/bold] (selected)")
+    if not onboard:
+        return
+    try:
+        asyncio.run(source.onboard_user(name, include_metadata=metadata_onboard))
+    except UDbError as exc:
+        err.print(
+            f"[yellow]Warning:[/yellow] onboarding did not run: {exc}\n"
+            "Run 'blue-userdb database onboard' to try again."
+        )
 
 
 @database_group.command("onboard")

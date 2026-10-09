@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
-from blue_data_user_source.types import InteractionError
+from blue_data_user_source.types import InteractionError, LLMError
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _WORKING_HOURS_RE = re.compile(
@@ -506,7 +506,11 @@ class ContactManager:
             "method from the list above. "
             'Return only a JSON object: {"protocol": "<protocol>", "name": "<name>"}'
         )
-        result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        try:
+            result = await _llm_complete(prompt, properties={"response_format": "json_object"})
+        except LLMError:
+            # Documented: on LLM failure, fall back to the lowest-preference method.
+            return fallback
         if isinstance(result, dict):
             for method in methods:
                 if method.protocol == result.get("protocol") and method.name == result.get("name"):

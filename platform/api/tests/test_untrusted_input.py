@@ -142,3 +142,14 @@ def test_remove_source_unknown_is_404_not_a_silent_success(client, source):
     resp = client.delete("/alice/sources/nope")
     assert resp.status_code == 404
     assert "No source 'nope'" in resp.json()["detail"]
+
+
+# ── LLM failures (#117) ───────────────────────────────────────────────────────
+
+def test_an_llm_failure_is_a_502_not_an_empty_answer(client, source):
+    from blue_data_user_source import LLMError
+
+    source.async_execute_query = AsyncMock(side_effect=LLMError("LLM call to 'gpt-4o' failed: connection error"))
+    resp = client.post("/alice/query", json={"query": "what are my skills?"})
+    assert resp.status_code == 502
+    assert "LLM call to 'gpt-4o' failed" in resp.json()["detail"]
