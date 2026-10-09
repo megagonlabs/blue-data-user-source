@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import re
 import sys
 from datetime import datetime, timezone
@@ -278,10 +279,13 @@ class ContactMethod:
                 f"Reply to this email with your answer, or click the link below:\n"
                 f"{respond_link}"
             )
+            # The question can carry caller-shaped text (an LLM rewrite of the
+            # query, or the raw query itself), so it must not be read as markup.
+            message_html = html.escape(message).replace("\n", "<br>\n")
             body_html = (
-                f"<p>{message}</p>"
+                f"<p>{message_html}</p>"
                 f"<p>Reply to this email with your answer, or "
-                f'<a href="{respond_link}">click here</a> to respond.</p>'
+                f'<a href="{html.escape(respond_link)}">click here</a> to respond.</p>'
             )
 
             msg = MIMEMultipart("alternative")

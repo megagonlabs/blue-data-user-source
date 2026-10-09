@@ -343,6 +343,29 @@ async def test_email_includes_reply_to_and_link() -> None:
     assert "/respond" in body
 
 
+async def test_email_html_body_escapes_the_question() -> None:
+    sent_msgs: list = []
+
+    async def _capture(msg, *, hostname, port, username, password, start_tls):
+        sent_msgs.append(msg)
+        for fut in list(pending_interactions.values()):
+            if not fut.done():
+                fut.set_result("ok")
+
+    question = 'Is this your manager, Jane Doe <jane@corp.com>?\n<a href="https://evil.example">Verify</a> &copy'
+    with patch.dict(sys.modules, {"aiosmtplib": _mock_aiosmtplib(_capture)}):
+        method = ContactMethod(protocol="email", name="work", details=_EMAIL_DETAILS)
+        await method.interact().send(question)
+
+    parts = {p.get_content_type(): p.get_payload(decode=True).decode() for p in sent_msgs[0].get_payload()}
+    html_body = parts["text/html"]
+    assert "Jane Doe &lt;jane@corp.com&gt;?<br>" in html_body
+    assert '&lt;a href=&quot;https://evil.example&quot;&gt;' in html_body
+    assert "&amp;copy" in html_body
+    assert "evil.example\">" not in html_body
+    assert question in parts["text/plain"]
+
+
 async def test_email_timeout_raises_interaction_error() -> None:
     import sys
 
