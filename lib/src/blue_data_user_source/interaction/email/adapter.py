@@ -16,7 +16,11 @@ Adding a provider
 """
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
+from email.parser import BytesParser
+from email.policy import HTTP
+from urllib.parse import parse_qs
 
 
 class InboundEmailAdapter(ABC):
@@ -40,6 +44,48 @@ class InboundEmailAdapter(ABC):
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _form_fields(body: bytes, content_type: str) -> dict[str, list[str]]:
+        """Parse a webhook form body, ``multipart/form-data`` or URL-encoded.
+
+        Providers post multipart (SendGrid always does), which ``parse_qs``
+        cannot read. File parts (attachments) are skipped. A part is decoded with
+        its own charset, else the one a ``charsets`` field (SendGrid's JSON map
+        of field name to charset) names for it, else UTF-8.
+        """
+        if not content_type.lower().startswith("multipart/form-data"):
+            return parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+
+        message = BytesParser(policy=HTTP).parsebytes(
+            b"Content-Type: " + content_type.encode("latin-1") + b"\r\n\r\n" + body
+        )
+        if not message.is_multipart():
+            raise ValueError("multipart/form-data body has no parts (missing or wrong boundary?)")
+        raw: list[tuple[str, bytes, str | None]] = []
+        for part in message.iter_parts():
+            name = part.get_param("name", header="content-disposition")
+            if name is None or part.get_filename() is not None:
+                continue
+            raw.append((name, part.get_payload(decode=True) or b"", part.get_content_charset()))
+
+        charsets: dict[str, str] = {}
+        for name, payload, _ in raw:
+            if name == "charsets":
+                try:
+                    charsets = {k: str(v) for k, v in json.loads(payload.decode("ascii")).items()}
+                except (ValueError, AttributeError):
+                    charsets = {}
+
+        fields: dict[str, list[str]] = {}
+        for name, payload, charset in raw:
+            encoding = charset or charsets.get(name) or "utf-8"
+            try:
+                text = payload.decode(encoding, errors="replace")
+            except LookupError:  # unknown charset name
+                text = payload.decode("utf-8", errors="replace")
+            fields.setdefault(name, []).append(text)
+        return fields
 
     @staticmethod
     def _id_from_address(address: str) -> str:

@@ -228,6 +228,78 @@ def test_sendgrid_empty_after_stripping_raises() -> None:
         SendgridAdapter().extract(body, "application/x-www-form-urlencoded", {})
 
 
+# Real Inbound Parse and Mailgun posts are multipart/form-data (#122). Built by
+# hand, byte for byte, the way the providers send them.
+
+_BOUNDARY = "xYzZY"
+_MULTIPART = f"multipart/form-data; boundary={_BOUNDARY}"
+
+
+def _part(name: str, value: bytes | str, extra_headers: str = "") -> bytes:
+    data = value.encode() if isinstance(value, str) else value
+    head = f'--{_BOUNDARY}\r\nContent-Disposition: form-data; name="{name}"{extra_headers}\r\n\r\n'
+    return head.encode() + data + b"\r\n"
+
+
+def _multipart(*parts: bytes) -> bytes:
+    return b"".join(parts) + f"--{_BOUNDARY}--\r\n".encode()
+
+
+def test_sendgrid_reads_a_multipart_payload() -> None:
+    body = _multipart(
+        _part("headers", "Received: by mx.sendgrid.net\nSubject: Re: A question for you"),
+        _part("to", f"Agent <{_RECIPIENT}>"),
+        _part("from", "Alice <alice@example.com>"),
+        _part("text", f"{_REPLY}\n\nOn Thu, Agent wrote:\n> Which address?"),
+        _part("charsets", '{"to":"UTF-8","text":"UTF-8","from":"UTF-8"}'),
+    )
+    interaction_id, reply = SendgridAdapter().extract(body, _MULTIPART, {})
+    assert interaction_id == _INTERACTION_ID
+    assert reply == _REPLY
+
+
+def test_sendgrid_decodes_text_with_the_charset_it_names() -> None:
+    body = _multipart(
+        _part("to", _RECIPIENT),
+        _part("text", "Ja, gerne. Grüße".encode("iso-8859-1")),
+        _part("charsets", '{"to":"UTF-8","text":"iso-8859-1"}'),
+    )
+    _, reply = SendgridAdapter().extract(body, _MULTIPART, {})
+    assert reply == "Ja, gerne. Grüße"
+
+
+def test_sendgrid_skips_attachment_parts() -> None:
+    body = _multipart(
+        _part("to", _RECIPIENT),
+        _part("text", _REPLY),
+        _part("attachment1", b"%PDF-1.4 binary\xff\xfe", '; filename="cv.pdf"\r\nContent-Type: application/pdf'),
+    )
+    interaction_id, reply = SendgridAdapter().extract(body, _MULTIPART, {})
+    assert (interaction_id, reply) == (_INTERACTION_ID, _REPLY)
+
+
+def test_sendgrid_multipart_without_to_still_raises_the_specific_error() -> None:
+    body = _multipart(_part("text", _REPLY))
+    with pytest.raises(ValueError, match="missing 'to'"):
+        SendgridAdapter().extract(body, _MULTIPART, {})
+
+
+def test_multipart_with_the_wrong_boundary_raises_value_error() -> None:
+    body = _multipart(_part("to", _RECIPIENT), _part("text", _REPLY))
+    with pytest.raises(ValueError):
+        SendgridAdapter().extract(body, "multipart/form-data; boundary=other", {})
+
+
+def test_mailgun_reads_a_multipart_payload() -> None:
+    body = _multipart(
+        _part("recipient", _RECIPIENT),
+        _part("stripped-text", _REPLY),
+        _part("body-plain", f"{_REPLY}\n> quoted"),
+        _part("attachment-1", b"\x89PNG", '; filename="a.png"\r\nContent-Type: image/png'),
+    )
+    assert MailgunAdapter().extract(body, _MULTIPART, {}) == (_INTERACTION_ID, _REPLY)
+
+
 # ---------------------------------------------------------------------------
 # SMTP server stub
 # ---------------------------------------------------------------------------

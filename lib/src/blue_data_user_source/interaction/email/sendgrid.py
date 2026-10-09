@@ -11,7 +11,6 @@ Docs: https://www.twilio.com/docs/sendgrid/for-developers/parsing-email/setting-
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qs
 
 from blue_data_user_source.interaction.email.adapter import InboundEmailAdapter
 
@@ -36,8 +35,7 @@ class SendgridAdapter(InboundEmailAdapter):
     def extract(
         self, body: bytes, content_type: str, headers: dict[str, str]
     ) -> tuple[str, str]:
-        decoded = body.decode("utf-8", errors="replace")
-        parsed = parse_qs(decoded, keep_blank_values=True)
+        parsed = self._form_fields(body, content_type)
 
         def _first(key: str) -> str:
             return (parsed.get(key) or [""])[0]

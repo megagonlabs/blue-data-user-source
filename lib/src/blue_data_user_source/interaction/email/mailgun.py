@@ -1,6 +1,7 @@
 """Mailgun inbound email adapter.
 
-Mailgun POSTs form-encoded data when an email arrives. Relevant fields:
+Mailgun POSTs form data when an email arrives — URL-encoded, or multipart/form-data
+when the message has attachments. Relevant fields:
 
     recipient      — full To address, e.g. interaction-<id>@blue-userdb.example.com
     stripped-text  — reply body with quoted text and signatures removed
@@ -10,8 +11,6 @@ Docs: https://documentation.mailgun.com/docs/mailgun/user-manual/receive-forward
 """
 from __future__ import annotations
 
-from urllib.parse import parse_qs
-
 from blue_data_user_source.interaction.email.adapter import InboundEmailAdapter
 
 
@@ -19,7 +18,7 @@ class MailgunAdapter(InboundEmailAdapter):
     def extract(
         self, body: bytes, content_type: str, headers: dict[str, str]
     ) -> tuple[str, str]:
-        parsed = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+        parsed = self._form_fields(body, content_type)
 
         def _first(key: str) -> str:
             return (parsed.get(key) or [""])[0]
