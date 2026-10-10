@@ -169,18 +169,31 @@ def _results_to_text(results: list[Any]) -> str:
     return "\n".join(parts) if parts else "(no results)"
 
 
+_JUDGE_ATTEMPTS = 3
+
+
 async def _judge_contains(answer_text: str, expected: str, client: Any, model: str) -> ContainsResult:
-    response = await client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You judge whether an answer contains a specific piece of information (semantic, not literal)."},
-            {"role": "user", "content": f"Answer:\n{answer_text}\n\nDoes it contain: {expected!r}?"},
-        ],
-        tools=[_CONTAINS_TOOL],
-        tool_choice={"type": "function", "function": {"name": "record_contains_result"}},
-    )
-    tc = response.choices[0].message.tool_calls[0]
-    args = json.loads(tc.function.arguments)
+    # A judge reply is occasionally malformed (truncated tool-call JSON). Retry;
+    # if it never parses, record "not found" with the reason instead of
+    # aborting every remaining case of the run.
+    for _ in range(_JUDGE_ATTEMPTS):
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You judge whether an answer contains a specific piece of information (semantic, not literal)."},
+                {"role": "user", "content": f"Answer:\n{answer_text}\n\nDoes it contain: {expected!r}?"},
+            ],
+            tools=[_CONTAINS_TOOL],
+            tool_choice={"type": "function", "function": {"name": "record_contains_result"}},
+        )
+        try:
+            args = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+            break
+        except (json.JSONDecodeError, TypeError, IndexError):
+            continue
+    else:
+        return ContainsResult(expected=expected, found=False,
+                              reasoning=f"judge reply unparseable after {_JUDGE_ATTEMPTS} attempts")
     return ContainsResult(
         expected=expected,
         found=bool(args.get("found")),
