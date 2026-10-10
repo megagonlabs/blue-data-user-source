@@ -26,6 +26,7 @@ from pathlib import Path
 
 from ..common import runner, scoring
 from ..common.cases import QueryCase, cassette_filename, load_query_cases
+from ..common.baseline import print_regressions
 from ..common.reporting import render_query_table, write_detailed_log, write_json
 
 CASES_DIR   = Path(__file__).parent / "cases"
@@ -59,9 +60,11 @@ def _cassette_context(case_id: str, record: bool):
         return contextlib.nullcontext()
     import vcr as vcrlib
 
+    from ..common.cassettes import scrub_response
+
     cassette_dir = Path(__file__).parent / "cassettes"
     my_vcr = vcrlib.VCR(cassette_library_dir=str(cassette_dir), record_mode="all",
-                         filter_headers=["authorization"])
+                         filter_headers=["authorization"], before_record_response=scrub_response)
     return my_vcr.use_cassette(cassette_filename(case_id))
 
 
@@ -131,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     write_detailed_log(results, detail_path)
     print(f"Wrote {len(scores)} score(s) to {out_path}")
     print(f"Wrote detailed log to {detail_path}")
+    print_regressions("querying", scores)
     if args.record:
         print(f"Cassettes (re)written under {Path(__file__).parent / 'cassettes'}")
     return 0

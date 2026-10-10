@@ -552,9 +552,25 @@ The reasoning runner also accepts `--type` to filter by benchmark type (`context
 
 Cassettes are saved to `tests/benchmarks/<module>/cassettes/`. Commit them alongside the case files so CI can replay without network access.
 
+Recording drops account identifiers from responses (the OpenAI organization and project ids, and cookies; request `authorization` headers are filtered too). To scrub cassettes recorded some other way: `python -m tests.benchmarks.common.cassettes`.
+
 #### Benchmark reports
 
 After each run a JSON report and a JSONL detail log are written to `tests/benchmarks/<module>/.reports/` (git-ignored). A Rich table is also printed to the terminal.
+
+#### Committed results and the baseline
+
+Versioned live runs are committed under `tests/benchmarks/results/<date>-<model>/`: each module's score report, `run.json` (model, judge model, date, commit) and a `README.md` summarizing the run. [`tests/benchmarks/baseline.json`](tests/benchmarks/baseline.json) holds one value per case from the latest committed run.
+
+The value compared is the case's hit rate (extraction, querying) or judged score (contextualization, expansion, appropriateness). A metric case (completeness, freshness, privacy) declares `expect_pass` — whether the metric should pass its threshold for that input — and counts 1.0 when the metric's pass/fail decision matches and 0.0 when it does not; its raw score is not "higher is better" (an empty result set *should* score 0 on completeness).
+
+A case scoring more than the baseline's `tolerance` (0.15) below its baseline is a regression: the pytest replay emits a `BenchmarkRegression` warning, and the live runners print it. Neither fails the run: LLM-judged scores are noisy, and the benchmarks stay report-only. Cases run on a different model than the baseline's are not compared.
+
+To commit a new baseline, run the three runners with `--record --out tests/benchmarks/results/<run>/<module>.json`, add `run.json` and the run's `README.md`, then:
+
+```bash
+python -m tests.benchmarks.common.baseline tests/benchmarks/results/<run>/
+```
 
 ## Project structure
 

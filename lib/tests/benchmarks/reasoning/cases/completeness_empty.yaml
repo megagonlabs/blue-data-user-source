@@ -1,5 +1,6 @@
 id: completeness_empty
 benchmark_type: completeness
+expect_pass: false
 description: >
   No results and no provenance. CompletenessMetric should score at or near
   zero — there is nothing to assess completeness against.

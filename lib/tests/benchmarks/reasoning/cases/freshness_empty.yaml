@@ -1,5 +1,6 @@
 id: freshness_empty
 benchmark_type: freshness
+expect_pass: false
 description: >
   No metadata nodes at all. FreshnessMetric returns score 0.0 immediately
   without an LLM call — there are no timestamps to assess.

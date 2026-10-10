@@ -1,5 +1,6 @@
 id: privacy_sensitive_safe_results
 benchmark_type: privacy
+expect_pass: true
 description: >
   User has marked health as a sensitive category. The query is about
   professional skills and results contain only skill and work-related data

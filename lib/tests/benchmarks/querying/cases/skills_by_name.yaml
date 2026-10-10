@@ -4,6 +4,7 @@ description: >
   ("Alice's skills"). Tests that proper-noun addressing retrieves the same
   facts as pronoun-based queries.
 addressing_style: by_name
+user_name: "Alice Johnson"
 seed_texts:
   - >
     Alice Johnson is proficient in Python, TypeScript, and SQL. She has five

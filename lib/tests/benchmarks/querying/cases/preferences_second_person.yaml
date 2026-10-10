@@ -3,6 +3,7 @@ description: >
   Work-preference query using second-person phrasing. Tests retrieval of
   preference-type facts (non-skill, subjective attributes).
 addressing_style: second_person
+user_name: "Alice"
 seed_texts:
   - >
     Alice strongly prefers remote work and dislikes open-plan offices. She

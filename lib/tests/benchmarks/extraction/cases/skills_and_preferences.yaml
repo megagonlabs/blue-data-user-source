@@ -1,4 +1,5 @@
 id: skills_and_preferences
+user_name: "Bob Martinez"
 description: >
   User profile containing a skills list and work preferences. Tests whether
   the KB can retrieve individual skills and preference values after extraction.

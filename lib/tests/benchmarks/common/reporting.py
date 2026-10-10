@@ -77,6 +77,16 @@ def render_query_table(scores: list[Any]) -> Any:
     return t
 
 
+def _decision(s: Any) -> str:
+    """Metric cases: pass/fail, and whether that is what the case expects."""
+    if getattr(s, "passes", None) is None:
+        return "—"
+    verdict = "pass" if s.passes else "fail"
+    if s.correct is None:
+        return verdict
+    return f"{verdict} ✓" if s.correct else f"{verdict} ✗ (expected {'pass' if s.expect_pass else 'fail'})"
+
+
 def render_reasoning_table(scores: list[Any]) -> Any:
     from rich.table import Table
     t = Table(title="Reasoning Benchmark", show_lines=True)
@@ -84,6 +94,7 @@ def render_reasoning_table(scores: list[Any]) -> Any:
     t.add_column("Type")
     t.add_column("Score", justify="right")
     t.add_column("Score 2", justify="right")
+    t.add_column("Decision")
     t.add_column("Reasoning")
     t.add_column("Prompt tok", justify="right")
     t.add_column("Latency (s)", justify="right")
@@ -93,6 +104,7 @@ def render_reasoning_table(scores: list[Any]) -> Any:
             s.benchmark_type,
             f"{s.score:.2f}",
             f"{s.secondary_score:.2f}" if s.secondary_score is not None else "—",
+            _decision(s),
             s.reasoning[:80],
             str(s.prompt_tokens),
             f"{s.latency_seconds:.2f}",

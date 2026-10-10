@@ -1,5 +1,6 @@
 id: freshness_moderate
 benchmark_type: freshness
+expect_pass: true
 description: >
   Single node modified 90 days ago. FreshnessMetric presents the age to the
   LLM, which should assess the data as reasonably fresh and likely pass

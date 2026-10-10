@@ -1,5 +1,6 @@
 id: completeness_rich_profile
 benchmark_type: completeness
+expect_pass: true
 description: >
   Rich provenance — multiple extraction snippets covering skills, experience,
   and preferences. CompletenessMetric should score high (>= 0.7) because

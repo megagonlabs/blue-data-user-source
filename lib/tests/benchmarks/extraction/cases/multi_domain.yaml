@@ -1,4 +1,5 @@
 id: multi_domain
+user_name: "David Chen"
 description: >
   Multi-paragraph user profile spanning career history, skills, hobbies, and
   location. Tests cross-domain extraction from a longer document with several

@@ -31,6 +31,7 @@ class ExtractionCase:
     description: str
     input_texts: list[str]
     queries: list[ExpectedAnswer] = field(default_factory=list)
+    user_name: str | None = None  # set as identity.name before seeding; see QueryCase
     source_path: Path | None = None
 
 
@@ -48,6 +49,7 @@ def _load_extraction_case(path: Path) -> ExtractionCase:
         description=raw.get("description", ""),
         input_texts=raw.get("input_texts", [raw.get("input_text", "")]),
         queries=queries,
+        user_name=raw.get("user_name"),
         source_path=path,
     )
 
@@ -62,6 +64,9 @@ class QueryCase:
     seed_texts: list[str]
     query: str
     expected_contains: list[str] = field(default_factory=list)
+    # The user's own name, set as identity.name before seeding — how the
+    # product learns who "you", "my" and "the user" are (onboarding asks it).
+    user_name: str | None = None
     source_path: Path | None = None
 
 
@@ -74,6 +79,7 @@ def _load_query_case(path: Path) -> QueryCase:
         seed_texts=raw.get("seed_texts", [raw.get("seed_text", "")]),
         query=raw["query"],
         expected_contains=raw.get("expected_contains", []),
+        user_name=raw.get("user_name"),
         source_path=path,
     )
 
@@ -133,6 +139,10 @@ class ReasoningCase:
     failing_metrics: list[str] = field(default_factory=list)
     user_preferences: dict[str, str] = field(default_factory=dict)
 
+    # completeness / freshness / privacy — whether the metric should pass its
+    # threshold for this input. None leaves the case unjudged (raw score only).
+    expect_pass: bool | None = None
+
     source_path: Path | None = None
 
 
@@ -153,6 +163,7 @@ def _load_reasoning_case(path: Path) -> ReasoningCase:
         contact_name=raw.get("contact_name", "default"),
         failing_metrics=raw.get("failing_metrics", []),
         user_preferences=raw.get("user_preferences", {}),
+        expect_pass=raw.get("expect_pass"),
         source_path=path,
     )
 

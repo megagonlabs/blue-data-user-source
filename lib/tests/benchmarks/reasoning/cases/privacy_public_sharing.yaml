@@ -1,5 +1,6 @@
 id: privacy_public_sharing
 benchmark_type: privacy
+expect_pass: true
 description: >
   User has explicitly set data_sharing_preference to public. Results contain
   standard professional information. PrivacyMetric should score high —

@@ -1,5 +1,6 @@
 id: privacy_no_restrictions
 benchmark_type: privacy
+expect_pass: true
 description: >
   No privacy settings configured. Results contain general professional data
   (skills, role). PrivacyMetric should score high — without any restrictions

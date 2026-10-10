@@ -3,6 +3,7 @@ description: >
   Query using second-person phrasing ("your skills"). Tests that the KB
   returns the correct skills regardless of how the user is addressed.
 addressing_style: second_person
+user_name: "Alice Johnson"
 seed_texts:
   - >
     Alice Johnson is proficient in Python, TypeScript, and SQL. She has five

@@ -73,13 +73,15 @@ async def run_extraction_case(case: ExtractionCase, model: str = "gpt-4o-mini") 
 
     with patch("openai.AsyncOpenAI", instrumented):
         manager = await _build_manager()
+        if case.user_name:
+            manager.set_metadata("identity.name", case.user_name)
         for text in case.input_texts:
             await manager.store_data(text)
 
         answers: dict[str, Any] = {}
         all_metadata: dict[str, Any] = {}
         for qa in case.queries:
-            results, meta = await manager.execute_query(qa.question)
+            results, meta = await _query_like_user_source(manager, qa.question, model)
             answers[qa.question] = results
             all_metadata.update(meta)
 
@@ -113,6 +115,31 @@ class QueryRunResult:
         return sum(c.latency_seconds for c in self.llm_calls)
 
 
+async def _query_like_user_source(manager: Any, query: str, model: str) -> tuple[list[Any], dict[str, Any]]:
+    """Phases 1-2 of ``UserSource._run_query``: rewrite the query (resolving
+    "you" / "the user" to the user's name), expand it into sub-questions, and
+    retrieve for each. Calling ``manager.execute_query`` on the raw query, as
+    this runner used to, skipped the rewrite, so the addressing-style cases
+    never tested addressing (#131).
+
+    Assessment, clarification and answer synthesis are left out: the querying
+    benchmark scores what retrieval finds.
+    """
+    import asyncio
+
+    from blue_data_user_source.reasoning.reasoner import UserQueryReasoner
+
+    reasoner = UserQueryReasoner(source=None, manager=manager, model=model)  # type: ignore[arg-type]
+    rewritten = await reasoner.contextualize_query(query)
+    questions = [*await reasoner.expand_query(rewritten), rewritten]
+    outcomes = await asyncio.gather(*[manager.execute_query(q) for q in questions])
+    results = [item for data, _ in outcomes for item in data]
+    metadata: dict[str, Any] = {}
+    for _, meta in outcomes:
+        metadata.update(meta)
+    return results, metadata
+
+
 async def run_query_case(case: QueryCase, model: str = "gpt-4o-mini") -> QueryRunResult:
     """Seed KB with case texts, execute the NL query, return raw results."""
     import openai
@@ -121,9 +148,11 @@ async def run_query_case(case: QueryCase, model: str = "gpt-4o-mini") -> QueryRu
 
     with patch("openai.AsyncOpenAI", instrumented):
         manager = await _build_manager()
+        if case.user_name:
+            manager.set_metadata("identity.name", case.user_name)
         for text in case.seed_texts:
             await manager.store_data(text)
-        results, metadata = await manager.execute_query(case.query)
+        results, metadata = await _query_like_user_source(manager, case.query, model)
 
     return QueryRunResult(
         case=case,

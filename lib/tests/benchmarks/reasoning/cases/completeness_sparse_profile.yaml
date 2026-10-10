@@ -1,5 +1,6 @@
 id: completeness_sparse_profile
 benchmark_type: completeness
+expect_pass: false
 description: >
   Sparse provenance — only one short extraction snippet, and results are
   minimal. CompletenessMetric should score low (< 0.5) because the available

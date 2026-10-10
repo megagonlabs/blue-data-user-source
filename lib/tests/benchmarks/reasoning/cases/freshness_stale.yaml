@@ -1,5 +1,6 @@
 id: freshness_stale
 benchmark_type: freshness
+expect_pass: false
 description: >
   Single node modified 400 days ago (beyond one year). FreshnessMetric
   presents the age to the LLM, which should flag this data as stale and

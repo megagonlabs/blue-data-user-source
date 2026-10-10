@@ -3,6 +3,7 @@ description: >
   Same seed data and expected facts as skills_second_person, but using
   third-person "the user" phrasing. Tests addressing-style equivalence.
 addressing_style: third_person_user
+user_name: "Alice Johnson"
 seed_texts:
   - >
     Alice Johnson is proficient in Python, TypeScript, and SQL. She has five

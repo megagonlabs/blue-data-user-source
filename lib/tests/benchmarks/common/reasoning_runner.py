@@ -139,7 +139,7 @@ async def _dispatch(case: ReasoningCase) -> Any:
     if case.benchmark_type == "freshness":
         from datetime import datetime, timedelta, timezone
         from blue_data_user_source.reasoning.metric import FreshnessMetric
-        ages = case.node_ages_days or [0]
+        ages = case.node_ages_days  # [] really is no nodes: freshness_empty tests exactly that
         now = datetime.now(timezone.utc)
         metadata = {
             f"n{i}": {

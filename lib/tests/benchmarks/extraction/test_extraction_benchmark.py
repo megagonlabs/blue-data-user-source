@@ -15,13 +15,16 @@ import pytest
 
 from ..common import runner, scoring
 from ..common.cases import cassette_filename, load_extraction_cases
+from ..common.baseline import warn_regressions
 from ..common.reporting import render_extraction_table, write_detailed_log, write_json
 
 CASES_DIR    = Path(__file__).parent / "cases"
 CASSETTE_DIR = Path(__file__).parent / "cassettes"
 REPORT_PATH  = Path(__file__).parent / ".reports" / "latest.json"
 DETAIL_LOG   = Path(__file__).parent / ".reports" / "latest.detail.jsonl"
-DEFAULT_MODEL = "gpt-4o-mini"
+# The models the committed cassettes were recorded with (the live runners' defaults).
+DEFAULT_MODEL = "gpt-4o"
+JUDGE_MODEL = "gpt-4o-mini"
 
 pytestmark = pytest.mark.vcr
 
@@ -37,6 +40,7 @@ def _print_and_write_report():
     if _collected_scores:
         from rich.console import Console
         Console().print(render_extraction_table(_collected_scores))
+        warn_regressions("extraction", _collected_scores)
         write_json(_collected_scores, REPORT_PATH)
         write_detailed_log(_collected_results, DETAIL_LOG)
 
@@ -52,6 +56,6 @@ async def test_case(case_id: str) -> None:
     case = _cases[case_id]
     result = await runner.run_extraction_case(case, DEFAULT_MODEL)
     judge_client = openai.AsyncOpenAI()
-    score = await scoring.score_extraction_case(case, result, judge_client, DEFAULT_MODEL)
+    score = await scoring.score_extraction_case(case, result, judge_client, JUDGE_MODEL)
     _collected_scores.append(score)
     _collected_results.append(result)

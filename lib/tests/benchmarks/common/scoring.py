@@ -148,6 +148,13 @@ class ReasoningCaseScore:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     latency_seconds: float = 0.0
+    # Metric cases: the metric's pass/fail decision, what the case expects, and
+    # whether they agree. A metric's raw score is not "higher is better" (an
+    # empty result set *should* score 0 on completeness), so the decision is
+    # what a regression check compares.
+    passes: bool | None = None
+    expect_pass: bool | None = None
+    correct: bool | None = None
 
 
 # ── Scoring helpers ───────────────────────────────────────────────────────────
@@ -287,6 +294,10 @@ async def score_reasoning_case(
         ev: MetricEvaluation = run_result.output
         score.score = ev.score
         score.reasoning = ev.reasoning
+        score.passes = ev.passes
+        score.expect_pass = case.expect_pass
+        if case.expect_pass is not None:
+            score.correct = ev.passes == case.expect_pass
 
     elif case.benchmark_type == "appropriateness":
         question_text = str(run_result.output)

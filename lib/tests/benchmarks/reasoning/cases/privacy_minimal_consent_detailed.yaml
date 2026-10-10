@@ -1,5 +1,6 @@
 id: privacy_minimal_consent_detailed
 benchmark_type: privacy
+expect_pass: false
 description: >
   User has set consent_level to minimal, indicating they want only essential
   data usage. The results contain a rich personal profile with location,

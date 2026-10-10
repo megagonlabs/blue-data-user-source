@@ -1,5 +1,6 @@
 id: privacy_sensitive_exposure
 benchmark_type: privacy
+expect_pass: false
 description: >
   User has set data_sharing_preference to private and listed health and
   financial data as sensitive categories. The query results expose financial

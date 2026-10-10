@@ -1,5 +1,6 @@
 id: freshness_recent
 benchmark_type: freshness
+expect_pass: true
 description: >
   Single node modified 1 day ago. FreshnessMetric presents the age to the
   LLM, which should score this data as very recent and pass the threshold.
