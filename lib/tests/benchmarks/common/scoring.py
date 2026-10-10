@@ -92,7 +92,9 @@ _APPROPRIATENESS_TOOL = {
                     "type": "number",
                     "description": (
                         "0.0–1.0. Consider: tone matches channel formality, length is suitable "
-                        "(concise for sms, richer for email), language is natural."
+                        "(concise and conversational for stdio, a terminal prompt; richer for email; "
+                        "self-contained and chat-length for webhook, which another app shows the user), "
+                        "language is natural."
                     ),
                 },
                 "reasoning": {"type": "string"},

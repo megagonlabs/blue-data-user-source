@@ -1,0 +1,17 @@
+id: appropriateness_webhook
+benchmark_type: appropriateness
+description: >
+  webhook channel — the question is POSTed to another application (a chat bot,
+  a ticketing tool) that shows it to the user out of context. Generated question
+  should be self-contained, saying what it is about without relying on earlier
+  conversation, short enough for a chat message, and plain text without
+  markdown or raw JSON.
+query: "What remote work setup does the user prefer?"
+contact_protocol: webhook
+contact_name: bot
+failing_metrics:
+  - completeness
+user_preferences:
+  communication_style: casual
+  verbosity: brief
+  language: English
