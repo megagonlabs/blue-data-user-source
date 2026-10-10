@@ -23,8 +23,10 @@ coverage.xml
 htmlcov/
 *,cover
 
-# Benchmark reports (generated at run time, not committed)
+# Benchmark reports and VCR cassettes (generated at run time, not committed;
+# committed results live in lib/tests/benchmarks/results/)
 lib/tests/benchmarks/**/.reports/
+lib/tests/benchmarks/*/cassettes/
 
 # Type checking
 .pyright/

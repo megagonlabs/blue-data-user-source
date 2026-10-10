@@ -1,4 +1,4 @@
-"""Report-only extraction benchmark, replayed from committed VCR cassettes.
+"""Report-only extraction benchmark, replayed from VCR cassettes recorded locally with ``run.py --record``.
 
 Stores user-profile text into a ``UserDataManager`` KB, then queries it and
 scores how much expected information is retrievable.  Never fails on a metric

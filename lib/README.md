@@ -497,7 +497,7 @@ Report-only: benchmarks never fail on a metric regression — they print and wri
 | `querying` | 5 | Same KB data queried using second-person, "the user", and by-name phrasing; scores result alignment |
 | `reasoning` | 22 | Query contextualization precision, expansion coverage, completeness metric, freshness metric, privacy compliance, and interaction question appropriateness per contact channel |
 
-All benchmarks use [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) for replay. They skip automatically when no cassette exists and `OPENAI_API_KEY` is unset:
+**The regression check is a live run** (below), compared against the committed [baseline](#committed-results-and-the-baseline). The pytest wrappers replay [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) recorded locally with `--record`. Cassettes are not committed, and replay is not yet complete (#150): the judge's calls are not recorded, and the OpenAI client needs a key even to replay. Without cassettes and without `OPENAI_API_KEY`, every case skips:
 
 ```bash
 # Run all benchmarks — cases without cassettes skip when OPENAI_API_KEY is unset
@@ -550,7 +550,7 @@ Common options (all three runners):
 
 The reasoning runner also accepts `--type` to filter by benchmark type (`contextualization`, `expansion`, `completeness`, `freshness`, `appropriateness`, `privacy`).
 
-Cassettes are saved to `tests/benchmarks/<module>/cassettes/`. Commit them alongside the case files so CI can replay without network access.
+Cassettes are saved to `tests/benchmarks/<module>/cassettes/` and are git-ignored. One full run is about 29 MB, and since VCR matches requests on method and URL only, a replay returns the recorded answers whatever the code now asks: it can catch harness breakage, not a product regression.
 
 Recording drops account identifiers from responses (the OpenAI organization and project ids, and cookies; request `authorization` headers are filtered too). To scrub cassettes recorded some other way: `python -m tests.benchmarks.common.cassettes`.
 
@@ -566,7 +566,7 @@ The value compared is the case's hit rate (extraction, querying) or judged score
 
 A case scoring more than the baseline's `tolerance` (0.15) below its baseline is a regression: the pytest replay emits a `BenchmarkRegression` warning, and the live runners print it. Neither fails the run: LLM-judged scores are noisy, and the benchmarks stay report-only. Cases run on a different model than the baseline's are not compared.
 
-To commit a new baseline, run the three runners with `--record --out tests/benchmarks/results/<run>/<module>.json`, add `run.json` and the run's `README.md`, then:
+To commit a new baseline, run the three runners with `--out tests/benchmarks/results/<run>/<module>.json`, add `run.json` and the run's `README.md`, then:
 
 ```bash
 python -m tests.benchmarks.common.baseline tests/benchmarks/results/<run>/
@@ -612,7 +612,7 @@ lib/
         ├── common/                # cases, runner, reasoning_runner, scoring, reporting, capture
         ├── extraction/
         │   ├── cases/*.yaml       # user-profile extraction cases
-        │   └── cassettes/         # VCR recordings (committed)
+        │   └── cassettes/         # VCR recordings (local, git-ignored)
         ├── querying/
         │   ├── cases/*.yaml       # NL query cases (second-person, "the user", by-name)
         │   └── cassettes/

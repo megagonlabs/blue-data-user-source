@@ -1,0 +1,26 @@
+{
+  "model": "gpt-4o",
+  "judge_model": "gpt-4o-mini",
+  "date": "2026-10-10",
+  "commit": "421622f",
+  "branch": "1.0",
+  "python": "3.10.12",
+  "openai": "3.28.0",
+  "samples_per_case": 1,
+  "install": "bash scripts/install.sh into a fresh virtualenv",
+  "commands": [
+    "python -m tests.benchmarks.reasoning.run --out tests/benchmarks/results/2026-10-10-gpt-4o/reasoning.json",
+    "python -m tests.benchmarks.querying.run --out tests/benchmarks/results/2026-10-10-gpt-4o/querying.json",
+    "python -m tests.benchmarks.extraction.run --out tests/benchmarks/results/2026-10-10-gpt-4o/extraction.json"
+  ],
+  "commits": {
+    "reasoning": "d00f477",
+    "querying": "d00f477",
+    "extraction": "421622f"
+  },
+  "notes": [
+    "421622f differs from d00f477 only in the benchmark judge (an unparseable judge reply is retried instead of aborting the run); the extraction run at d00f477 died on that, so extraction was re-run at 421622f.",
+    "Querying and extraction vary from run to run at the KB retrieval step. Every query was rewritten to the user's name correctly, but the KB query agent sometimes loops until it gives up and returns nothing: in querying, the three cases that scored 0.0 took 61-121 agent calls against 14-20 for the two that succeeded; in extraction, skills_and_preferences (0.0, all 4 answers empty) took 306 and multi_domain 269. skills_second_person scored 1.0 in a probe run of the same code minutes earlier, and the two runs also differed in how many extraction calls stored the seed text (16 vs 12). The query agent and the extractor are in blue-data-kb-source: megagon-internal/blue-data-kb-source#133.",
+    "One sample per case. exp_relocation_query scored 1.0 in an earlier probe and 0.40 here."
+  ]
+}

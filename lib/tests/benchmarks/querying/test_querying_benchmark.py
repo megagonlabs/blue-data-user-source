@@ -1,4 +1,4 @@
-"""Report-only querying benchmark, replayed from committed VCR cassettes.
+"""Report-only querying benchmark, replayed from VCR cassettes recorded locally with ``run.py --record``.
 
 Seeds a fresh ``UserDataManager`` with case-specific user text, then executes
 the natural-language query (which may address the user as "you", "the user",

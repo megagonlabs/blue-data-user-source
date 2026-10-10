@@ -1,4 +1,4 @@
-"""Report-only reasoning benchmarks, replayed from committed VCR cassettes.
+"""Report-only reasoning benchmarks, replayed from VCR cassettes recorded locally with ``run.py --record``.
 
 Covers four LLM-backed reasoning behaviours, each with its own set of YAML
 cases (all in ``cases/`` and distinguished by ``benchmark_type``):

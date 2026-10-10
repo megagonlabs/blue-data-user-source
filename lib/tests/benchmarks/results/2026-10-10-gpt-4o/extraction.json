@@ -1,0 +1,295 @@
+[
+  {
+    "case_id": "basic_profile",
+    "model": "gpt-4o",
+    "per_query": [
+      {
+        "question": "What is the user's name?",
+        "answer": "{\"full_name\": \"Alice Johnson\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}",
+        "checks": [
+          {
+            "expected": "Alice Johnson",
+            "found": true,
+            "reasoning": "The answer explicitly states 'Alice Johnson' as the full name of the individual."
+          },
+          {
+            "expected": "Alice",
+            "found": true,
+            "reasoning": "The answer explicitly mentions 'Alice' in the full name 'Alice Johnson'."
+          }
+        ]
+      },
+      {
+        "question": "What is the user's job title?",
+        "answer": "{\"PERSON\": \"Alice Johnson\", \"relation\": \"WORKED_AT\", \"COMPANY\": \"Acme Corp\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"engineering_role\": \"senior software engineer\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"professional_experience\": \"senior software engineer with 8 years of professional experience\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"team\": \"platform team\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"degree\": \"Bachelor of Science in Computer Science\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"PERSON\": \"Alice Johnson\", \"relation\": \"PART_OF_TEAM\", \"TEAM\": \"platform team\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"person\": \"Alice Johnson\", \"job_title\": \"Senior Software Engineer\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}",
+        "checks": [
+          {
+            "expected": "software engineer",
+            "found": true,
+            "reasoning": "The answer explicitly states that Alice Johnson is a senior software engineer."
+          },
+          {
+            "expected": "senior software engineer",
+            "found": true,
+            "reasoning": "The answer mentions Alice Johnson's job title explicitly as 'senior software engineer'."
+          }
+        ]
+      },
+      {
+        "question": "Where did the user study?",
+        "answer": "{\"person\": \"Alice Johnson\", \"relation\": \"STUDIED_AT\", \"education_institution\": \"MIT\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT.\"}\n{\"person\": \"Alice Johnson\", \"studied_at\": \"MIT\", \"degree\": \"Bachelor of Science in Computer Science\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT.\"}",
+        "checks": [
+          {
+            "expected": "MIT",
+            "found": true,
+            "reasoning": "Both answers explicitly mention 'MIT' as the institution where Alice Johnson studied."
+          },
+          {
+            "expected": "Massachusetts Institute of Technology",
+            "found": false,
+            "reasoning": "The answer refers to MIT but does not explicitly mention 'Massachusetts Institute of Technology'."
+          }
+        ]
+      },
+      {
+        "question": "Where does the user work?",
+        "answer": "{\"person\": \"Alice Johnson\", \"organization\": \"Acme Corp\", \"role\": \"senior software engineer\", \"team\": \"platform team\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}\n{\"person\": \"Alice Johnson\", \"works_at\": \"Acme Corp\", \"role\": \"Senior Software Engineer\", \"team\": \"platform team\", \"provenance\": \"Alice Johnson is a senior software engineer with 8 years of professional experience. She holds a Bachelor of Science in Computer Science from MIT. Alice currently works at Acme Corp as part of the platform team.\"}",
+        "checks": [
+          {
+            "expected": "Acme Corp",
+            "found": true,
+            "reasoning": "Both answers explicitly state that Alice Johnson works at 'Acme Corp'."
+          }
+        ]
+      }
+    ],
+    "hit_rate": 0.8571428571428571,
+    "prompt_tokens": 236974,
+    "completion_tokens": 6843,
+    "latency_seconds": 100.16341314837337
+  },
+  {
+    "case_id": "contact_info",
+    "model": "gpt-4o",
+    "per_query": [
+      {
+        "question": "What is the user's email address?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "carol.kim@example.com",
+            "found": false,
+            "reasoning": "The answer explicitly states '(no results)', indicating that there are no email addresses provided, including 'carol.kim@example.com'."
+          }
+        ]
+      },
+      {
+        "question": "What is the user's phone number?",
+        "answer": "{\"phone_number\": \"+1-415-555-0182\", \"provenance\": \"Carol Kim's professional contact details are as follows. She can be reached by email at carol.kim@example.com. Her mobile phone number is +1-415-555-0182. She maintains a LinkedIn profile at linkedin.com/in/carolkim and prefers to be contacted via email for professional inquiries.\"}",
+        "checks": [
+          {
+            "expected": "+1-415-555-0182",
+            "found": true,
+            "reasoning": "The answer explicitly states the mobile phone number as +1-415-555-0182."
+          },
+          {
+            "expected": "415-555-0182",
+            "found": true,
+            "reasoning": "The answer includes the mobile phone number +1-415-555-0182, which contains the segment 415-555-0182."
+          }
+        ]
+      },
+      {
+        "question": "What is the user's LinkedIn profile?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "carolkim",
+            "found": false,
+            "reasoning": "The answer states 'no results', which implies that it does not contain the name 'carolkim'."
+          },
+          {
+            "expected": "linkedin.com/in/carolkim",
+            "found": false,
+            "reasoning": "The answer explicitly states '(no results)', indicating it does not contain any information, including the specified LinkedIn URL."
+          }
+        ]
+      },
+      {
+        "question": "How does the user prefer to be contacted for professional matters?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "email",
+            "found": false,
+            "reasoning": "The answer states 'no results', which does not mention 'email'."
+          }
+        ]
+      }
+    ],
+    "hit_rate": 0.3333333333333333,
+    "prompt_tokens": 123467,
+    "completion_tokens": 3362,
+    "latency_seconds": 47.397169910371304
+  },
+  {
+    "case_id": "multi_domain",
+    "model": "gpt-4o",
+    "per_query": [
+      {
+        "question": "Where does the user live?",
+        "answer": "{\"Resident\": \"David Chen\", \"LIVES_IN\": null, \"provenance\": null}",
+        "checks": [
+          {
+            "expected": "Austin",
+            "found": false,
+            "reasoning": "The provided answer does not mention 'Austin' or any location."
+          },
+          {
+            "expected": "Texas",
+            "found": false,
+            "reasoning": "The answer does not mention 'Texas' or any location."
+          }
+        ]
+      },
+      {
+        "question": "Where did the user work before their current job?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "Google",
+            "found": false,
+            "reasoning": "The answer states '(no results)', indicating that it contains no information or mentions of 'Google'."
+          }
+        ]
+      },
+      {
+        "question": "What is the user's current employer?",
+        "answer": "{\"organization\": \"Austin Chess Club\", \"member_name\": \"David Chen\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online. He is an active member of the Austin Chess Club and competes locally.\"}",
+        "checks": [
+          {
+            "expected": "NovaBridge",
+            "found": false,
+            "reasoning": "The answer pertains to David Chen's involvement with the Austin Chess Club and does not mention 'NovaBridge'."
+          }
+        ]
+      },
+      {
+        "question": "What programming languages does the user know?",
+        "answer": "{\"Technical Skill\": \"Go\", \"Provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"Technical Skill\": \"Rust\", \"Provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"Technical Skill\": \"Kubernetes\", \"Provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"Technical Skill\": \"PostgreSQL\", \"Provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person_name\": \"David Chen\", \"skill\": \"Go\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person_name\": \"David Chen\", \"skill\": \"Rust\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person_name\": \"David Chen\", \"skill\": \"Kubernetes\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person_name\": \"David Chen\", \"skill\": \"PostgreSQL\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"SOFTWARE_ENGINEER\": \"David Chen\", \"TECHNICAL_SKILL\": \"Go\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"SOFTWARE_ENGINEER\": \"David Chen\", \"TECHNICAL_SKILL\": \"Rust\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"SOFTWARE_ENGINEER\": \"David Chen\", \"TECHNICAL_SKILL\": \"Kubernetes\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"SOFTWARE_ENGINEER\": \"David Chen\", \"TECHNICAL_SKILL\": \"PostgreSQL\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}",
+        "checks": [
+          {
+            "expected": "Go",
+            "found": true,
+            "reasoning": "The answer explicitly states that David's technical skills include 'Go'."
+          },
+          {
+            "expected": "Rust",
+            "found": true,
+            "reasoning": "The answer explicitly lists 'Rust' as one of David's technical skills alongside Go, Kubernetes, and PostgreSQL."
+          }
+        ]
+      },
+      {
+        "question": "What certifications does the user hold?",
+        "answer": "{\"certification\": \"AWS Solutions Architect\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"certification\": \"CKA\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person\": \"David Chen\", \"certification\": \"CKA\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}\n{\"person\": \"David Chen\", \"certification\": \"AWS Solutions Architect\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\"}",
+        "checks": [
+          {
+            "expected": "AWS",
+            "found": true,
+            "reasoning": "All answers mention the 'AWS Solutions Architect' certification, which contains 'AWS'."
+          },
+          {
+            "expected": "CKA",
+            "found": true,
+            "reasoning": "The answers mention the 'CKA' certification in the context of David's technical qualifications."
+          }
+        ]
+      },
+      {
+        "question": "What are the user's hobbies?",
+        "answer": "{\"interest\": \"rock climbing\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online.\"}\n{\"interest\": \"cooking Vietnamese food\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online.\"}\n{\"interest\": \"playing chess online\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online.\"}\n{\"person\": \"David Chen\", \"skill\": \"Go\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\", \"created\": \"2026-10-10T05:44:03.914254+00:00\"}\n{\"person\": \"David Chen\", \"skill\": \"Rust\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\", \"created\": \"2026-10-10T05:44:03.914649+00:00\"}\n{\"person\": \"David Chen\", \"skill\": \"Kubernetes\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\", \"created\": \"2026-10-10T05:44:03.915051+00:00\"}\n{\"person\": \"David Chen\", \"skill\": \"PostgreSQL\", \"provenance\": \"David's technical skills include Go, Rust, Kubernetes, and PostgreSQL. He is particularly experienced with event-driven architectures and has published two open-source libraries on GitHub. He holds AWS Solutions Architect and CKA certifications.\", \"created\": \"2026-10-10T05:44:03.915393+00:00\"}\n{\"MEMBER_OF\": \"Austin Chess Club\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online. He is an active member of the Austin Chess Club and competes locally.\"}\n{\"hobby\": \"rock climbing\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online. He is an active member of the Austin Chess Club and competes locally.\"}\n{\"hobby\": \"cooking Vietnamese food\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online. He is an active member of the Austin Chess Club and competes locally.\"}\n{\"hobby\": \"playing chess online\", \"provenance\": \"Outside of work, David enjoys rock climbing, cooking Vietnamese food, and playing chess online. He is an active member of the Austin Chess Club and competes locally.\"}",
+        "checks": [
+          {
+            "expected": "rock climbing",
+            "found": true,
+            "reasoning": "The answer includes 'rock climbing' as one of David's interests and hobbies."
+          },
+          {
+            "expected": "chess",
+            "found": true,
+            "reasoning": "The answer mentions 'playing chess online,' which includes the term 'chess'."
+          }
+        ]
+      }
+    ],
+    "hit_rate": 0.6,
+    "prompt_tokens": 1220793,
+    "completion_tokens": 18194,
+    "latency_seconds": 261.86782045289874
+  },
+  {
+    "case_id": "skills_and_preferences",
+    "model": "gpt-4o",
+    "per_query": [
+      {
+        "question": "What programming languages does the user know?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "Python",
+            "found": false,
+            "reasoning": "The answer explicitly states 'no results', indicating that it does not contain the word 'Python'."
+          },
+          {
+            "expected": "SQL",
+            "found": false,
+            "reasoning": "The answer does not mention or contain the term 'SQL'."
+          }
+        ]
+      },
+      {
+        "question": "What is the user's area of expertise?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "data science",
+            "found": false,
+            "reasoning": "The answer explicitly states 'no results', indicating that it does not contain any information about 'data science'."
+          },
+          {
+            "expected": "machine learning",
+            "found": false,
+            "reasoning": "The answer explicitly states 'no results', indicating that it does not contain the phrase 'machine learning'."
+          }
+        ]
+      },
+      {
+        "question": "Does the user prefer remote work?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "remote",
+            "found": false,
+            "reasoning": "The answer explicitly states 'no results', indicating that it does not contain the term 'remote'."
+          }
+        ]
+      },
+      {
+        "question": "How does the user prefer to communicate?",
+        "answer": "(no results)",
+        "checks": [
+          {
+            "expected": "asynchronous",
+            "found": false,
+            "reasoning": "The answer explicitly states 'no results', indicating that it does not contain the word 'asynchronous'."
+          }
+        ]
+      }
+    ],
+    "hit_rate": 0.0,
+    "prompt_tokens": 765500,
+    "completion_tokens": 13431,
+    "latency_seconds": 231.11644487455487
+  }
+]

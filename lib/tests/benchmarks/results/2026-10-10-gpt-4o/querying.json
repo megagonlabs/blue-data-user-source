@@ -1,0 +1,127 @@
+[
+  {
+    "case_id": "career_by_user_pronoun",
+    "model": "gpt-4o",
+    "addressing_style": "third_person_user",
+    "hit_rate": 0.0,
+    "per_expected": [
+      {
+        "expected": "Google",
+        "found": false,
+        "reasoning": "The answer does not mention 'Google' at all."
+      },
+      {
+        "expected": "Stripe",
+        "found": false,
+        "reasoning": "The answer explicitly states '(no results)', indicating there is no mention of 'Stripe'."
+      },
+      {
+        "expected": "staff engineer",
+        "found": false,
+        "reasoning": "The answer explicitly states '(no results)', indicating that there are no mentions of 'staff engineer'."
+      }
+    ],
+    "prompt_tokens": 228589,
+    "completion_tokens": 7289,
+    "latency_seconds": 90.10061315819621
+  },
+  {
+    "case_id": "preferences_second_person",
+    "model": "gpt-4o",
+    "addressing_style": "second_person",
+    "hit_rate": 0.0,
+    "per_expected": [
+      {
+        "expected": "remote",
+        "found": false,
+        "reasoning": "The answer does not mention the word 'remote'."
+      },
+      {
+        "expected": "asynchronous",
+        "found": false,
+        "reasoning": "The answer states 'no results', which means it does not contain the word 'asynchronous'."
+      }
+    ],
+    "prompt_tokens": 241854,
+    "completion_tokens": 5421,
+    "latency_seconds": 77.16898012533784
+  },
+  {
+    "case_id": "skills_by_name",
+    "model": "gpt-4o",
+    "addressing_style": "by_name",
+    "hit_rate": 1.0,
+    "per_expected": [
+      {
+        "expected": "Python",
+        "found": true,
+        "reasoning": "The answer explicitly states that Alice Johnson is proficient in Python."
+      },
+      {
+        "expected": "TypeScript",
+        "found": true,
+        "reasoning": "The answers explicitly state that Alice Johnson is proficient in TypeScript."
+      },
+      {
+        "expected": "SQL",
+        "found": true,
+        "reasoning": "The responses indicate proficiency in SQL as part of the listed programming languages for Alice Johnson."
+      }
+    ],
+    "prompt_tokens": 87441,
+    "completion_tokens": 4599,
+    "latency_seconds": 36.6182400546968
+  },
+  {
+    "case_id": "skills_second_person",
+    "model": "gpt-4o",
+    "addressing_style": "second_person",
+    "hit_rate": 0.0,
+    "per_expected": [
+      {
+        "expected": "Python",
+        "found": false,
+        "reasoning": "The answer explicitly states '(no results)', indicating that it contains no information, including the term 'Python'."
+      },
+      {
+        "expected": "TypeScript",
+        "found": false,
+        "reasoning": "The answer explicitly states '(no results)', which indicates that it does not contain any information, including the term 'TypeScript'."
+      },
+      {
+        "expected": "SQL",
+        "found": false,
+        "reasoning": "The answer states 'no results', which does not include the term 'SQL'."
+      }
+    ],
+    "prompt_tokens": 287241,
+    "completion_tokens": 5667,
+    "latency_seconds": 92.60086017102003
+  },
+  {
+    "case_id": "skills_third_person_user",
+    "model": "gpt-4o",
+    "addressing_style": "third_person_user",
+    "hit_rate": 1.0,
+    "per_expected": [
+      {
+        "expected": "Python",
+        "found": true,
+        "reasoning": "The provided information states that Alice Johnson is proficient in Python."
+      },
+      {
+        "expected": "TypeScript",
+        "found": true,
+        "reasoning": "The answer mentions that Alice Johnson is proficient in TypeScript."
+      },
+      {
+        "expected": "SQL",
+        "found": true,
+        "reasoning": "The answer includes multiple instances where 'SQL' is mentioned, confirming Alice Johnson's proficiency in that skill."
+      }
+    ],
+    "prompt_tokens": 113727,
+    "completion_tokens": 6264,
+    "latency_seconds": 54.25205967575312
+  }
+]

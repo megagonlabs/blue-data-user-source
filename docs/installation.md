@@ -123,7 +123,7 @@ Install `lib` with the `dev` extra first:
 cd lib && pip install -e ".[dev]"
 ```
 
-The library's benchmark suites (`lib/tests/benchmarks/`) are separate from the default unit-test run and score query rewriting, extraction, and reasoning quality against gold-standard cases — see [guide.md](guide.md#benchmarks) and [`lib/README.md`](../lib/README.md#benchmarks) for details. They require `OPENAI_API_KEY` (cases skip cleanly without it if no VCR cassette has been recorded).
+The library's benchmark suites (`lib/tests/benchmarks/`) are separate from the default unit-test run and score query rewriting, extraction, and reasoning quality against gold-standard cases — see [guide.md](guide.md#benchmarks) and [`lib/README.md`](../lib/README.md#benchmarks) for details. They require `OPENAI_API_KEY` (cases skip cleanly without it if no VCR cassette has been recorded locally).
 
 ---
 
