@@ -96,6 +96,9 @@ def resolve_secret(value: Any) -> Any:
     return resolved
 
 
+# A contact name is one segment of a dot-notation store path (#142).
+_CONTACT_NAME = re.compile(r"[A-Za-z0-9 _@+-]{1,64}")
+
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _WORKING_HOURS_RE = re.compile(
     r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2}).*?"
@@ -464,6 +467,20 @@ class ContactManager:
     # CRUD                                                                 #
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    def _path(protocol: str, name: str) -> str | None:
+        """The store path of a contact, or None when *protocol*/*name* cannot name one.
+
+        Both are interpolated into a dot-notation path, so a name like
+        ``work.address`` used to address (and overwrite) a field of contact
+        ``work`` (#142).
+        """
+        if protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
+            return None
+        if not isinstance(name, str) or not _CONTACT_NAME.fullmatch(name):
+            return None
+        return f"contacts.{protocol}.{name}"
+
     async def create_contact_method(
         self,
         protocol: str,
@@ -473,11 +490,19 @@ class ContactManager:
     ) -> None:
         if protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
             raise InteractionError(f"Unsupported contact protocol: {protocol!r}")
+        path = self._path(protocol, name)
+        if path is None:
+            raise InteractionError(
+                f"Invalid contact name {name!r}: use 1-64 letters, digits, spaces, '_', '-', '@' or '+'."
+            )
         entry = {**details, "preference": preference}
-        self._store().set(f"contacts.{protocol}.{name}", entry)
+        self._store().set(path, entry)
 
     async def get_contact_method(self, protocol: str, name: str) -> ContactMethod | None:
-        entry = self._store().get(f"contacts.{protocol}.{name}")
+        path = self._path(protocol, name)
+        if path is None:
+            return None
+        entry = self._store().get(path)
         if entry is None:
             return None
         return ContactMethod(protocol=protocol, name=name, details=entry)
@@ -501,7 +526,8 @@ class ContactManager:
         value, so a contact read and written back unchanged keeps its secrets.
         """
         store = self._store()
-        entry = store.get(f"contacts.{protocol}.{name}")
+        path = self._path(protocol, name)
+        entry = store.get(path) if path else None
         if entry is None:
             raise ContactNotFoundError(f"Contact method {protocol!r}/{name!r} not found.")
         secret = SECRET_FIELDS.get(protocol, frozenset())
@@ -512,10 +538,12 @@ class ContactManager:
             entry[key] = _unmask(value, entry.get(key)) if key in secret else value
         if preference is not None:
             entry["preference"] = preference
-        store.set(f"contacts.{protocol}.{name}", entry)
+        store.set(path, entry)
 
     async def delete_contact_method(self, protocol: str, name: str) -> None:
-        self._store().delete(f"contacts.{protocol}.{name}")
+        path = self._path(protocol, name)
+        if path is not None:
+            self._store().delete(path)
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #
@@ -544,6 +572,8 @@ class ContactManager:
         return [p for p, v in all_contacts.items() if isinstance(v, dict)]
 
     async def list_named_entries(self, protocol: str) -> dict[str, dict]:
+        if protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
+            return {}
         entries = self._store().get(f"contacts.{protocol}") or {}
         return {k: v for k, v in entries.items() if isinstance(v, dict)}
 

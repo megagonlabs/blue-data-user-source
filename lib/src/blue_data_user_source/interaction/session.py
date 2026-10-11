@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
 from blue_data_user_source.types import SessionEndedError, SessionNotFoundError
+
+
+_SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 class SessionManager:
@@ -51,6 +56,11 @@ class SessionManager:
         return session_id
 
     async def get_session(self, session_id: str) -> dict | None:
+        # Ids are interpolated into dot-notation store paths, so "<sid>.queries.<qid>"
+        # would address a query record as if it were a session (#142). Session ids
+        # are generated UUIDs: anything that is not a plain token is unknown.
+        if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
+            return None
         return self._store().get(f"sessions.{session_id}")
 
     async def list_sessions(self) -> dict[str, Any]:

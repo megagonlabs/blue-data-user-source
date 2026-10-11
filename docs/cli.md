@@ -273,6 +273,8 @@ Contact methods for agents to reach you — dot-path addressed by protocol/name/
 | `blue-userdb contact add PROTOCOL NAME [--preference N]` | Create a named entry (set its remaining fields with `contact set` afterwards) |
 | `blue-userdb contact remove PROTOCOL NAME [--yes]` | Remove a named entry |
 
+Contact names are 1-64 letters, digits, spaces, `_`, `-`, `@` or `+`; a name with a `.` would address another contact's field, so it is refused.
+
 ```bash
 blue-userdb contact list                                    # protocols with entry counts
 blue-userdb contact add email work

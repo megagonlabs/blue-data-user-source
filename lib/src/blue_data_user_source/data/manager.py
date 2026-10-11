@@ -743,17 +743,34 @@ class UserDataManager:
     def get_contacts(self) -> dict[str, Any]:
         return self._ensure_contact_source().get("contacts") or {}
 
+    # Contact protocol and name are validated like ContactManager does: both are
+    # dot-path segments, and a dotted name addressed another contact's field (#142).
+    # ``field`` may be dotted on purpose (e.g. ``headers.Authorization``).
+
     def get_contact(self, protocol: str, name: str) -> dict[str, Any] | None:
-        return self._ensure_contact_source().get(f"contacts.{protocol}.{name}")
+        from blue_data_user_source.interaction.contact import ContactManager
+
+        path = ContactManager._path(protocol, name)
+        return self._ensure_contact_source().get(path) if path else None
 
     def set_contact_field(self, protocol: str, name: str, field: str, value: Any) -> None:
+        from blue_data_user_source.interaction.contact import ContactManager
+        from blue_data_user_source.types import InteractionError
+
+        path = ContactManager._path(protocol, name)
+        if path is None:
+            raise InteractionError(f"Invalid contact {protocol!r}/{name!r}.")
         store = self._ensure_contact_source()
-        if store.get(f"contacts.{protocol}.{name}") is None:
-            store.set(f"contacts.{protocol}.{name}", {})
-        store.set(f"contacts.{protocol}.{name}.{field}", value)
+        if store.get(path) is None:
+            store.set(path, {})
+        store.set(f"{path}.{field}", value)
 
     def delete_contact(self, protocol: str, name: str) -> None:
-        self._ensure_contact_source().delete(f"contacts.{protocol}.{name}")
+        from blue_data_user_source.interaction.contact import ContactManager
+
+        path = ContactManager._path(protocol, name)
+        if path is not None:
+            self._ensure_contact_source().delete(path)
 
     # ------------------------------------------------------------------ #
     # Session operations                                                   #
