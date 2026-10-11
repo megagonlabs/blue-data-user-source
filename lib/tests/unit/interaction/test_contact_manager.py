@@ -529,3 +529,43 @@ async def test_email_sends_with_the_password_from_the_referenced_variable(monkey
         method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, "smtp_password": "$SMTP_PASSWORD"})
         await method.interact().send("Pick a colour.")
     assert seen["password"] == "from-env"
+
+
+# ── updating details (#137) ───────────────────────────────────────────────────
+
+async def test_updating_details_replaces_the_stored_fields(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "old@example.com", "subject": "Hi"}, preference=2)
+    await contact_manager.update_contact_method("email", "work", details={"address": "new@example.com"})
+
+    method = await contact_manager.get_contact_method("email", "work")
+    assert method.details == {"address": "new@example.com", "preference": 2}
+    chosen = await contact_manager.identify_contact_method()  # the only usable method
+    assert chosen.details["address"] == "new@example.com"
+
+
+async def test_updating_details_and_preference_together(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "a@example.com"}, preference=2)
+    await contact_manager.update_contact_method("email", "work", details={"address": "b@example.com"}, preference=0)
+    assert (await contact_manager.get_contact_method("email", "work")).details == {"address": "b@example.com", "preference": 0}
+
+
+async def test_writing_back_a_masked_read_keeps_the_secrets(contact_manager: ContactManager) -> None:
+    """A client that reads a contact (secrets masked, #143) and writes it back must not store '***'."""
+    await contact_manager.create_contact_method(
+        "webhook", "hook", {"url": "https://hooks.example.com/s3cr3t", "response_base_url": "http://x",
+                            "headers": {"Authorization": "Bearer abc", "X-Env": "prod"}})
+    read = (await contact_manager.get_contact_method("webhook", "hook")).public_dict()["details"]
+    read["headers"]["X-Env"] = "staging"            # one header edited, the secret one left masked
+    read.pop("preference")
+    await contact_manager.update_contact_method("webhook", "hook", details=read)
+
+    stored = (await contact_manager.get_contact_method("webhook", "hook")).details
+    assert stored["url"] == "https://hooks.example.com/s3cr3t"
+    assert stored["headers"] == {"Authorization": "Bearer abc", "X-Env": "staging"}
+
+
+async def test_a_masked_single_field_update_is_ignored(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "a@example.com", "smtp_password": "p"})
+    await contact_manager.update_contact_method("email", "work", smtp_password="***", address="c@example.com")
+    stored = (await contact_manager.get_contact_method("email", "work")).details
+    assert stored["smtp_password"] == "p" and stored["address"] == "c@example.com"

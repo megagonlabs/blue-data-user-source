@@ -313,7 +313,7 @@ waiting agent. `response_base_url` must point to a running `blue-userdb-api` ins
 
 #### `update_contact`
 
-`user`, `protocol`, `name`, `details` (optional), `preference` (optional).
+`user`, `protocol`, `name`, `details` (optional), `preference` (optional). `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value.
 
 #### `remove_contact`
 

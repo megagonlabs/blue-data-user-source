@@ -189,7 +189,7 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
 | `GET` | `/{name}/contacts` | List contact methods; optional `?protocol=` filter |
 | `POST` | `/{name}/contacts` | Add a contact method |
 | `GET` | `/{name}/contacts/{protocol}/{contact_name}` | Get a specific contact method |
-| `PATCH` | `/{name}/contacts/{protocol}/{contact_name}` | Update details or preference |
+| `PATCH` | `/{name}/contacts/{protocol}/{contact_name}` | Update details or preference: `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value |
 | `DELETE` | `/{name}/contacts/{protocol}/{contact_name}` | Remove a contact method |
 
 `POST /{name}/contacts` body:

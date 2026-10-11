@@ -766,9 +766,18 @@ class UserSource(DataSource):
         return await self._contact_manager(database).get_contact_method(protocol, name)
 
     async def update_contact_method(
-        self, database: str, protocol: str, name: str, **updates: Any
+        self,
+        database: str,
+        protocol: str,
+        name: str,
+        details: dict[str, Any] | None = None,
+        preference: int | None = None,
+        **fields: Any,
     ) -> None:
-        await self._contact_manager(database).update_contact_method(protocol, name, **updates)
+        """``details`` replaces the stored fields; ``fields`` set individual ones. See ContactManager."""
+        await self._contact_manager(database).update_contact_method(
+            protocol, name, details=details, preference=preference, **fields
+        )
 
     async def remove_contact_method(self, database: str, protocol: str, name: str) -> None:
         await self._contact_manager(database).delete_contact_method(protocol, name)

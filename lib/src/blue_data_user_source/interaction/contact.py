@@ -58,6 +58,15 @@ def redact_details(protocol: str, details: dict[str, Any]) -> dict[str, Any]:
     return {k: (_mask(v) if k in secret else copy.deepcopy(v)) for k, v in details.items()}
 
 
+def _unmask(new: Any, stored: Any) -> Any:
+    """*new* with every masked value (``***``) replaced by the stored one — per key for dicts."""
+    if new == MASK:
+        return stored
+    if isinstance(new, dict) and isinstance(stored, dict):
+        return {k: (stored.get(k) if v == MASK else v) for k, v in new.items()}
+    return new
+
+
 def redact_contacts(contacts: dict[str, Any]) -> dict[str, Any]:
     """A copy of a whole ``{protocol: {name: details}}`` contacts tree with secrets masked."""
     return {
@@ -454,13 +463,35 @@ class ContactManager:
         return ContactMethod(protocol=protocol, name=name, details=entry)
 
     async def update_contact_method(
-        self, protocol: str, name: str, **updates: Any
+        self,
+        protocol: str,
+        name: str,
+        details: dict[str, Any] | None = None,
+        preference: int | None = None,
+        **fields: Any,
     ) -> None:
+        """Update a contact method.
+
+        ``details`` replaces the stored fields (the preference is kept unless
+        ``preference`` is given); ``fields`` set individual fields. Contacts are
+        stored flat, so ``details`` used to be merged in as a nested
+        ``"details"`` key while the old fields stayed in use (#137).
+
+        A secret field given as the read-path mask (``***``) keeps its stored
+        value, so a contact read and written back unchanged keeps its secrets.
+        """
         store = self._store()
         entry = store.get(f"contacts.{protocol}.{name}")
         if entry is None:
             raise InteractionError(f"Contact method {protocol!r}/{name!r} not found.")
-        entry.update(updates)
+        secret = SECRET_FIELDS.get(protocol, frozenset())
+        if details is not None:
+            replaced = {k: (_unmask(v, entry.get(k)) if k in secret else v) for k, v in details.items()}
+            entry = {**replaced, "preference": entry.get("preference", 0)}
+        for key, value in fields.items():
+            entry[key] = _unmask(value, entry.get(key)) if key in secret else value
+        if preference is not None:
+            entry["preference"] = preference
         store.set(f"contacts.{protocol}.{name}", entry)
 
     async def delete_contact_method(self, protocol: str, name: str) -> None:

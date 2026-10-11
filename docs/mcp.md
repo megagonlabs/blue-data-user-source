@@ -238,7 +238,7 @@ For a production email contact, also set `from_address`, `smtp_host`, `reply_dom
 
 #### `update_contact`
 
-`user`, `protocol`, `name`, `details` (optional), `preference` (optional).
+`user`, `protocol`, `name`, `details` (optional), `preference` (optional). `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value.
 
 #### `remove_contact`
 

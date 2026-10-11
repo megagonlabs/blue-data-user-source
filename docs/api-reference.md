@@ -102,7 +102,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 |---|---|---|
 | `await add_contact_method(database, protocol, name, details, preference=0)` | `None` | Create a contact method |
 | `await get_contact_method(database, protocol, name)` | `ContactMethod \| None` | Fetch one |
-| `await update_contact_method(database, protocol, name, **updates)` | `None` | Update `details` and/or `preference` |
+| `await update_contact_method(database, protocol, name, details=None, preference=None, **fields)` | `None` | `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value; `fields` set individual fields |
 | `await remove_contact_method(database, protocol, name)` | `None` | Delete |
 | `await list_contact_methods(database, protocol=None)` | `list[ContactMethod]` | All methods, optionally filtered by protocol |
 
@@ -212,7 +212,7 @@ ContactManager(database: str, data_manager: UserDataManager, console: bool = Tru
 |---|---|---|
 | `await create_contact_method(protocol, name, details, preference=0)` | `None` | Create a named entry |
 | `await get_contact_method(protocol, name)` | `ContactMethod \| None` | Fetch one |
-| `await update_contact_method(protocol, name, details=None, preference=None)` | `None` | Update fields |
+| `await update_contact_method(protocol, name, details=None, preference=None, **fields)` | `None` | `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value; `fields` set individual fields |
 | `await delete_contact_method(protocol, name)` | `None` | Remove |
 | `await list_contact_methods(protocol=None)` | `list[ContactMethod]` | All methods, optionally filtered |
 | `await list_protocols()` | `list[str]` | Distinct protocols with at least one entry |
