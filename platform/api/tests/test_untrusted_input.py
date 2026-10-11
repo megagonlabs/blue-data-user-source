@@ -76,54 +76,46 @@ def test_create_rejects_names_that_are_not_plain_path_segments(client, source, n
 
 # ── POST /{name}/sources ──────────────────────────────────────────────────────
 
-def _capture_ingested(source):
-    """Record the path add_source was given and the file's text at that moment."""
-    seen = {}
-
-    async def _add_source(path, database, optional_properties):
-        seen.update(path=path, text=Path(path).read_text(), database=database, props=optional_properties)
-
-    source.add_source.side_effect = _add_source
-    return seen
-
-
 def test_add_source_ingests_the_documented_free_text(client, source):
-    seen = _capture_ingested(source)
+    source.add_text_source = AsyncMock()
     text = "Alice joined Acme Corp in 2019 as a data scientist."
     resp = client.post("/alice/sources", json={"source": text, "name": "resume", "queries": ["What role?"]})
     assert resp.status_code == 201
-    assert seen["text"] == text
-    assert seen["database"] == "alice"
-    assert seen["props"] == {"name": "resume", "queries": ["What role?"]}
-    assert not Path(seen["path"]).exists()  # the request's own file is cleaned up
+    args, kwargs = source.add_text_source.await_args
+    assert args == (text,)
+    assert kwargs["database"] == "alice"
+    assert kwargs["optional_properties"] == {"name": "resume", "queries": ["What role?"], "location": "rest:resume"}
+    source.add_source.assert_not_awaited()  # nothing is read from a path
 
 
 def test_add_source_never_opens_a_server_path(client, source, tmp_path):
     secret = tmp_path / "unrelated" / "secret.txt"
     secret.parent.mkdir()
     secret.write_text("CANARY-LINE\n")
-    seen = _capture_ingested(source)
+    source.add_text_source = AsyncMock()
 
     resp = client.post("/alice/sources", json={"source": str(secret)})
     assert resp.status_code == 201
-    assert seen["path"] != str(secret)
-    assert seen["text"] == str(secret)  # the string itself is the content
-    assert "CANARY-LINE" not in seen["text"]
+    assert source.add_text_source.await_args.args == (str(secret),)  # the string itself is the content
+    source.add_source.assert_not_awaited()
 
 
-def test_add_source_file_name_cannot_escape_the_temp_directory(client, source):
-    seen = _capture_ingested(source)
-    resp = client.post("/alice/sources", json={"source": "x", "name": "../../etc/passwd"})
-    assert resp.status_code == 201
-    assert Path(seen["path"]).name == "______etc_passwd.txt"
-    assert seen["props"]["name"] == "../../etc/passwd"  # the label itself is kept
+def test_add_source_records_a_label_not_a_server_path(client, source):
+    """#151: the location used to be a deleted temp file under the server's temp directory."""
+    source.add_text_source = AsyncMock()
+    client.post("/alice/sources", json={"source": "x", "name": "../../etc/passwd"})
+    props = source.add_text_source.await_args.kwargs["optional_properties"]
+    assert props["location"] == "rest:../../etc/passwd"  # a label, never opened
+    client.post("/alice/sources", json={"source": "x"})
+    assert source.add_text_source.await_args.kwargs["optional_properties"]["location"] == "rest:text"
 
 
 @pytest.mark.parametrize("value", ["", {"path": "/etc/passwd"}, ["a"]])
 def test_add_source_rejects_non_text(client, source, value):
+    source.add_text_source = AsyncMock()
     resp = client.post("/alice/sources", json={"source": value})
     assert resp.status_code == 422
-    source.add_source.assert_not_awaited()
+    source.add_text_source.assert_not_awaited()
 
 
 # ── DELETE /{name}/sources/{source_name} (#118) ───────────────────────────────

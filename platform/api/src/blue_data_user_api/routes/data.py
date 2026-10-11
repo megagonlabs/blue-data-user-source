@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import re
-import tempfile
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -49,13 +46,10 @@ async def add_source(name: str, body: AddSourceRequest, request: Request) -> dic
     if body.queries:
         props["queries"] = body.queries
     props.setdefault("name", "text")
-    # The ingest pipeline reads files, so the text goes into a file this
-    # request owns; its chunks are stored by the time add_source returns.
-    file_stem = re.sub(r"[^A-Za-z0-9_-]", "_", props["name"])[:64] or "text"
-    with tempfile.TemporaryDirectory(prefix="blue-userdb-source-") as tmp:
-        path = Path(tmp) / f"{file_stem}.txt"
-        path.write_text(body.source, encoding="utf-8")
-        await request.app.state.source.add_source(str(path), database=name, optional_properties=props)
+    # Ingested as text: no server path is read (#133), and none is written or
+    # recorded as the source's location (#151).
+    props["location"] = f"rest:{props['name']}"
+    await request.app.state.source.add_text_source(body.source, database=name, optional_properties=props)
     return {"database": name, "added": True}
 
 

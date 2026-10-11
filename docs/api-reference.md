@@ -66,6 +66,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | Method | Returns | Description |
 |---|---|---|
 | `await add_source(source, database, optional_properties=None)` | `None` | Register a source; `optional_properties["queries"]` drives Type 2 extraction |
+| `await add_text_source(text, database, optional_properties=None)` | `None` | Add text as a source without a file (nothing is read or written on disk); same properties, `location` defaults to `"text:<name>"`. The REST API uses it |
 | `await remove_source(database, source_name)` | `dict` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{id, name, chunks_removed}`; raises `QueryError` if no source, or more than one, matches |
 | `await import_data(source, collection, database="default", entity=None, mode="append", options=None)` | `dict` | Lower-level `KBSource.import_data` passthrough |
 
@@ -77,6 +78,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `name` | `str` | Human-readable label |
 | `description` | `str` | Optional description |
 | `original` | `str` | Original publication date or provenance note |
+| `location` | `str` | Label recorded as the source's location (default: the file's path, or `"text:<name>"` for a text source) |
 
 ### Data access
 

@@ -645,3 +645,26 @@ async def test_build_passes_namespace_to_metadata_contacts_and_sessions(tmp_path
     for store in ("metadata", "contacts", "sessions"):
         assert mgr._registry.get_source_properties(store)["namespace"] == f"alice:{store}"
         assert mgr._registry.connect_source(store).properties["namespace"] == f"alice:{store}"
+
+
+async def test_a_text_source_needs_no_file_and_records_its_label(tmp_path: Path, user_id: str) -> None:
+    """#151: the REST API ingests text directly; no temp path is recorded anywhere."""
+    mgr = await _build_file_backed_manager(tmp_path, user_id, tmp_path / "sessions")
+    await mgr.add_source(None, text="PRIVATE-CANARY: the bank PIN hint is the first dog.", name="note",
+                         location="rest:note")
+
+    [added] = await mgr.list_sources()
+    assert (added["name"], added["source"]) == ("note", "rest:note")
+    assert _canary_found(mgr)
+    stored = (tmp_path / "external_documents" / "documents.json").read_text()
+    assert '"source_path": "' not in stored  # chunks of a text source record no path at all
+
+    removed = await mgr.remove_source("note")
+    assert removed["chunks_removed"] >= 1 and not _canary_found(mgr)
+
+
+async def test_a_text_source_location_defaults_to_a_text_label(tmp_path: Path, user_id: str) -> None:
+    mgr = await _build_file_backed_manager(tmp_path, user_id, tmp_path / "sessions")
+    await mgr.add_source(None, text="hello", name="memo")
+    [added] = await mgr.list_sources()
+    assert added["source"] == "text:memo"

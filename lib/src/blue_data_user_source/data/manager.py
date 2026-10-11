@@ -487,6 +487,8 @@ class UserDataManager:
         description: str | None = None,
         original: str | None = None,
         effort: Literal["low", "medium", "high"] = "medium",
+        location: str | None = None,
+        text: str | None = None,
     ) -> None:
         """Register a file as a source, always ingesting it into the shared
         "external_documents" DocumentDataSource (parsed, chunked, embedded —
@@ -505,7 +507,11 @@ class UserDataManager:
         (listing / removal) should be revisited.
         """
         kb = self._ensure_kb_source()
-        location = getattr(source, "location", str(source))
+        # With ``text``, the document is that text and *source* is unused: no file
+        # is read or written. ``location`` is what the SOURCE node records; it
+        # defaults to the path read, or "text:<name>" for text (#151).
+        path = None if text is not None else getattr(source, "location", str(source))
+        location = location or path or f"text:{name or 'text'}"
         # The SOURCE node's description is rendered into the extraction system
         # prompt, so naming the owner here is what lets the extractor tie an
         # unattributed document ("Results-driven Project Manager with...") to
@@ -521,7 +527,10 @@ class UserDataManager:
         # No "collection" override — falls through to the pipeline's own
         # default_collection ("documents"), matching the index created by
         # ensure_external_documents_source().
-        chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": location})
+        if text is not None:
+            chunks = doc_source.ingest_text(text, file_name=f"{name or 'text'}.txt")
+        else:
+            chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": path})
         if chunks:
             # The doc store can delete a document from another process only by
             # id + chunk count (its path index is per-process), so keep both,

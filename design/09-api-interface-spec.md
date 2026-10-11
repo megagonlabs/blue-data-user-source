@@ -275,7 +275,7 @@ Execute a natural language query.
 
 Add a source and optionally extract attributes from it.
 
-> **1.0: text only.** The request carries the source's text; the server writes it to a temporary file it owns, ingests that, and deletes it. Nothing in the request is ever read as a path on the server (#133). File uploads (`multipart/form-data`, as originally specified here) and session sources are not implemented over REST; add files with the CLI (`blue-userdb data source add FILE`) or the MCP `add_source` tool. File uploads are tracked in #147.
+> **1.0: text only.** The request carries the source's text, which the server ingests directly (`UserSource.add_text_source`): nothing in the request is read as a path on the server (#133), no file is written, and the source's location is recorded as `rest:<name>` (#151). File uploads (`multipart/form-data`, as originally specified here) and session sources are not implemented over REST; add files with the CLI (`blue-userdb data source add FILE`) or the MCP `add_source` tool. File uploads are tracked in #147.
 
 **Request** (`application/json`)
 

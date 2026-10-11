@@ -688,20 +688,42 @@ class UserSource(DataSource):
         database: str,
         optional_properties: dict[str, object] | None = None,
     ) -> None:
-        """Register a source in the user's KB and optionally ingest via queries."""
+        """Register a file as a source in the user's KB and optionally extract via queries.
+
+        ``optional_properties``: ``queries``, ``name``, ``description``,
+        ``original``, ``effort``, and ``location`` (the label recorded on the
+        SOURCE node; defaults to the file's path).
+        """
+        await self._get_manager(database).add_source(source, **self._source_kwargs(optional_properties))
+
+    async def add_text_source(
+        self,
+        text: str,
+        database: str,
+        optional_properties: dict[str, object] | None = None,
+    ) -> None:
+        """Add *text* as a source, without a file: nothing is read from or written to disk.
+
+        Same ``optional_properties`` as :meth:`add_source`; ``location``
+        defaults to ``"text:<name>"``. The REST API uses this, so a request
+        never names, or leaves behind, a server path (#133, #151).
+        """
+        await self._get_manager(database).add_source(None, text=text, **self._source_kwargs(optional_properties))
+
+    @staticmethod
+    def _source_kwargs(optional_properties: dict[str, object] | None) -> dict[str, Any]:
         props = optional_properties or {}
         queries: list[str] | None = None
-        if "queries" in props:
-            raw = props["queries"]
-            if isinstance(raw, list):
-                queries = [str(q) for q in raw]
-        name = str(props["name"]) if "name" in props else None
-        description = str(props["description"]) if "description" in props else None
-        original = str(props["original"]) if "original" in props else None
-        effort = str(props.get("effort", "medium"))
-        await self._get_manager(database).add_source(
-            source, queries, name=name, description=description, original=original, effort=effort,
-        )
+        if isinstance(props.get("queries"), list):
+            queries = [str(q) for q in props["queries"]]  # type: ignore[union-attr]
+        return {
+            "queries": queries,
+            "name": str(props["name"]) if "name" in props else None,
+            "description": str(props["description"]) if "description" in props else None,
+            "original": str(props["original"]) if "original" in props else None,
+            "effort": str(props.get("effort", "medium")),
+            "location": str(props["location"]) if "location" in props else None,
+        }
 
     async def remove_source(self, database: str, source_name: str) -> dict[str, Any]:
         """Remove a source by name or id: its document chunks and its KB SOURCE node.
