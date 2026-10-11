@@ -386,6 +386,7 @@ def _get_session(obj: dict, session: str | None) -> str | None:
 # ------------------------------------------------------------------ #
 
 @click.group()
+@click.version_option(package_name="blue-data-user-cli", prog_name="blue-userdb")
 @click.option(
     "--profile",
     "profile_name",
@@ -509,6 +510,11 @@ def _db_default(obj: dict, param: str, option):
     return obj["config"].get(f"BLUE_DATA_USER_SOURCE_{param}")
 
 
+def _interactive() -> bool:
+    """Whether a person is at this terminal to answer prompts."""
+    return sys.stdin.isatty()
+
+
 def _log_limit(obj: dict, option: int | None) -> int:
     """`--log-limit` if given, else the family-wide BLUE_DATA_CLI_LOG_LIMIT."""
     if option is not None:
@@ -572,7 +578,11 @@ def database_list(obj: dict, fmt: str) -> None:
 @click.option("--neo4j-host", default=None, help="Neo4j host (neo4j backend only).")
 @click.option("--neo4j-port", default=None, type=int, help="Neo4j bolt port.")
 @click.option("--neo4j-user", default=None, help="Neo4j username.")
-@click.option("--neo4j-password", default=None, help="Neo4j password.")
+@click.option(
+    "--neo4j-password", default=None,
+    help="Neo4j password. Prefer the profile's BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD (or that "
+         "environment variable), which keeps it out of shell history and process listings.",
+)
 @click.option(
     "--kb-search-mode",
     default=None,
@@ -639,6 +649,7 @@ def database_create(
     neo4j_host = _db_default(obj, "NEO4J_HOST", neo4j_host)
     neo4j_port = _db_default(obj, "NEO4J_PORT", neo4j_port)
     neo4j_user = _db_default(obj, "NEO4J_USER", neo4j_user)
+    neo4j_password = _db_default(obj, "NEO4J_PASSWORD", neo4j_password)
     data_dir: Path = obj["data_dir"]
     source = _seeding_source(obj)
 
@@ -649,7 +660,11 @@ def database_create(
     kb_extras: dict[str, Any] = {}
     if kb_backend == "neo4j":
         if not neo4j_password:
-            err.print("[red]Error:[/red] neo4j backend requires --neo4j-password.")
+            err.print(
+                "[red]Error:[/red] neo4j backend needs a password: run "
+                "'blue-userdb profile config BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD' "
+                "(or export that variable)."
+            )
             sys.exit(1)
         kb_extras = {
             "host": neo4j_host,
@@ -685,6 +700,14 @@ def database_create(
     _selected_db_path(data_dir).write_text(name)
     console.print(f"Created database: [bold]{name}[/bold] (selected)")
     if not onboard:
+        return
+    if not _interactive():
+        # Onboarding is an interview on this terminal; under a pipe or in a script
+        # it would read EOF and record blank answers (#104).
+        err.print(
+            "[yellow]Note:[/yellow] skipped onboarding (stdin is not a terminal). "
+            "Run 'blue-userdb database onboard' interactively to answer its questions."
+        )
         return
     try:
         asyncio.run(source.onboard_user(name, include_metadata=metadata_onboard))

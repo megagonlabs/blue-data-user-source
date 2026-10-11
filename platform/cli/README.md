@@ -129,6 +129,7 @@ $ blue-userdb profile config                  # configures staging, now that it 
 | `BLUE_DATA_USER_SOURCE_NEO4J_HOST` | str | `localhost` | |
 | `BLUE_DATA_USER_SOURCE_NEO4J_PORT` | int | `7687` | |
 | `BLUE_DATA_USER_SOURCE_NEO4J_USER` | str | `neo4j` | |
+| `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | secret | — | |
 
 Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to `BLUE_DATA_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
 
@@ -184,7 +185,7 @@ blue-userdb database delete alice --yes
 | `--neo4j-host` | `localhost` | Neo4j host (neo4j backend only) |
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
-| `--neo4j-password` | — | Neo4j password (required for neo4j backend) |
+| `--neo4j-password` | the profile's `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | Neo4j password (required for neo4j backend). Prefer the profile secret or that environment variable: a value on the command line lands in shell history |
 | `--doc-backend` | `file` | Vector backend for per-session interaction transcripts: `memory` or `file` |
 
 ```bash
@@ -192,12 +193,12 @@ blue-userdb database delete alice --yes
 blue-userdb database create alice
 
 # Neo4j backend
+blue-userdb profile config BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD   # prompts; never on the command line
 blue-userdb database create alice \
   --kb-backend neo4j \
   --neo4j-host db.example.com \
   --neo4j-port 7687 \
-  --neo4j-user neo4j \
-  --neo4j-password secret
+  --neo4j-user neo4j
 ```
 
 ---

@@ -53,6 +53,8 @@ blue-userdb [--database NAME] [--session ID] [--data-dir DIR] [--schema-path PAT
     [--metadata-schema-path PATH] [--contact-schema-path PATH] COMMAND
 ```
 
+`blue-userdb --version` prints the installed `blue-data-user-cli` version.
+
 | Option | Env var | Default | Description |
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
@@ -142,7 +144,7 @@ Manage user databases.
 | Command | Description |
 |---|---|
 | `blue-userdb database list [--format table\|json]` | List all registered databases |
-| `blue-userdb database create NAME [options]` | Create a new database, and select it as active |
+| `blue-userdb database create NAME [options]` | Create a new database, and select it as active. Onboarding (a short interview) follows unless `--no-onboard`, and is skipped with a note when stdin is not a terminal |
 | `blue-userdb database delete NAME [--yes]` | Delete a database and all its data |
 | `blue-userdb database select NAME` | Set the active database |
 | `blue-userdb database search KEYWORD [--format]` | Keyword search over database names |
@@ -157,12 +159,12 @@ Manage user databases.
 | `--neo4j-host` | `localhost` | Neo4j host (`neo4j` backend only) |
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
-| `--neo4j-password` | — | Neo4j password (required for `neo4j` backend) |
+| `--neo4j-password` | the profile's `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | Neo4j password (required for `neo4j` backend). Prefer the profile secret or that environment variable: a value on the command line lands in shell history |
 | `--doc-backend` | `file` | Vector backend for per-session/per-file document stores: `memory` or `file` |
 
 ```bash
-blue-userdb database create alice --kb-backend neo4j \
-    --neo4j-host db.example.com --neo4j-password secret
+blue-userdb profile config BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD   # prompts; stored masked, or as $VAR
+blue-userdb database create alice --kb-backend neo4j --neo4j-host db.example.com
 ```
 
 ---

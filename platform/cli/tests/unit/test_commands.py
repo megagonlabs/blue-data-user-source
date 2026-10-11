@@ -97,7 +97,8 @@ def test_database_list_empty_produces_placeholder(runner: CliRunner, data_dir: P
     assert "no databases" in result.output
 
 
-def test_database_create_onboards_by_default(runner: CliRunner, data_dir: Path) -> None:
+@patch("blue_data_user_cli.commands._interactive", return_value=True)
+def test_database_create_onboards_by_default(_interactive, runner: CliRunner, data_dir: Path) -> None:
     mock = MagicMock()
     mock.list_users.return_value = []
     mock.create_user = AsyncMock(return_value=None)
@@ -110,7 +111,8 @@ def test_database_create_onboards_by_default(runner: CliRunner, data_dir: Path) 
     mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True)
 
 
-def test_database_create_keeps_the_database_when_onboarding_fails(
+@patch("blue_data_user_cli.commands._interactive", return_value=True)
+def test_database_create_keeps_the_database_when_onboarding_fails(_interactive, 
     runner: CliRunner, data_dir: Path
 ) -> None:
     """An unreachable LLM fails onboarding, not the creation that already happened (#117)."""
@@ -143,7 +145,8 @@ def test_database_create_no_onboard_flag_disables_onboarding(
     mock.onboard_user.assert_not_called()
 
 
-def test_database_create_no_metadata_onboard_flag(
+@patch("blue_data_user_cli.commands._interactive", return_value=True)
+def test_database_create_no_metadata_onboard_flag(_interactive, 
     runner: CliRunner, data_dir: Path
 ) -> None:
     mock = MagicMock()
@@ -177,7 +180,7 @@ def test_database_create_neo4j_without_password_exits_with_code_1(
             runner, data_dir, ["database", "create", "alice", "--kb-backend", "neo4j"]
         )
     assert result.exit_code == 1
-    assert "neo4j-password" in result.output
+    assert "BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD" in result.output  # points at the profile, not a CLI argument
 
 
 def test_database_create_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
@@ -1223,3 +1226,44 @@ def test_contact_get_and_list_mask_secrets(runner: CliRunner, data_dir: Path) ->
         assert "hunter2" not in result.output
     assert "***" in field.output
     assert "a@example.com" in entry.output
+
+
+def test_neo4j_password_comes_from_the_profile(runner: CliRunner, data_dir: Path) -> None:
+    """#104: a secret must not be required on the command line, where shell history keeps it."""
+    configured = runner.invoke(
+        cli, ["--data-dir", str(data_dir), "profile", "config", "BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD"], input="s3cret\n"
+    )
+    assert configured.exit_code == 0, configured.output
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice", "--kb-backend", "neo4j", "--no-onboard"])
+    assert result.exit_code == 0, result.output
+    assert mock.create_user.await_args.args[2]["connection"]["password"] == "s3cret"
+    inspected = _invoke(runner, data_dir, ["profile", "inspect"])
+    assert "s3cret" not in inspected.output
+
+
+def test_version(runner: CliRunner) -> None:
+    from importlib.metadata import version
+
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0
+    assert result.output.strip() == f"blue-userdb, version {version('blue-data-user-cli')}"
+
+
+def test_database_create_skips_onboarding_without_a_terminal(runner: CliRunner, data_dir: Path) -> None:
+    """#104: under a pipe the interview would read EOF and record blank answers."""
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice"])  # CliRunner stdin is not a TTY
+    assert result.exit_code == 0, result.output
+    assert "Created database: alice" in result.output
+    text = " ".join(result.output.split())  # Rich wraps long lines
+    assert "skipped onboarding" in text and "database onboard" in text
+    mock.onboard_user.assert_not_called()

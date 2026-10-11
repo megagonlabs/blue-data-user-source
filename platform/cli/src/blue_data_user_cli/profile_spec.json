@@ -105,5 +105,11 @@
     "prompt": "Neo4j username",
     "required": false,
     "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD": {
+    "default": null,
+    "prompt": "Neo4j password (neo4j KB backend only)",
+    "required": false,
+    "cast": "secret"
   }
 }
