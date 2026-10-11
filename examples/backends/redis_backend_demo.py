@@ -15,16 +15,10 @@ Covers the same shape as file_backend_demo.py: create a user, set metadata,
 register a contact, start a session, then reopen with a second RedisUserSource
 instance pointed at the same Redis database and verify everything survived.
 
-A real gotcha surfaced while writing this demo: RedisJSONSource.get() on a
-JSONPath that doesn't exist yet returns an empty list, not None. seed_metadata_
-schema/seed_contact_schema use "is None" to decide whether a category is
-already seeded, so once the *first* schema category exists, every later
-category's (non-None) `[]` reads as "already there" and is skipped -- only
-`identity` (metadata) and `email` (contacts, seeded as an empty bucket) end up
-present. This demo works within that: it only touches `identity.*` metadata
-and an `email` contact method, both of which fully round-trip. See
-file_backend_demo.py for the complete 4-category-metadata / 8-protocol-contact
-picture, which the file JSON backend seeds correctly.
+Seeding behaves as on the file backend: all four metadata categories and
+every contact protocol are seeded. (RedisJSONSource.get() returns an empty
+list, not None, for a missing JSONPath; the library reads dot paths through
+its root document so that difference no longer matters, #99.)
 
 Run from examples/backends/ (needs a reachable Redis with the RedisJSON module,
 e.g. `docker run -p 6379:6379 redis/redis-stack`):
@@ -79,7 +73,6 @@ async def main():
     )
     seeded = outer.list_metadata("alice")
     print(f"Metadata categories present after seeding: {list(seeded.keys())}")
-    print("(only 'identity' -- see the module docstring for why the other three don't land)")
 
     # ---------------------------------------------------------------- #
     # 2. Metadata, contact method, session
@@ -91,9 +84,6 @@ async def main():
 
     outer.set_metadata("alice", "identity.name", "Alice")
     outer.set_metadata("alice", "identity.timezone", "America/New_York")
-    # "email" is the one contact protocol bucket schema-seeding actually
-    # created (see module docstring) -- a new nested key under an *existing*
-    # object round-trips fine.
     await outer.add_contact_method(
         "alice", "email", "work", details={"address": "alice@example.com"}, preference=0,
     )

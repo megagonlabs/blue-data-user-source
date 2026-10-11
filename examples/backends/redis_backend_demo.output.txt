@@ -1,13 +1,12 @@
 ------------------------------------------------------------
 1. Create user (Redis-backed registry, metadata, contacts, sessions)
 ------------------------------------------------------------
-Metadata categories present after seeding: ['identity']
-(only 'identity' -- see the module docstring for why the other three don't land)
+Metadata categories present after seeding: ['identity', 'preferences', 'availability', 'privacy']
 
 ------------------------------------------------------------
 2. Set metadata, register a contact method, start a session
 ------------------------------------------------------------
-Session created: a9e2a9e8-d89b-40d4-a204-68b1ea486781
+Session created: b5917a6b-568c-411d-9adc-993bb856db11
 
 ------------------------------------------------------------
 3. Persistence -- reopen with a second RedisUserSource instance

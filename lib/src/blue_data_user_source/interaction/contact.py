@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from blue_data_user_source.data.paths import get_path
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
 from blue_data_user_source.types import ContactNotFoundError, InteractionError, InteractionTimeoutError, LLMError
@@ -502,7 +503,7 @@ class ContactManager:
         path = self._path(protocol, name)
         if path is None:
             return None
-        entry = self._store().get(path)
+        entry = get_path(self._store(), path)
         if entry is None:
             return None
         return ContactMethod(protocol=protocol, name=name, details=entry)
@@ -527,7 +528,7 @@ class ContactManager:
         """
         store = self._store()
         path = self._path(protocol, name)
-        entry = store.get(path) if path else None
+        entry = get_path(store, path) if path else None
         if entry is None:
             raise ContactNotFoundError(f"Contact method {protocol!r}/{name!r} not found.")
         secret = SECRET_FIELDS.get(protocol, frozenset())
@@ -574,7 +575,7 @@ class ContactManager:
     async def list_named_entries(self, protocol: str) -> dict[str, dict]:
         if protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
             return {}
-        entries = self._store().get(f"contacts.{protocol}") or {}
+        entries = get_path(self._store(), f"contacts.{protocol}") or {}
         return {k: v for k, v in entries.items() if isinstance(v, dict)}
 
     # ------------------------------------------------------------------ #

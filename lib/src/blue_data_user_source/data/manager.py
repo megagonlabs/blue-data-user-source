@@ -11,6 +11,8 @@ from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
 
+from blue_data_user_source.data.paths import get_path
+
 logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ #
@@ -717,7 +719,7 @@ class UserDataManager:
         schema = json.loads(Path(schema_path).read_text())
         meta = self._ensure_metadata_source()
         for category, entries in schema.items():
-            if meta.get(f"metadata.{category}") is None:
+            if get_path(meta, f"metadata.{category}") is None:
                 meta.set(f"metadata.{category}", {})
             if entries.get("__open__"):
                 continue
@@ -725,14 +727,14 @@ class UserDataManager:
                 if key.startswith("__"):
                     continue
                 dotted = f"metadata.{category}.{key}"
-                if meta.get(dotted) is None:
+                if get_path(meta, dotted) is None:
                     meta.set(dotted, spec.get("default"))
 
     def clear_metadata(self) -> None:
         self._ensure_metadata_source().set("metadata", {})
 
     def get_metadata(self, key: str) -> Any:
-        return self._ensure_metadata_source().get(f"metadata.{key}")
+        return get_path(self._ensure_metadata_source(), f"metadata.{key}")
 
     def set_metadata(self, key: str, value: Any) -> None:
         self._ensure_metadata_source().set(f"metadata.{key}", value)
@@ -755,7 +757,7 @@ class UserDataManager:
         schema = json.loads(Path(schema_path).read_text())
         store = self._ensure_contact_source()
         for protocol in schema:
-            if store.get(f"contacts.{protocol}") is None:
+            if get_path(store, f"contacts.{protocol}") is None:
                 store.set(f"contacts.{protocol}", {})
 
     def clear_contacts(self) -> None:
@@ -775,7 +777,7 @@ class UserDataManager:
         from blue_data_user_source.interaction.contact import ContactManager
 
         path = ContactManager._path(protocol, name)
-        return self._ensure_contact_source().get(path) if path else None
+        return get_path(self._ensure_contact_source(), path) if path else None
 
     def set_contact_field(self, protocol: str, name: str, field: str, value: Any) -> None:
         from blue_data_user_source.interaction.contact import ContactManager
@@ -785,7 +787,7 @@ class UserDataManager:
         if path is None:
             raise InteractionError(f"Invalid contact {protocol!r}/{name!r}.")
         store = self._ensure_contact_source()
-        if store.get(path) is None:
+        if get_path(store, path) is None:
             store.set(path, {})
         store.set(f"{path}.{field}", value)
 

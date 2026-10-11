@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from blue_data_user_source.data.paths import get_path
 from blue_data_user_source.types import SessionEndedError, SessionNotFoundError
 
 
@@ -61,7 +62,7 @@ class SessionManager:
         # are generated UUIDs: anything that is not a plain token is unknown.
         if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
             return None
-        return self._store().get(f"sessions.{session_id}")
+        return get_path(self._store(), f"sessions.{session_id}")
 
     async def list_sessions(self) -> dict[str, Any]:
         return self._store().get("sessions") or {}
