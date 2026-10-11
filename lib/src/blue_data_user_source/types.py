@@ -22,6 +22,10 @@ class UserNotFoundError(QueryError):
     """Raised when an operation names a user (database) that is not registered."""
 
 
+class UserExistsError(QueryError):
+    """Raised when creating a user (database) that is already registered."""
+
+
 class ImportError(UDbError):  # noqa: A001
     """Raised when a source import fails."""
 

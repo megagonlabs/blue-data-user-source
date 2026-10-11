@@ -45,3 +45,18 @@ async def test_create_user_accepts_a_leading_underscore(tmp_path: Path) -> None:
     us = FileUserSource("user_source", {"connection": {"path": str(tmp_path / "registry.json")}})
     await us.create_user("_private", **_file_props(tmp_path, "_private"), onboard=False)
     assert us.list_users() == ["_private"]
+
+
+async def test_creating_an_existing_user_is_refused_and_keeps_its_data(tmp_path: Path) -> None:
+    """#141: a second create used to re-register the user against new stores, orphaning the data."""
+    from blue_data_user_source import UserExistsError
+
+    us = FileUserSource("user_source", {"connection": {"path": str(tmp_path / "registry.json")}})
+    await us.create_user("alice", **_file_props(tmp_path, "alice"), onboard=False)
+    us.set_metadata("alice", "identity.timezone", "Europe/Oslo")
+
+    with pytest.raises(UserExistsError, match="'alice' already exists"):
+        await us.create_user("alice", **_file_props(tmp_path / "elsewhere", "alice"), onboard=False)
+
+    assert us.get_metadata("alice", "identity.timezone") == "Europe/Oslo"
+    assert us.list_users() == ["alice"]

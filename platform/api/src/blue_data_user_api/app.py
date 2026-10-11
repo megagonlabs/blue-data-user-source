@@ -7,7 +7,7 @@ from typing import AsyncIterator
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from blue_data_user_source import LLMError, UserNotFoundError
+from blue_data_user_source import LLMError, UserExistsError, UserNotFoundError
 
 from blue_data_user_api.config import settings
 from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query, sessions
@@ -83,6 +83,12 @@ async def reject_cross_origin_writes(request: Request, call_next):  # type: igno
 async def user_not_found(request: Request, exc: UserNotFoundError) -> JSONResponse:
     """Any route naming a user that does not exist (#145)."""
     return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(UserExistsError)
+async def user_exists(request: Request, exc: UserExistsError) -> JSONResponse:
+    """Creating a user that already exists (#141)."""
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(LLMError)

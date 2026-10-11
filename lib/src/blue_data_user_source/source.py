@@ -19,7 +19,7 @@ from blue_data_user_source.data.manager import (
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
-from blue_data_user_source.types import QueryError, QueryResult, UserNotFoundError
+from blue_data_user_source.types import QueryError, QueryResult, UserExistsError, UserNotFoundError
 
 # A user's name becomes file and directory names under the data directory, so it
 # must be a plain path segment. Same rule as blue-data-kb-source's database names.
@@ -600,9 +600,14 @@ class UserSource(DataSource):
         whether that onboarding also asks structured metadata questions —
         set to False to only seed the KB.
 
-        Raises ``QueryError`` for an invalid name before anything is written.
+        Raises ``QueryError`` for an invalid name, and ``UserExistsError`` for a
+        user that is already registered, before anything is written: creating
+        it again re-registered the name against new stores, orphaning the
+        existing user's data (#141).
         """
         validate_user_name(name)
+        if self.get_user(name) is not None:
+            raise UserExistsError(f"Database {name!r} already exists.")
         manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
         await manager.build(
             schema_path=self._registry.get_source_property(self.name, "schema"),

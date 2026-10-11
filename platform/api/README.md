@@ -101,7 +101,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/databases` | List all registered users |
-| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`) |
+| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`); `409` if it already exists |
 | `GET` | `/databases/{name}` | Get user info and registry properties |
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
 | `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered |

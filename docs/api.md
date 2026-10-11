@@ -86,7 +86,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/databases` | List all registered users |
-| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`) |
+| `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`); `409` if it already exists |
 | `GET` | `/databases/{name}` | Get user info and registry properties |
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
 | `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered |
@@ -322,7 +322,7 @@ Errors use FastAPI's standard body, a `detail` string (or, for request validatio
 | 401 | Missing or wrong API key, when `BLUE_DATA_USER_SOURCE_API_KEY` is set |
 | 403 | A state-changing request from a foreign browser origin |
 | 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session, source or pending interaction does not |
-| 409 | The interaction was already answered |
+| 409 | The user already exists (`POST /databases/{name}`), or the interaction was already answered |
 | 422 | Request validation: a malformed body, an unknown body key, an invalid database name, or an inbound email the adapter cannot parse |
 | 502 | The language model could not be reached or gave an unusable reply (`LLMError`) |
 | 500 | Anything else — a bug; please report it |

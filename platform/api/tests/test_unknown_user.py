@@ -32,3 +32,14 @@ def test_unknown_user_is_404(client, method, path, body):
     resp = client.request(method, path, json=body)
     assert resp.status_code == 404, resp.text
     assert "nobody" in resp.json()["detail"]
+
+
+def test_creating_an_existing_user_is_409_and_keeps_its_data(client):
+    """#141: the second POST used to return 201 and orphan the user's metadata."""
+    assert client.post("/databases/ana").status_code == 201
+    assert client.put("/ana/metadata/identity.timezone", json={"value": "Asia/Tokyo"}).status_code == 200
+
+    again = client.post("/databases/ana")
+    assert again.status_code == 409
+    assert "already exists" in again.json()["detail"]
+    assert client.get("/ana/metadata/identity.timezone").json()["value"] == "Asia/Tokyo"
