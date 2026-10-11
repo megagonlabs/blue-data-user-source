@@ -43,7 +43,9 @@ Claude Desktop config (~/.config/claude-desktop/claude_desktop_config.json):
 """
 from __future__ import annotations
 
+import inspect
 import json
+import re
 from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -81,8 +83,8 @@ async def create_database(name: str) -> str:
     """Create a new user database with file-backed storage under BLUE_DATA_USER_SOURCE_DATA_DIR.
 
     All storage paths (registry, KB, metadata, contacts) are derived
-    automatically from the user name and the server's data directory. Use
-    the REST API (POST /databases/{name}) to supply custom storage paths.
+    automatically from the user name and the server's data directory. Other
+    backends (Redis, Neo4j) are configured through the library or the CLI.
 
     Args:
         name: User name, e.g. 'alice'.
@@ -570,6 +572,54 @@ async def get_contact(user: str, protocol: str, name: str) -> str:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Parameter schemas
+# ---------------------------------------------------------------------------
+
+# Parameters whose allowed values are a fixed set, expressed as a JSON Schema
+# enum so a client sees them without reading prose.
+_ENUMS: dict[str, list[str]] = {
+    "output_form": ["json", "nl"],
+    "protocol": ["stdio", "email", "webhook", "sms", "messaging", "enterprise", "notification", "session"],
+}
+
+
+def _document_parameters() -> None:
+    """Copy each tool's ``Args:`` docstring entries into its parameter schema.
+
+    FastMCP builds the input schema from the signature only, so every
+    parameter reached MCP clients without a description; the docstrings were
+    the only place they were documented (#105). Fails at import if a
+    parameter is left undocumented, so a new tool cannot regress this.
+    """
+    for name, tool in mcp._tool_manager._tools.items():
+        doc = inspect.getdoc(tool.fn) or ""
+        args_block = doc.split("Args:", 1)[1] if "Args:" in doc else ""
+        described: dict[str, str] = {}
+        current: str | None = None
+        for line in args_block.splitlines():
+            match = re.match(r"\s*(\w+):\s*(.*)", line)
+            if match and match.group(1) in tool.parameters.get("properties", {}):
+                current = match.group(1)
+                described[current] = match.group(2).strip()
+            elif current and line.strip():
+                described[current] += " " + line.strip()
+            elif not line.strip():
+                current = None
+        for param, schema in tool.parameters.get("properties", {}).items():
+            if param not in described:
+                raise RuntimeError(f"MCP tool {name!r}: parameter {param!r} has no Args: description")
+            schema["description"] = described[param]
+            if param in _ENUMS:
+                # An optional parameter is anyOf [string, null]: the enum goes on the
+                # string branch, or it would forbid null.
+                target = next((b for b in schema.get("anyOf", []) if b.get("type") == "string"), schema)
+                target["enum"] = _ENUMS[param]
+
+
+_document_parameters()
+
 
 def main() -> None:
     mcp.run()

@@ -281,3 +281,18 @@ async def test_contact_tools_mask_secrets():
     assert got["details"]["smtp_password"] == "***"
     assert got["details"]["address"] == "a@example.com"
     assert "hunter2" not in listed
+
+
+async def test_every_tool_parameter_is_described_in_its_schema():
+    """#105: clients see only the schema; the docstrings' Args: never reached it."""
+    from blue_data_user_mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    assert len(tools) == 23
+    for tool in tools:
+        for param, schema in tool.inputSchema.get("properties", {}).items():
+            assert schema.get("description"), f"{tool.name}.{param} has no description"
+    by_name = {t.name: t for t in tools}
+    assert by_name["query"].inputSchema["properties"]["output_form"]["enum"] == ["json", "nl"]
+    optional = by_name["list_contacts"].inputSchema["properties"]["protocol"]["anyOf"]
+    assert {"type": "null"} in optional and any("enum" in branch for branch in optional)

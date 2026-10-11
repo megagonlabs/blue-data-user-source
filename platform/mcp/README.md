@@ -77,6 +77,17 @@ If `blue-userdb-mcp` is not on the system PATH, use the full path:
 
 ---
 
+## Conventions
+
+- **Transport: stdio.** The server is a local process that acts for the user on their machine, like the rest of the Blue Data family's MCP servers; it opens no network port. (An HTTP surface is `blue-userdb-api`.)
+- **Tools only, no resources.** Every operation, reads included, is a tool, since most reads take parameters (`user`, a key, a filter).
+- **Results and errors.** Every tool returns JSON text. On success it is the tool's payload, as documented per tool below. On failure it is `{"error": "<message>"}`, returned as normal content, not as an MCP `isError` result, so an agent can read the reason and recover. Every tool follows this rule.
+- **No `--format`.** The CLI's `--format table|json|nl` does not carry over: MCP results are always JSON. (`query` still takes `output_form`, which picks a table of rows or a prose answer *inside* the JSON.)
+- **Parameter schemas.** Every parameter has a description, and fixed-value parameters (`output_form`, `protocol`) are JSON Schema enums. The server refuses to start if a tool's parameter is undocumented.
+- **Secrets.** Read tools (`list_contacts`, `get_contact`) mask contact secrets as `***`. Pass secrets to `add_contact` / `update_contact` as `$VAR` environment-variable references (e.g. `"smtp_password": "$SMTP_PASSWORD"`) so they never appear in a tool call; sending a masked value back keeps the stored secret.
+- **Scope.** Not exposed, deliberately: schema management (`blue-userdb schema ...`), keyword/semantic `data search`, `data export` / `import` / `extract`, onboarding (an interactive interview, which a server cannot hold — #120), and the CLI's own state (`database select`, `session select`, profiles). Use the CLI or the library for those; an agent works with users, sources, queries, sessions, metadata and contacts.
+- **Configuration** comes only from `BLUE_DATA_USER_SOURCE_*` environment variables (below). The server deliberately does not read the CLI's profiles, so a developer's CLI profile cannot reconfigure a running server.
+
 ## Configuration reference
 
 All configuration is via environment variables — there is no config file.
