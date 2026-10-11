@@ -221,7 +221,7 @@ The layer:
 3. Generates clarification request via Interaction Manager, passing the same `interaction_id` so the transport-level correlation and the durable record share one id
 4. Sends interaction to user
 5. Waits for response
-6. Records the response via the Session Manager (`"resolved"`, or `"timeout"` if the wait fails) and ingests the transcript into the session's `DocumentDataSource`
+6. Records the response via the Session Manager (`"resolved"`, `"timeout"` if no answer arrives in time, or `"failed"` with the reason if the question cannot be delivered; in the last two cases the query returns the data it has) and ingests the transcript into the session's `DocumentDataSource`
 7. Returns updated data to Reasoning Layer for reassessment
 8. Repeats if necessary
 

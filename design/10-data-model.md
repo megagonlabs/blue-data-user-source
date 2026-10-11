@@ -243,9 +243,10 @@ Stored at `sessions.{session_id}.queries.{query_id}.interactions.{interaction_id
 | `question` | string | The clarification question sent to the user |
 | `response` | string \| `null` | The user's reply; `null` while pending |
 | `contact` | object | `{"protocol": str, "name": str}` — which contact method handled this interaction |
-| `status` | `"pending"` \| `"resolved"` \| `"timeout"` | Interaction lifecycle state |
+| `status` | `"pending"` \| `"resolved"` \| `"timeout"` \| `"failed"` | Interaction lifecycle state. `"failed"`: the question could not be delivered (a contact missing a required field, an unreachable endpoint, a mail server error) |
+| `error` | string | Only when `"failed"`: why delivery failed |
 | `started_at` | ISO 8601 datetime | When the interaction was sent |
-| `resolved_at` | ISO 8601 datetime \| `null` | When it resolved or timed out |
+| `resolved_at` | ISO 8601 datetime \| `null` | When it resolved, timed out or failed |
 
 `interaction_id` is the same id used to key the transport-level `pending_interactions` Future-correlation dict (webhook/email) — see [04-detailed-architecture.md](04-detailed-architecture.md) and ADR-017 in [13-decision-log.md](13-decision-log.md).
 

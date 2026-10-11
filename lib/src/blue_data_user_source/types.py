@@ -40,5 +40,9 @@ class InteractionError(UDbError):
     """Raised when user interaction fails (channel unavailable, timeout, etc.)."""
 
 
+class InteractionTimeoutError(InteractionError):
+    """Raised when the user did not answer within the contact method's timeout."""
+
+
 class NoContactMethodError(InteractionError):
     """Raised when no contact method can reach the user from this process."""

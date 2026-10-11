@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
-from blue_data_user_source.types import InteractionError, LLMError
+from blue_data_user_source.types import InteractionError, InteractionTimeoutError, LLMError
 
 # ------------------------------------------------------------------ #
 # Secrets in contact details (#143)                                    #
@@ -188,6 +188,13 @@ class ContactMethod:
             self.protocol == "email" and self.details.get("inbound_provider") == "stdio"
         )
 
+    def _required(self, key: str) -> Any:
+        """A required detail, or an ``InteractionError`` naming what is missing (#138)."""
+        value = self.details.get(key)
+        if value in (None, ""):
+            raise InteractionError(f"{self.protocol} contact {self.name!r} is missing required field {key!r}.")
+        return value
+
     def interact(self, interaction_id: str | None = None) -> InteractionManager:
         """Build an InteractionManager for this contact method.
 
@@ -235,8 +242,8 @@ class ContactMethod:
             headers           — extra HTTP headers for the outgoing POST
             timeout           — seconds to wait for a response (default: 300)
         """
-        url: str = resolve_secret(self.details["url"])
-        response_base_url: str = self.details["response_base_url"].rstrip("/")
+        url: str = resolve_secret(self._required("url"))
+        response_base_url: str = self._required("response_base_url").rstrip("/")
         headers: dict[str, str] = resolve_secret(self.details.get("headers") or {})
         timeout: float = float(self.details.get("timeout", 300))
 
@@ -253,20 +260,27 @@ class ContactMethod:
 
             response_url = f"{response_base_url}/interactions/{iid}/response"
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        url,
-                        json={
-                            "interaction_id": iid,
-                            "message": message,
-                            "response_url": response_url,
-                        },
-                        headers=headers,
-                        timeout=10.0,
-                    )
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            url,
+                            json={
+                                "interaction_id": iid,
+                                "message": message,
+                                "response_url": response_url,
+                            },
+                            headers=headers,
+                            timeout=10.0,
+                        )
+                        resp.raise_for_status()
+                except httpx.HTTPError as exc:
+                    # The question never reached the user (endpoint down, 4xx/5xx).
+                    raise InteractionError(
+                        f"webhook contact {self.name!r} could not deliver the question: {type(exc).__name__}: {exc}"
+                    ) from exc
                 return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
-                raise InteractionError(
+                raise InteractionTimeoutError(
                     f"No response received within {timeout}s for interaction {iid!r}"
                 )
             finally:
@@ -349,11 +363,11 @@ class ContactMethod:
         if self.details.get("inbound_provider") == "stdio":
             return self._email_stdio_manager(interaction_id)
 
-        address: str = self.details["address"]
-        from_address: str = self.details["from_address"]
-        smtp_host: str = self.details["smtp_host"]
-        reply_domain: str = self.details["reply_domain"].lstrip("@")
-        response_base_url: str = self.details["response_base_url"].rstrip("/")
+        address: str = self._required("address")
+        from_address: str = self._required("from_address")
+        smtp_host: str = self._required("smtp_host")
+        reply_domain: str = self._required("reply_domain").lstrip("@")
+        response_base_url: str = self._required("response_base_url").rstrip("/")
         smtp_port: int = int(self.details.get("smtp_port", 587))
         smtp_user: str = self.details.get("smtp_user") or from_address
         smtp_password: str = resolve_secret(self.details.get("smtp_password") or "")
@@ -401,17 +415,23 @@ class ContactMethod:
             msg.attach(MIMEText(body_html, "html"))
 
             try:
-                await aiosmtplib.send(
-                    msg,
-                    hostname=smtp_host,
-                    port=smtp_port,
-                    username=smtp_user,
-                    password=smtp_password,
-                    start_tls=smtp_use_tls,
-                )
+                try:
+                    await aiosmtplib.send(
+                        msg,
+                        hostname=smtp_host,
+                        port=smtp_port,
+                        username=smtp_user,
+                        password=smtp_password,
+                        start_tls=smtp_use_tls,
+                    )
+                except (aiosmtplib.SMTPException, OSError) as exc:
+                    # The question never reached the user (server down, auth refused).
+                    raise InteractionError(
+                        f"email contact {self.name!r} could not send the question: {type(exc).__name__}: {exc}"
+                    ) from exc
                 return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
-                raise InteractionError(
+                raise InteractionTimeoutError(
                     f"No email response within {timeout}s for interaction {iid!r}"
                 )
             finally:

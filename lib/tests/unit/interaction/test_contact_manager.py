@@ -222,6 +222,10 @@ def test_contact_method_webhook_interact_returns_interaction_manager() -> None:
     assert isinstance(method.interact(), InteractionManager)
 
 
+class _FakeHTTPError(Exception):
+    """Stands in for httpx.HTTPError in the mocked module."""
+
+
 def _make_mock_httpx(on_post=None):
     """Build a mock httpx module whose AsyncClient resolves futures via on_post."""
     import sys
@@ -234,10 +238,16 @@ def _make_mock_httpx(on_post=None):
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = post_fn
+    async def _post(*args, **kwargs):
+        # Like httpx: post() returns a response that raise_for_status() checks.
+        result = await post_fn(*args, **kwargs)
+        return result if result is not None else MagicMock(raise_for_status=MagicMock())
+
+    mock_client.post = _post
 
     mock_httpx = MagicMock()
     mock_httpx.AsyncClient = MagicMock(return_value=mock_client)
+    mock_httpx.HTTPError = _FakeHTTPError
     return mock_httpx
 
 

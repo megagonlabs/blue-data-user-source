@@ -6,6 +6,7 @@ from blue_data_user_source.source import UserSource, validate_user_name
 from blue_data_user_source.types import (
     ImportError,
     InteractionError,
+    InteractionTimeoutError,
     LLMError,
     NoContactMethodError,
     QueryError,
@@ -18,6 +19,7 @@ __all__ = [
     "FileUserSource",
     "ImportError",
     "InteractionError",
+    "InteractionTimeoutError",
     "LLMError",
     "MemoryUserSource",
     "NoContactMethodError",

@@ -117,6 +117,15 @@ class SessionManager:
         doc_source = self._data_manager.ensure_session_doc_source(session_id)
         doc_source.ingest_text(text, file_name=file_name)
 
+    async def mark_interaction_failed(
+        self, session_id: str, query_id: str, interaction_id: str, error: str,
+    ) -> None:
+        """The question could not be delivered (misconfigured contact, endpoint down, #138)."""
+        path = f"sessions.{session_id}.queries.{query_id}.interactions.{interaction_id}"
+        self._store().set(f"{path}.status", "failed")
+        self._store().set(f"{path}.error", error)
+        self._store().set(f"{path}.resolved_at", self._now())
+
     async def mark_interaction_timeout(
         self, session_id: str, query_id: str, interaction_id: str,
     ) -> None:

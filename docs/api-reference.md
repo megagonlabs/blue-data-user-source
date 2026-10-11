@@ -247,6 +247,7 @@ SessionManager(database: str, data_manager: UserDataManager)
 | `await create_interaction(session_id, query_id, question, protocol, name)` | `str` | New interaction id, status `"pending"` |
 | `await resolve_interaction(session_id, query_id, interaction_id, response)` | `None` | Mark `"resolved"`, store the response |
 | `await mark_interaction_timeout(session_id, query_id, interaction_id)` | `None` | Mark `"timeout"` |
+| `await mark_interaction_failed(session_id, query_id, interaction_id, error)` | `None` | Mark `"failed"`, with the reason in `error` |
 
 See [10-data-model.md](../design/10-data-model.md) §6 for the full session/query/interaction record schema.
 

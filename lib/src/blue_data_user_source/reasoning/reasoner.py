@@ -304,25 +304,18 @@ class UserQueryReasoner:
         interaction_id = await session_manager.create_interaction(
             session_id, query_id, user_question, channel.protocol, channel.name
         )
-        interaction = channel.interact(interaction_id=interaction_id)
-
-        await interaction.start()
-        try:
-            response = await interaction.send(user_question)
-        except InteractionError:
-            await session_manager.mark_interaction_timeout(session_id, query_id, interaction_id)
-            raise
-        await interaction.stop()
-
+        response = await self._converse(session_manager, session_id, query_id, interaction_id, channel, user_question)
         await session_manager.resolve_interaction(session_id, query_id, interaction_id, response)
 
-        context = f"Question: {query}\nUser Response: {response}"
-        await self._manager.store_data(context, queries=[query])
-
-        # The reply is new evidence, so it gets provenance of its own: without
-        # it, reassessment saw only the old entries, and a clarification could
-        # fix completeness but never freshness (#125). A blank reply adds none.
+        # A blank reply carries nothing to store or to count as evidence; storing
+        # it still ran a KB extraction over an empty answer.
         if response.strip():
+            context = f"Question: {query}\nUser Response: {response}"
+            await self._manager.store_data(context, queries=[query])
+
+            # The reply is new evidence, so it gets provenance of its own: without
+            # it, reassessment saw only the old entries, and a clarification could
+            # fix completeness but never freshness (#125).
             now = datetime.now(timezone.utc).isoformat()
             metadata = {
                 **metadata,
@@ -334,6 +327,34 @@ class UserQueryReasoner:
                 },
             }
         return list(data) + [response], metadata
+
+    @staticmethod
+    async def _converse(
+        session_manager: Any, session_id: str, query_id: str, interaction_id: str,
+        channel: ContactMethod, question: str,
+    ) -> str:
+        """Ask *question* over *channel*; on failure, close the interaction record and re-raise.
+
+        Building the channel, starting it and sending all count: a misconfigured
+        contact or an unreachable endpoint used to leave the record ``pending``
+        forever (#138). A timeout ends it ``timeout``, any other delivery failure
+        ``failed`` with the reason.
+        """
+        from blue_data_user_source.types import InteractionError, InteractionTimeoutError
+
+        try:
+            interaction = channel.interact(interaction_id=interaction_id)
+            await interaction.start()
+            try:
+                return await interaction.send(question)
+            finally:
+                await interaction.stop()
+        except InteractionTimeoutError:
+            await session_manager.mark_interaction_timeout(session_id, query_id, interaction_id)
+            raise
+        except InteractionError as exc:
+            await session_manager.mark_interaction_failed(session_id, query_id, interaction_id, str(exc))
+            raise
 
     async def resolve_via_interaction(
         self,
@@ -359,7 +380,7 @@ class UserQueryReasoner:
         Returns only the newly collected user responses, in round order (empty if
         no interaction was needed).
         """
-        from blue_data_user_source.types import NoContactMethodError
+        from blue_data_user_source.types import InteractionError
 
         new_items: list[Any] = []
         metrics = await self.assess_query_results(assessment_query, data, metadata)
@@ -370,9 +391,11 @@ class UserQueryReasoner:
                 data, metadata = await self.request_user_interaction(
                     query, data, metadata, metrics, topic=topic
                 )
-            except NoContactMethodError as exc:
-                # Nobody to ask: answer with what was retrieved instead of blocking.
-                logger.info("Skipping clarification: %s", exc)
+            except InteractionError as exc:
+                # Nobody to ask, the question could not be delivered, or no answer
+                # in time: answer with what was retrieved rather than failing the
+                # query (#138). The interaction record says what happened.
+                logger.info("Clarification ended without an answer: %s", exc)
                 break
             new_items.append(data[-1])
             metrics = await self.assess_query_results(assessment_query, data, metadata)
@@ -483,14 +506,10 @@ class UserQueryReasoner:
         interaction_id = await session_manager.create_interaction(
             session_id, query_id, question, channel.protocol, channel.name
         )
-        interaction = channel.interact(interaction_id=interaction_id)
-        await interaction.start()
         try:
-            response = await interaction.send(question)
+            response = await self._converse(session_manager, session_id, query_id, interaction_id, channel, question)
         except InteractionError:
-            await session_manager.mark_interaction_timeout(session_id, query_id, interaction_id)
             return ""
-        await interaction.stop()
         await session_manager.resolve_interaction(session_id, query_id, interaction_id, response)
         return response
 

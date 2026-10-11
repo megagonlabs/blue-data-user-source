@@ -113,3 +113,14 @@ async def test_freshness_sees_what_each_node_is_and_where_it_came_from() -> None
     assert "- n1: 730 day(s) old (source: kb) — Alice lives in New York" in prompt
     assert "- user-reply:i1: 0 day(s) old (source: user via email) — The user answered" in prompt
     assert "answer the user has just given" in prompt
+
+
+async def test_a_blank_reply_is_not_stored(manager: UserDataManager) -> None:
+    """An empty answer (e.g. EOF on a console) used to run a KB extraction over nothing."""
+    reasoner = _reasoner(manager)
+    store = AsyncMock()
+    with patch("blue_data_user_source.interaction.ContactManager", return_value=_contact_manager("  ")), \
+         patch.object(reasoner._manager, "store_data", store), \
+         patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value="Where?")):
+        await reasoner.request_user_interaction("where do I live?", [], {}, _FAILING)
+    store.assert_not_awaited()
