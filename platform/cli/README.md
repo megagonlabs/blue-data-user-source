@@ -252,7 +252,7 @@ blue-userdb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [-
 |---|---|
 | `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`blue-userdb session select`/`start`), then auto-creates one if neither is set — see [`blue-userdb session`](#blue-userdb-session) |
 | `--format` | `table` (default) · `json` · `nl` |
-| `--top-k N` | Maximum results (default: 10) |
+| `--top-k N` | Accepted but has no effect in 1.0 |
 | `--include-expanded` | Also print the per-sub-question queries and their raw results, below the main answer |
 | `--verbose`, `-v` | Show tool call arguments in the status line while the query runs |
 | `--log`, `-l` | Log each tool call and result on its own line |

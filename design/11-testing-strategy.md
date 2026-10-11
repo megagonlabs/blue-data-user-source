@@ -4,6 +4,21 @@
 
 UDb uses a single test tier: **unit tests**. All I/O boundaries are doubled — storage backends via in-memory test doubles, LLM calls via recorded responses. Unit tests run on every push in CI.
 
+> **Status in 1.0:** the sections below are the original plan. What 1.0 has is summarized in §0; where a section no longer applies, it says so.
+
+---
+
+## 0. As Built in 1.0
+
+**Two tiers.**
+
+- **Unit tests**, offline and fast, with no API key: `lib/tests/unit/` (`backends/`, `data/`, `interaction/`, `reasoning/`, `sources/`, plus top-level modules) and one suite per platform package — `platform/cli/tests/unit/` (Click's `CliRunner`), `platform/api/tests/` (FastAPI's `TestClient`) and `platform/mcp/tests/` (tool functions called directly).
+- **Benchmarks**, `lib/tests/benchmarks/` (`extraction/`, `querying/`, `reasoning/`): report-only runs against the live LLM, scored per case and compared with the committed baseline (`baseline.json`, from `results/2026-10-10-gpt-4o/`); a case more than 0.15 below its baseline raises a `BenchmarkRegression` warning, not a failure. Reports and VCR cassettes are written at run time and git-ignored; cassettes are scrubbed of credentials. Measuring clarification precision and recall, and making replay work, is #150.
+
+**Doubles.** LLM calls are mocked, not recorded: tests patch `reasoning.reasoner._llm_complete` (or the method under test) with `AsyncMock`. Stores are the real in-memory backends (`MemoryJSONSource`, `MemoryKBSource`), or, where a test needs fixed KB answers, a mock from `tests/unit/doubles/sources.py` (`make_mock_kb`). An autouse fixture in `lib/tests/unit/conftest.py` blocks every non-loopback network connection, so a test that reaches a real service fails instead of silently calling it.
+
+**No CI yet** — suites run locally (see [12-deployment-ops.md](12-deployment-ops.md) §7).
+
 ---
 
 ## 1. Tooling
@@ -49,6 +64,8 @@ tests/
 
 ## 3. Storage Test Doubles
 
+> **1.0:** no `VectorSource` and no `tests/doubles/` of JSON stores; see §0.
+
 `JSONSource` and `VectorSource` are tested against in-memory implementations of their abstract interfaces. These doubles are defined in `tests/doubles/` and injected via pytest fixtures.
 
 The in-memory doubles must implement the same interface as the real backends (`set`, `get`, `delete`, `query`, `keys`). They do not simulate vectorization — the `VectorSource` double stores raw values alongside zero-vector placeholders, which is sufficient for testing write paths and interface contracts.
@@ -68,6 +85,8 @@ def vector_store() -> InMemoryVectorSource:
 ---
 
 ## 4. LLM Test Doubles
+
+> **1.0:** unit tests mock LLM calls instead of replaying cassettes; cassettes exist only for benchmarks and are not committed. See §0.
 
 LLM calls are tested using recorded HTTP responses via `pytest-recording` (VCR.py). On first run with `--record-mode=once`, real LLM responses are captured and saved as cassettes under `tests/cassettes/`. Subsequent runs replay the cassettes without hitting the network.
 
@@ -89,6 +108,8 @@ async def test_query_rewriter_expands_query(query_rewriter):
 ---
 
 ## 5. Dual-Write Verification
+
+> **1.0:** not applicable — there is no dual-write (see [10-data-model.md](10-data-model.md) §0).
 
 Tests for data write operations assert that both the JSON store and the Vector store receive the write. Each test that exercises a write path should assert state in both doubles after the operation.
 
@@ -139,7 +160,7 @@ Each external interface (REST, MCP, CLI) has its own test module. These are stil
 
 ## 8. Coverage
 
-Coverage is measured via `pytest-cov` and reported in CI output. No minimum threshold is enforced. The report is available as a CI artifact for review.
+Coverage is measured via `pytest-cov` (the library's default `addopts`) and reported in CI output once CI exists. No minimum threshold is enforced. The report is available as a CI artifact for review.
 
 ```toml
 # pyproject.toml

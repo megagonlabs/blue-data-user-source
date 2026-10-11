@@ -1,6 +1,8 @@
 # UDb — Library
 
-> External dependencies: `blue-data-core` provides `DataSource`, `FileSource`, `SessionSource`, `Session`, `DataPlanner`, `DataRegistry`, and related base classes.
+> External dependencies: `blue-data` provides `DataSource`, `JSONSource` and `DataRegistry`; `blue-data-kb-source` provides `KBSource`; `blue-data-doc-source` provides `DocumentDataSource`. The `FileSource`, `SessionSource`, `Session` and `DataPlanner` classes this spec originally assumed do not exist: files are passed as paths, and sessions are records kept by the Session Manager.
+>
+> This is the design-level specification. Where 1.0 differs, a **Current implementation** note says how; the exact signatures are in [09-api-interface-spec.md](09-api-interface-spec.md).
 
 ---
 
@@ -17,34 +19,31 @@ UserSource(properties={})
 ### Example
 
 ```python
-us = UserSource(properties={})
+us = MemoryUserSource("blue-userdb")   # or FileUserSource / RedisUserSource
 
-eser_db = "5WgRzdacRdOEvj8JBmCXFZSvWmH3"
-us.create_database(eser_db)
+await us.create_user("alice", ...store configs..., onboard=False)
 
-# Type 1 import — register source for later querying
-fs = FileSource("~/resume.txt")
-us.import(fs, database=eser_db)
+# Type 1 — add a file for later querying
+await us.add_source("resume.txt", database="alice")
 
-# Type 2 import — extract structured data from source
-us.import(fs, database=eser_db, optional_properties={"queries": ["what skills does user have?"]})
+# Type 2 — also extract structured data from it
+await us.add_source("resume.txt", database="alice",
+                    optional_properties={"queries": ["What skills does the user have?"]})
 
-# Import active session as a streaming source
-session = Session()
-ss = session.get_source()
-us.import(ss, database=eser_db)
-
-# Query
-results = us.execute_query(
+# Query in a session
+session_id = await us.create_session("alice")
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me",
-    database=eser_db,
-    optional_properties={"session": session.cid}
+    database="alice",
+    optional_properties={"session": session_id},
 )
 ```
 
+There is no streaming session source: a session's clarification transcripts are ingested automatically into the `session_content` document store and searched at query time.
+
 ### Methods
 
-#### `execute_query(query, database=None, optional_properties={})`
+#### `execute_query(query, database=None, collection=None, optional_properties=None)`
 
 Executes a natural language query against a user database.
 
@@ -55,8 +54,8 @@ Executes a natural language query against a user database.
 - `optional_properties`:
   - `"session"` — session ID; used as query context and as the primary contact method for user 
   interaction
-  - `"output"` - output format; defaults to JSON, other options include "NL", "CSV", etc.
-  - `"prompt"` - prompt to translate structured data to natural language
+  - `"output_form"` - `"json"` (default) or `"nl"`
+  - `"include_expanded"`, `"max_interaction_rounds"`, `"model"` — see [09](09-api-interface-spec.md)
 
 **Returns**
 
@@ -67,6 +66,8 @@ List of result objects, one per question in the resolved question set:
 ```
 
 Includes the original query if it has full coverage, plus any complementary queries that were necessary.
+
+**Current implementation** — returns `(answer, session_id)`. The answer is synthesized across all sub-questions: one aggregated table (a list of dicts) for `"json"`, prose for `"nl"`. The per-sub-question `{"query", "results"}` list above is returned only with `include_expanded=True`, as `{"result": answer, "expanded": [...]}`. `async_execute_query` is the same call for async callers.
 
 **Algorithm**
 
@@ -79,6 +80,8 @@ Includes the original query if it has full coverage, plus any complementary quer
    - (c) Call `reasoner.assess_user_verification(qi, di, md_i, Mi)` → interaction needed?
    - (d) If interaction required: instantiate `ContactManager` and pass `(qi, di, Mi)` to Interaction Layer; repeat until metrics satisfactory
 5. Return all resolved `(qi, di, Mi)` as results
+
+**Current implementation** — steps 4(b)–(d) run once over the results of all sub-questions together, not per sub-question, in `UserQueryReasoner.resolve_via_interaction` (see [04](04-detailed-architecture.md) §2); `assess_user_verification` is named `assess_user_interaction`.
 
 #### `import(source, database=None, optional_properties={})`
 
@@ -96,6 +99,8 @@ Imports data from an external source into the user database.
 - No queries specified (Type 1): delegates to `UserDataManager.import_source(source, database)` — source is registered in the user's source registry as user-specific metadata
 - Queries specified (Type 2): delegates to `UserDataManager.import_source(source, database, queries)` — each query is executed over the source and results are injected into generic user data stores
 
+**Current implementation** — `import` is a reserved word in Python, so the method is `add_source(source, database, optional_properties)` (a file path) and `add_text_source(text, database, optional_properties)` (text, no file). Both always create a KB SOURCE node and ingest the text into `external_documents`; with `queries`, they also extract into the KB. See [04](04-detailed-architecture.md) §4.
+
 #### `create_user(name)`
 
 Delegates to `UserDataManager.create_user(name)`.
@@ -103,6 +108,8 @@ Delegates to `UserDataManager.create_user(name)`.
 #### `create_database(name)`
 
 Alias for `create_user(name)`.
+
+**Current implementation** — `create_user` also takes the store configs for the user's registry, KB, metadata, contacts, sessions and document stores, and onboards the user by default (`onboard=False` skips it). `create_database(name, properties)` is the synchronous `DataSource` form.
 
 ---
 
@@ -113,7 +120,7 @@ Encapsulates query rewriting, metric-based result assessment, and user interacti
 ### Constructor
 
 ```python
-UserQueryReasoner(source, database)
+UserQueryReasoner(source, manager=None, session_id=None, query_id=None, model="gpt-4o")
 ```
 
 Instantiates with a set of `UserDataMetric` instances.
@@ -121,7 +128,7 @@ Instantiates with a set of `UserDataMetric` instances.
 **Parameters**
 
 - `source` — the parent `UserSource` instance
-- `database` — user database identifier
+- `database` — user database identifier (in 1.0, the user's `UserDataManager` is passed instead)
 
 ### Methods
 
@@ -197,6 +204,8 @@ Manages all data sources for a user database — generic stores and user-specifi
 
 Instantiates a `UserDataRegistry` backed by `JSONSource` and `VectorSource` as generic stores, and prepares the `UserDataPlanner`.
 
+**Current implementation** — the registry is a plain per-user `DataRegistry` holding `kb` (`KBSource`), `metadata`, `contacts` and `sessions` (`JSONSource`), and the `session_content` and `external_documents` document stores. There is no `VectorSource` and no separate user-data JSON namespace; see [10-data-model.md](10-data-model.md).
+
 ### Data Model per User
 
 **Metadata** (stored in `JSONSource`):
@@ -252,6 +261,8 @@ Returns an execution plan: a list of `(subquery, source)` pairs derived from sou
 ---
 
 ## UserDataRegistry(DataRegistry)
+
+> **Status in 1.0:** no subclass; `UserDataManager` uses `blue-data`'s `DataRegistry` directly.
 
 A user-scoped data registry. Maintains all data sources for a given user — generic stores (`JSONSource`, `VectorSource`) and registered user-specific sources — and supports both structured and natural language query execution.
 
@@ -323,12 +334,13 @@ Starts the interaction. Calls `_on_start()`.
 
 Ends the interaction. Calls `_on_stop()`.
 
-#### `send(message, async=False)`
+#### `send(message, blocking=True)`
 
-Sends a message to the user.
+Sends a message to the user. (`async` is a reserved word, so the flag is `blocking`; `send` itself is a coroutine.)
 
-- `async=False` — blocks and returns the user response directly
-- `async=True` — returns a `Future` to be awaited
+- `blocking=True` — waits for and returns the user response
+
+**Current implementation** — `blocking` is accepted but unused: every transport waits for the reply (or its timeout).
 
 Calls `_on_response()` on receipt.
 

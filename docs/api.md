@@ -118,13 +118,15 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
   "database": "alice",
   "query": "What skills does alice have?",
   "results": [
-    {"query": "What skills does the user have?", "results": ["Python", "SQL", "machine learning"]}
+    {"skill": "Python"},
+    {"skill": "SQL"},
+    {"skill": "machine learning"}
   ],
   "session_id": "1c1919ff-9881-4429-8c52-ab6abae6ff1a"
 }
 ```
 
-`session_id` is always present — the session that was reused, or the one just auto-created.
+`results` is the synthesized answer: one aggregated table for `"json"`, a string for `"nl"`. With `"include_expanded": true` it becomes `{"result": ..., "expanded": [...]}`, adding each sub-question with its raw results. `session_id` is always present — the session that was reused, or the one just auto-created.
 
 ### Sessions
 

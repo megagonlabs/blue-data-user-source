@@ -50,7 +50,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `output_form` | `"json"` \| `"nl"` | `"json"` (default) → `list[QueryResult]`; `"nl"` → synthesized string |
 | `include_expanded` | `bool` | Also return per-sub-question queries/results alongside the synthesized answer; shape becomes `{"result": ..., "expanded": ...}` |
 | `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default 3) |
-| `top_k` | `int` | Max KB results per sub-question (default 10) |
+| `top_k` | `int` | Accepted but not used in 1.0 |
 
 ### Sessions
 

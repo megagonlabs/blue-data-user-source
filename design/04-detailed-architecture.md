@@ -2,7 +2,7 @@
 
 ## External Interfaces
 
-All four interfaces are thin adapters over the Python library. They each ultimately delegate to `UserSource.execute_query()` and `UserSource.import()`.
+All four interfaces are thin adapters over the Python library. They each ultimately delegate to `UserSource` — chiefly `execute_query()` (or its async form, `async_execute_query()`) for queries and `add_source()` / `add_text_source()` for ingestion (the design's `import()`; see §4).
 
 | Interface | Technology | Primary Use |
 |-----------|-----------|-------------|
@@ -17,11 +17,11 @@ All four interfaces are thin adapters over the Python library. They each ultimat
 
 ### MCP Server
 
-Exposes `execute_query` and `import` as MCP tools, allowing LLM agents to query and populate UDb directly within an agentic context.
+Exposes the library as MCP tools, allowing LLM agents to query and populate UDb directly within an agentic context. 1.0 has 23 tools over stdio, covering query, sources, data, metadata, contacts, sessions and databases; see [docs/mcp.md](../docs/mcp.md).
 
 ### REST API
 
-HTTP interface built with FastAPI. Endpoints map 1:1 to `execute_query` and `import`. Enables non-Python services and remote clients to interact with UDb.
+HTTP interface built with FastAPI. Enables non-Python services and remote clients to interact with UDb. Its routes cover databases, query, data and sources, metadata, contacts, sessions, and the interaction-reply callbacks that webhook and email contacts answer through; sources are added as text only in 1.0 (#147). See [docs/api.md](../docs/api.md).
 
 ### CLI
 
@@ -180,6 +180,8 @@ For `"Suitable jobs for me"`:
 
 Completeness is below threshold → interaction required.
 
+> **Status in 1.0:** three metrics are implemented — `CompletenessMetric`, `FreshnessMetric` and `PrivacyMetric` (the last moves its threshold with the user's consent level, below). Confidence, Consistency, Relevance and Specificity are not built.
+
 **Current implementation** — each `UserDataMetric` compares its score against `_threshold()`, which defaults to the class-level `THRESHOLD` (0.6). `PrivacyMetric` overrides `_threshold()` to move the bar with the user's `privacy.consent_level`: `minimal` consent raises it to 0.8 (stricter — less tolerance for privacy risk), `full` consent lowers it to 0.4, `standard` (or an unset/unrecognized level) keeps the default 0.6.
 
 **Satisfaction Evaluation**
@@ -193,7 +195,7 @@ The Reasoning Layer determines:
 If satisfactory: aggregate and return final evidence-backed results.
 Otherwise: forward unresolved (qi, di, Mi) to the Interaction Layer.
 
-**Current implementation** — the assess-then-interact cycle described above (steps 3-5 of the Query Path, and this section's Processing Flow) is owned end-to-end by `UserQueryReasoner.resolve_via_interaction`, called once by `UserSource._run_query` after aggregating results across all sub-questions (not per sub-question): it evaluates metrics, and while any fail, calls `request_user_interaction` and re-evaluates the augmented result, up to `max_interaction_rounds` (default 3, an `optional_properties` key on `execute_query`) — stopping as soon as every metric passes. Only the user's newly-collected responses (one per round) are surfaced back as a `QueryResult`, not the full augmented data list.
+**Current implementation** — the assess-then-interact cycle described above (steps 3-5 of the Query Path, and this section's Processing Flow) is owned end-to-end by `UserQueryReasoner.resolve_via_interaction`, called once by `UserSource._run_query` after aggregating results across all sub-questions (not per sub-question): it evaluates metrics, and while any fail, calls `request_user_interaction` and re-evaluates the augmented result, up to `max_interaction_rounds` (default 3, an `optional_properties` key on `execute_query`) — stopping as soon as every metric passes. Only the user's newly-collected responses (one per round) are surfaced back as a `QueryResult`, not the full augmented data list. Each reply joins the evidence with fresh provenance (`user-reply:<interaction_id>`, timestamped now), so a confirmation or correction can lift Freshness (#125). When the user cannot be reached — no usable contact method, a contact missing a required field, an undeliverable message, or no reply in time — the loop stops, the interaction record ends `failed` or `timeout`, and the query still returns the data it retrieved (#138).
 
 ---
 
@@ -246,12 +248,14 @@ Session tracking itself — which sessions are active, what they contain — is 
 - Enterprise messaging systems
 - Notifications
 
+> **Status in 1.0:** only three protocols have a transport — `stdio` (the terminal), `email` and `webhook`. `sms`, `messaging`, `enterprise`, `notification` and `session` are accepted by the contact schema and stored, but never selected for contact (#129). An active conversational session is reached through `stdio` when the process owns the terminal.
+
 **Example Decision**
 
 If user is currently active → use active chat session.
 Otherwise → send email or asynchronous notification.
 
-**Current implementation** — `ContactManager.identify_contact_method` returns the sole contact method directly when only one is registered; otherwise `_choose_contact_method` asks an LLM to pick among the options, giving it each method's stated `preference`, whether it is asynchronous (`ContactMethod.is_async` — true for `email`/`webhook`/`notification`), the user's stated `preferred_channel` and `working_hours` (`availability.*`), the current time localized to `identity.timezone`, whether that time falls within the stated working hours (best-effort parse of free-text windows like `"09:00-17:00 Mon-Fri"`), and whether the user is currently `out_of_office`. The LLM is instructed to prefer an asynchronous method when the user is out of office or outside working hours; if the call fails or returns an unrecognized choice, the fallback is the lowest-`preference` method — restricted to asynchronous methods when `out_of_office` is true and at least one exists. An optional `topic` argument looks up `availability.by_topic.<topic>` overrides (`working_hours`, `preferred_channel`, `out_of_office`) layered on top of the general `availability.*` settings, so different projects/topics can have different reachability rules.
+**Current implementation** — `ContactManager.identify_contact_method` returns the sole contact method directly when only one is registered; otherwise `_choose_contact_method` asks an LLM to pick among the options, giving it each method's stated `preference`, whether it is asynchronous (`ContactMethod.is_async` — true for `email`/`webhook`/`notification`), the user's stated `preferred_channel` and `working_hours` (`availability.*`), the current time localized to `identity.timezone`, whether that time falls within the stated working hours (best-effort parse of free-text windows like `"09:00-17:00 Mon-Fri"`), and whether the user is currently `out_of_office`. The LLM is instructed to prefer an asynchronous method when the user is out of office or outside working hours; if the call fails or returns an unrecognized choice, the fallback is the lowest-`preference` method — restricted to asynchronous methods when `out_of_office` is true and at least one exists. Before choosing, it drops methods with no transport (#129) and, when the process does not own a terminal (`UserSource.console` is False, as in the MCP and REST servers), methods that would ask on stdin/stdout (#132). An optional `topic` argument looks up `availability.by_topic.<topic>` overrides (`working_hours`, `preferred_channel`, `out_of_office`) layered on top of the general `availability.*` settings, so different projects/topics can have different reachability rules.
 
 ### Interaction Manager
 
@@ -337,6 +341,8 @@ The imported source is registered in the Source Manager as part of user metadata
 
 A query is executed over the imported source by the Reasoning Layer via the DML. Extracted results are injected into user data. Entity extraction from an uploaded file is an instance of this type.
 
+**Current implementation** — there is no `import()`; `UserSource.add_source(path, …)` adds a file and `UserSource.add_text_source(text, …)` adds text without touching disk (the REST API uses it). Both reach `UserDataManager.add_source`, which for every source (Type 1 and 2 alike) creates a KB SOURCE node (location, name, description, original date) and ingests the text into the `external_documents` document store, where it is chunked, embedded and searchable at query time. With `queries`, it also runs extraction for each query and writes the extracted entities and facts into the KB, tied to that SOURCE node (Type 2). `UserSource.import_data` is the `DataSource` interface's import: it hands data straight to the knowledge graph (`KBSource.import_data`, what `blue-userdb data import` uses to load `data export` output), not documents.
+
 ### Query Planner
 
 > **Status in 1.0:** not implemented as designed. `UserDataPlanner.plan` returns the query unchanged, once per registered source, and the query path does not call it: `UserQueryReasoner.expand_query` decomposes the query into LLM sub-questions, and `UserDataManager.execute_query` answers each from the KB, `session_content` and `external_documents`. See #128.
@@ -393,3 +399,5 @@ Maintains the registry of all data sources available for a user. Serves as the U
 - Manage schemas
 - Track access methods
 - Register new sources on import
+
+**Current implementation** — the Source Manager is the per-user `DataRegistry` (from `blue-data`), holding `kb`, `metadata`, `contacts`, `sessions`, `session_content` and `external_documents`. Individual added documents are not registry entries: they are tracked as KB SOURCE nodes and as documents inside `external_documents`.

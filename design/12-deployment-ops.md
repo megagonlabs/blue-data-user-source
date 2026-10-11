@@ -9,6 +9,37 @@ UDb is distributed in two forms:
 
 Production deployments are self-hosted. Operators provision and manage their own storage backends and observability infrastructure. UDb emits to standard interfaces and does not assume any specific platform.
 
+> **Status in 1.0:** sections 1–8 are the target. Most of it is not built yet; §0 describes how 1.0 is actually installed, configured and run.
+
+---
+
+## 0. As Built in 1.0
+
+**Packages.** Four, each with its own `pyproject.toml`, all at version `0.1.0` until the 1.0 version number is set (#116): `blue-data-user-source` (`lib/`), `blue-data-user-cli` (`blue-userdb`), `blue-data-user-mcp` (`blue-userdb-mcp`) and `blue-data-user-api` (`blue-userdb-api`). They depend on the sibling repositories `blue-data`, `blue-data-kb-source` and `blue-data-doc-source`, which are not on PyPI.
+
+**Install.** From source: `scripts/install.sh` installs the siblings (cloned beside this repository) and all four packages, editable. Each package also has `scripts/install.sh` and `scripts/build.sh` (sdist and wheel); `lib/scripts/publish.sh` uploads the library with `twine`, but nothing has been published. There is no Docker image or compose file.
+
+**Run.**
+
+| Entry point | How it runs |
+|-------------|-------------|
+| `blue-userdb` | A process per command; state on disk |
+| `blue-userdb-mcp` | stdio MCP server, launched by the agent host (Claude Desktop, Claude Code, …) |
+| `blue-userdb-api` | Uvicorn on `BLUE_DATA_USER_SOURCE_HOST`:`BLUE_DATA_USER_SOURCE_PORT` (default `127.0.0.1:8000`); `platform/api/scripts/start.sh` binds `0.0.0.0` |
+
+**Storage.** File-backed by default under `~/.blue-userdb/` (`BLUE_DATA_USER_SOURCE_DATA_DIR`): the registry, every user's JSON stores, KB and document stores. The CLI can put a user's KB in Neo4j (`database create --kb-backend neo4j`). The library also offers `RedisUserSource` (JSON stores in Redis with RedisJSON); the KB has no Redis backend.
+
+**Configuration.**
+
+- CLI: `blue-data` profiles (`blue-userdb profile`), which hold settings and secrets (`OPENAI_API_KEY`, `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD`, …) and export them to the command; options and environment variables override.
+- REST API: `BLUE_DATA_USER_SOURCE_*` environment variables or a `.env` file — `DATA_DIR`, `HOST`, `PORT`, `API_KEY`, `ALLOWED_ORIGINS`, `SCHEMA_PATH`, `METADATA_SCHEMA_PATH`, `CONTACT_SCHEMA_PATH`.
+- MCP server: `BLUE_DATA_USER_SOURCE_DATA_DIR` and the three schema paths.
+- All: `OPENAI_API_KEY` for the LLM; the model defaults to `gpt-4o`.
+
+**Observability.** Python `logging` only; no metrics endpoint, no tracing.
+
+**CI/CD.** None yet; tests, lint and type checks run locally (see [11-testing-strategy.md](11-testing-strategy.md) §0).
+
 ---
 
 ## 1. Versioning

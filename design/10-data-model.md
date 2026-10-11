@@ -9,6 +9,25 @@ UDb maintains two parallel per-user stores:
 
 Both stores are addressed by user ID. User data entries are written to both stores simultaneously (dual-write). The JSON store is the system of record.
 
+> **Status in 1.0:** sections 1–5 below are the original design. 1.0 does not have the `data` namespace, the `VectorSource` mirror or dual-write; user data lives in a knowledge graph and in document stores instead. The model as built is in [§0](#0-as-built-in-10); §6 (sessions) is current.
+
+---
+
+## 0. As Built in 1.0
+
+Each user has a `DataRegistry` (its own JSON store) holding these sources:
+
+| Registry name | Class | Holds |
+|---------------|-------|-------|
+| `kb` | `KBSource` | The knowledge graph: the user's PERSON entity, extracted entities, facts (relations) and property values, each tied to a SOURCE node, plus one SOURCE node per added document (location, name, description, `original` date). Typed by the KB schema, `data/schema.json` |
+| `metadata` | `JSONSource` | Four categories from `data/metadata_schema.json`, seeded with nulls at creation: `identity` (name, pronouns, locale, timezone), `preferences` (communication style, verbosity, language), `availability` (working hours, preferred channel, out of office, per-topic overrides) and `privacy` (data sharing, sensitive categories, retention days, consent level). Addressed by dotted key, e.g. `identity.timezone` |
+| `contacts` | `JSONSource` | Contact methods at `<protocol>.<name>`: the protocol's fields from `data/contact_schema.json` plus `preference` (lower is preferred). Fields marked `"secret": true` are masked as `***` on read; a value may be a `$VAR` reference resolved when sending |
+| `sessions` | `JSONSource` | Session, query and interaction records (§6) |
+| `external_documents` | `DocumentDataSource` | Every added source's text, chunked and embedded; searched at query time |
+| `session_content` | `DocumentDataSource` | Every resolved clarification as `Q: …\nA: …` text, shared across the user's sessions; searched at query time |
+
+The outer registry (one per `UserSource`) lists the users and the store configs needed to reopen each one. Provenance comes from the stores themselves: KB facts point to their SOURCE node, document hits carry `"source": "external_documents" | "session_content"`, and a user's clarification reply is tagged `user-reply:<interaction_id>` with a fresh timestamp.
+
 ---
 
 ## 1. User ID
@@ -220,7 +239,7 @@ Stored at `sessions.{session_id}`:
 | `created_at` | ISO 8601 datetime | When the session was created |
 | `ended_at` | ISO 8601 datetime \| `null` | When the session was ended, if it has been |
 | `status` | `"active"` \| `"ended"` | Session lifecycle state |
-| `doc_source_name` | string | Registry name of this session's `DocumentDataSource` (`"session-{session_id}"`) |
+| `doc_source_name` | string | Registry name of the `DocumentDataSource` its transcripts go to: `"session_content"`, shared by all of the user's sessions |
 | `queries` | object | Query records, keyed by `query_id` (see §6.2) |
 
 ### 6.2 Query Record
@@ -257,7 +276,7 @@ Stored at `sessions.{session_id}.queries.{query_id}.interactions.{interaction_id
   "created_at": "2026-08-21T00:53:42Z",
   "ended_at": null,
   "status": "active",
-  "doc_source_name": "session-1c1919ff-9881-4429-8c52-ab6abae6ff1a",
+  "doc_source_name": "session_content",
   "queries": {
     "8b62c38a-2cb6-482a-8bc8-66105dde4c4b": {
       "query": "what is my favorite color?",
@@ -280,6 +299,6 @@ Stored at `sessions.{session_id}.queries.{query_id}.interactions.{interaction_id
 
 ### 6.4 Interaction Transcripts
 
-Resolved interactions are additionally ingested as text (`"Q: {question}\nA: {response}"`) into the session's `DocumentDataSource` (§6.1's `doc_source_name`) via `ingest_text()`. This is a chunk/embed/search-backed store (from `blue-data-doc-source`), separate from the structured JSON record above — the JSON record is the system of record for session/query/interaction state; the `DocumentDataSource` exists for later semantic recall of transcript text (e.g. as a Context Expansion Source for query rewriting — see [04-detailed-architecture.md](04-detailed-architecture.md)).
+Resolved interactions are additionally ingested as text (`"Q: {question}\nA: {response}"`) into the `session_content` `DocumentDataSource` (§6.1's `doc_source_name`), one document per interaction, shared by all of the user's sessions. This is a chunk/embed/search-backed store (from `blue-data-doc-source`), separate from the structured JSON record above — the JSON record is the system of record for session/query/interaction state; the `DocumentDataSource` exists for later recall of transcript text: in 1.0, `UserDataManager.execute_query` searches it for every sub-question (ADR-019); its use as a Context Expansion Source for query rewriting ([04-detailed-architecture.md](04-detailed-architecture.md)) is not built.
 
-Unlike the sources in §5, a session's `DocumentDataSource` is not reconstructed via the registry's generic `_class`/`connection` reflection — see ADR-016 in [13-decision-log.md](13-decision-log.md).
+Unlike the sources in §5, `session_content` (like `external_documents`) is not reconstructed via the registry's generic `_class`/`connection` reflection — see ADR-016 in [13-decision-log.md](13-decision-log.md).

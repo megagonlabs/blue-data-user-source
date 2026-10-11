@@ -8,7 +8,9 @@
 | Linting | `ruff` | `pyproject.toml` |
 | Type checking | `pyright` (strict) | `pyproject.toml` |
 
-All three run in CI. `ruff format` and `ruff` are also expected to pass locally before committing.
+All three are intended to run in CI. `ruff format` and `ruff` are also expected to pass locally before committing.
+
+> **Status in 1.0:** there is no CI pipeline yet (see [12-deployment-ops.md](12-deployment-ops.md) §7), so these checks run only locally, and the code is not yet clean under pyright strict mode.
 
 ### `pyproject.toml` configuration
 
@@ -67,6 +69,8 @@ class UserSource:
     def execute_query(self, query: str, ...) -> list[QueryResult]: ...
 ```
 
+**Exception: `DataSource` overrides.** `UserSource` subclasses `blue-data`'s `DataSource`, whose interface is synchronous, so `execute_query`, `execute_query_nl`, `create_database` and `import_data` are sync wrappers that call `asyncio.run()` over the async implementation; async callers use `async_execute_query` and `create_user`.
+
 **CLI bridge** — Click commands are synchronous. Use `asyncio.run()` to call async library methods from CLI handlers:
 
 ```python
@@ -102,7 +106,7 @@ Do not use double-underscore (`__`) name mangling. Use `_` for all private membe
 import asyncio
 from typing import Any
 
-from llama_index.core import Settings
+import click
 
 from blue_data_user_source.types import QueryResult
 ```
@@ -136,8 +140,9 @@ Write a comment only when the *why* is non-obvious: a hidden constraint, a subtl
 
 ```python
 # correct — explains a non-obvious constraint
-# LlamaIndex streams partial tokens; we must await the full response before scoring
-response = await llm.acomplete(prompt)
+# RedisJSONSource.get() returns [] rather than None for a missing path, so read
+# through the root document to get the same answer from every backend
+value = _lookup(store.get("$"), path)
 
 # incorrect — restates the code
 # call expand_query to get expanded queries
@@ -163,3 +168,5 @@ class InteractionError(UDbError): ...
   - **MCP server** — tool handlers catch `UDbError` and return structured error responses.
   - **CLI** — top-level Click error handler renders `UDbError` messages via Rich.
 - Only catch specific exception types; never bare `except:` or `except Exception:`.
+
+> **Status in 1.0:** `except Exception` remains in a few places: every MCP tool wrapper (turning any failure into an `{"error": ...}` result), three CLI commands, an unparseable timezone in contact selection, and a failed KB-schema export, which leaves query expansion and onboarding ungrounded rather than failing them.

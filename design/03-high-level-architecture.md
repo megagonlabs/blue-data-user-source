@@ -60,9 +60,9 @@ Four interface adapters sit in front of UDb and delegate to the Natural Language
 
 **Python Library** — Native Python API (`UserSource` and related classes). Used to embed UDb directly in Python applications.
 
-**MCP Server** — Exposes `execute_query` and `import` as MCP tools, enabling LLM agents to interact with UDb within an agentic context.
+**MCP Server** — Exposes the library as MCP tools (23 in 1.0: query, sources, data, metadata, contacts, sessions and databases), enabling LLM agents to interact with UDb within an agentic context.
 
-**REST API** — HTTP/JSON interface (FastAPI). Enables non-Python services and remote clients to call UDb over the network.
+**REST API** — HTTP/JSON interface (FastAPI). Enables non-Python services and remote clients to call UDb over the network. In 1.0 it adds sources as text only (no file uploads, #147).
 
 **CLI** — Command-line interface (Click + Rich). Used for interactive development, debugging, and scripting.
 
@@ -88,7 +88,8 @@ Interprets queries and query results through reasoning agents.
 ### Interaction Layer
 Manages interaction with the user through various contact methods.
 
-- Maintains a set of contact methods (e.g. email, SMS, system I/O, active session)
+- Maintains a set of contact methods (e.g. email, webhook, the terminal (stdio))
+- In 1.0 only `stdio`, `email` and `webhook` have a transport; the other protocols in the contact schema (`sms`, `messaging`, `enterprise`, `notification`, `session`) are recorded but never selected (#129)
 - Contact methods are stored and retrieved as per-user metadata in the Data Management Layer
 - Conversation mechanics are specific to each contact method
 - Requests originate from the Reasoning Layer and responses are returned to the Reasoning Layer
@@ -113,7 +114,11 @@ Manages user data and metadata across all storage types and sources.
 
 **Source Manager** — Maintains the catalog of all data sources available for a user (generic stores, uploaded files, active sessions, etc.) and provides source lookup for the Query Planner and Query Executor.
 
+> **Status in 1.0:** the Source Manager is the per-user `DataRegistry`, and the Query Executor is `UserDataManager.execute_query`. The Query Planner is not built (#128): the Reasoning Layer's query expansion produces the sub-questions, and each is answered from the knowledge graph plus a search of the two document stores, with no per-source plan.
+
 ### Storage
+
+> **Status in 1.0:** the stores actually used per user are a knowledge graph (`KBSource`, from `blue-data-kb-source`) holding extracted entities, facts and the SOURCE node of every added document; JSON stores (`JSONSource`, from `blue-data`) for metadata, contact methods and session records; and two document stores (`DocumentDataSource`, from `blue-data-doc-source`) that chunk, embed and search text: `external_documents` for added sources and `session_content` for clarification transcripts. There is no standalone key-value Vector Store; vector search lives inside the document stores and the KB. See [10-data-model.md](10-data-model.md).
 
 **JSON Store** — Manages key-value JSON data.
 

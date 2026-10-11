@@ -36,7 +36,7 @@ An agent query may trigger a user interaction when the stored value needs confir
 **Example:**
 > Agent query: "What is the user's location?"
 (internally UDb) obtains `location: New York` *(stored value)*
-(internally) UDb asks User (e.g. through SMS): "Are you still in New York?"
+(internally) UDb asks User (e.g. by email): "Are you still in New York?"
 User confirms or corrects → UDb updates location data and metadata accordingly.
 > UDb Response to agent: `location: New York`
 
@@ -47,6 +47,6 @@ An agent query may reveal gaps in stored data. UDb detects what is known, formul
 **Example:**
 > Agent query: "What programming language skills do you have?"
 (internally UDb) obtains `programming languages: Python, Java` *(stored value)*
-(internally) UDb asks User (e.g. through SMS): "Besides Python and Java, does the user have any recent programming language skills?"
+(internally) UDb asks User (e.g. by email): "Besides Python and Java, does the user have any recent programming language skills?"
 User adds C → UDb updates programming languages data and metadata accordingly.
 > UDb Response to agent: `programming languages: Python, Java, C`

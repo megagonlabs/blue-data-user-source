@@ -33,7 +33,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-003 — LLM Abstraction: LlamaIndex
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Superseded in 1.0 — LLM calls use the OpenAI SDK directly (`openai.AsyncOpenAI`, one helper, `_llm_complete`); LlamaIndex is not a dependency. See [05-software-stack.md](05-software-stack.md).
 
 **Decision:** Use LlamaIndex (`llama-index-core`) as the LLM abstraction layer, with OpenAI as the initial provider (`llama-index-llms-openai`).
 
@@ -46,7 +46,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-004 — Storage Backends: blue-data-core Abstractions
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Superseded in 1.0 — the abstractions come from `blue-data` (`DataSource`, `JSONSource`, `DataRegistry`), `blue-data-kb-source` (`KBSource`) and `blue-data-doc-source` (`DocumentDataSource`); there is no `VectorSource` store. The principle stands: UDb never imports a concrete backend.
 
 **Decision:** `JSONSource` and `VectorSource` backends are provided by `blue-data-core`. UDb interacts only with their abstract interfaces (`set`, `get`, `delete`, `query`, `keys`).
 
@@ -124,7 +124,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-010 — Non-Unique Data Entry Keys
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Not implemented in 1.0 — there are no key-value data entries; user data is KB facts and document chunks, each tied to its source. See [10-data-model.md](10-data-model.md) §0.
 
 **Decision:** User data entry keys are not unique within a user database. Multiple entries may share the same key when populated from different sources or agents.
 
@@ -137,7 +137,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-011 — Dual-Write Synchronization Between JSONSource and VectorSource
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Not implemented in 1.0 — there is no JSON/Vector pair to keep in sync (see ADR-010).
 
 **Decision:** Every write to a user data entry is applied to both JSONSource and VectorSource synchronously within the same operation. JSONSource is the system of record.
 
@@ -150,7 +150,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-012 — Pluggable Embedding Model for VectorSource
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Superseded in 1.0 — embeddings are configured per store: the document stores take `embedding_model` (`dummy` by default, or `openai`), and the KB search index takes an OpenAI embedding model.
 
 **Decision:** The embedding model used to vectorize data entry keys and values is a deployment-time configuration, not a compile-time choice.
 
@@ -163,7 +163,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-013 — Distribution: PyPI Package + Docker Image
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Not implemented in 1.0 — the four packages (`blue-data-user-source`, `-cli`, `-mcp`, `-api`) are installed from source with `scripts/install.sh`; nothing is published to PyPI and there is no Docker image. See [12-deployment-ops.md](12-deployment-ops.md).
 
 **Decision:** UDb is distributed as both a PyPI package (`blue-userdb`) and a Docker image (`udb-server`). The PyPI package exposes the Python library with optional extras for the server and CLI. The Docker image bundles the REST API and MCP server.
 
@@ -176,7 +176,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-014 — Observability: OpenTelemetry + Prometheus + Structured JSON Logs
 
 **Date:** 2026-05-12
-**Status:** Accepted
+**Status:** Not implemented in 1.0 — the packages log through Python `logging` only; there are no metrics or traces.
 
 **Decision:** UDb emits structured JSON logs to stdout, Prometheus-compatible metrics at `/metrics`, and OpenTelemetry traces via OTLP export. Tracing is opt-in (enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set). Operators wire these into their own stacks.
 
@@ -202,7 +202,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 ## ADR-016 — Per-Session DocumentDataSource for Interaction Transcripts
 
 **Date:** 2026-08-21
-**Status:** Accepted
+**Status:** Accepted; amended — 1.0 keeps one shared `session_content` source per user rather than one per session; the reconnect and configuration consequences below still hold.
 
 **Decision:** Each session gets its own `DocumentDataSource` (from `blue-data-doc-source`), named `session-{session_id}` and registered in the user's `DataRegistry`, created on demand via `UserDataManager.ensure_session_doc_source()`. Resolved interaction Q/A pairs are ingested into it as text via `DocumentDataSource.ingest_text()`.
 
