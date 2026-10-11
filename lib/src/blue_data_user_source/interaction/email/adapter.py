@@ -20,6 +20,7 @@ import json
 from abc import ABC, abstractmethod
 from email.parser import BytesParser
 from email.policy import HTTP
+from email.utils import collapse_rfc2231_value
 from urllib.parse import parse_qs
 
 
@@ -64,10 +65,16 @@ class InboundEmailAdapter(ABC):
             raise ValueError("multipart/form-data body has no parts (missing or wrong boundary?)")
         raw: list[tuple[str, bytes, str | None]] = []
         for part in message.iter_parts():
-            name = part.get_param("name", header="content-disposition")
-            if name is None or part.get_filename() is not None:
+            raw_name = part.get_param("name", header="content-disposition")
+            if raw_name is None or part.get_filename() is not None:
                 continue
-            raw.append((name, part.get_payload(decode=True) or b"", part.get_content_charset()))
+            # get_param is typed to return a (charset, language, value) tuple for
+            # an RFC 2231-encoded name (name*=utf-8''to), and does under the
+            # compat32 policy; the HTTP policy used here already decodes it.
+            # Collapsing makes the field name a str under either (#152).
+            name = collapse_rfc2231_value(raw_name)
+            payload = part.get_payload(decode=True)  # typed to allow a nested Message; a form field is bytes
+            raw.append((name, payload if isinstance(payload, bytes) else b"", part.get_content_charset()))
 
         charsets: dict[str, str] = {}
         for name, payload, _ in raw:

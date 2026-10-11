@@ -307,3 +307,13 @@ def test_mailgun_reads_a_multipart_payload() -> None:
 def test_smtp_server_raises_not_implemented() -> None:
     with pytest.raises(NotImplementedError, match="smtp_server inbound provider is not yet implemented"):
         SMTPServerAdapter().extract(b"raw email bytes", "message/rfc822", {})
+
+
+def test_rfc2231_encoded_field_names_are_decoded() -> None:
+    """#152: an RFC 2231-encoded name (name*=utf-8''to) must still find 'to'."""
+    def encoded(name: str, value: str) -> bytes:
+        head = f"--{_BOUNDARY}\r\nContent-Disposition: form-data; name*=utf-8''{name}\r\n\r\n"
+        return head.encode() + value.encode() + b"\r\n"
+
+    body = _multipart(encoded("to", _RECIPIENT), encoded("text", _REPLY))
+    assert SendgridAdapter().extract(body, _MULTIPART, {}) == (_INTERACTION_ID, _REPLY)
