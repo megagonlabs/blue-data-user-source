@@ -463,3 +463,69 @@ async def test_only_recorded_methods_falls_back_like_none_registered(contact_man
     await contact_manager.create_contact_method("sms", "phone", {"number": "+15550100"})
     channel = await contact_manager.identify_contact_method()
     assert (channel.protocol, channel.name) == ("stdio", "default")
+
+
+# ── secrets in contact details (#143) ─────────────────────────────────────────
+
+from blue_data_user_source.interaction.contact import (  # noqa: E402
+    MASK, SECRET_FIELDS, redact_contacts, redact_details, resolve_secret,
+)
+
+
+def test_the_schema_marks_the_credential_fields_secret() -> None:
+    assert SECRET_FIELDS["email"] == {"smtp_password"}
+    assert SECRET_FIELDS["webhook"] == {"url", "headers"}
+    assert SECRET_FIELDS["notification"] == {"endpoint"}
+
+
+def test_redact_details_masks_secrets_and_keeps_everything_else() -> None:
+    details = {"address": "a@example.com", "smtp_password": "hunter2", "preference": 1}
+    assert redact_details("email", details) == {"address": "a@example.com", "smtp_password": MASK, "preference": 1}
+    assert details["smtp_password"] == "hunter2"  # the stored dict is untouched
+
+
+def test_redact_details_masks_each_header_and_the_webhook_url() -> None:
+    details = {"url": "https://hooks.example.com/T0/B0/xyz", "headers": {"Authorization": "Bearer abc", "X-Env": "prod"}}
+    assert redact_details("webhook", details) == {"url": MASK, "headers": {"Authorization": MASK, "X-Env": MASK}}
+
+
+def test_a_var_reference_is_shown_because_it_holds_no_secret() -> None:
+    details = {"smtp_password": "$SMTP_PASSWORD", "address": "a@example.com"}
+    assert redact_details("email", details)["smtp_password"] == "$SMTP_PASSWORD"
+
+
+def test_redact_contacts_covers_the_whole_tree() -> None:
+    tree = {"email": {"work": {"smtp_password": "p"}}, "stdio": {"default": {}}}
+    assert redact_contacts(tree) == {"email": {"work": {"smtp_password": MASK}}, "stdio": {"default": {}}}
+
+
+def test_contact_method_public_dict_is_masked() -> None:
+    method = ContactMethod(protocol="email", name="work", details={"address": "a@example.com", "smtp_password": "p"})
+    assert method.public_dict() == {"protocol": "email", "name": "work",
+                                    "details": {"address": "a@example.com", "smtp_password": MASK}}
+
+
+def test_resolve_secret_reads_the_environment_at_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOOK_TOKEN", "Bearer real")
+    assert resolve_secret("$HOOK_TOKEN") == "Bearer real"
+    assert resolve_secret({"Authorization": "$HOOK_TOKEN", "X": "y"}) == {"Authorization": "Bearer real", "X": "y"}
+    assert resolve_secret("plain") == "plain"
+    monkeypatch.delenv("HOOK_TOKEN")
+    with pytest.raises(InteractionError, match=r"\$HOOK_TOKEN"):
+        resolve_secret("$HOOK_TOKEN")
+
+
+async def test_email_sends_with_the_password_from_the_referenced_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SMTP_PASSWORD", "from-env")
+    seen: dict = {}
+
+    async def _capture(msg, *, hostname, port, username, password, start_tls):
+        seen["password"] = password
+        for fut in list(pending_interactions.values()):
+            if not fut.done():
+                fut.set_result("ok")
+
+    with patch.dict(sys.modules, {"aiosmtplib": _mock_aiosmtplib(_capture)}):
+        method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, "smtp_password": "$SMTP_PASSWORD"})
+        await method.interact().send("Pick a colour.")
+    assert seen["password"] == "from-env"

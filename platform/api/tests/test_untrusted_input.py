@@ -153,3 +153,22 @@ def test_an_llm_failure_is_a_502_not_an_empty_answer(client, source):
     resp = client.post("/alice/query", json={"query": "what are my skills?"})
     assert resp.status_code == 502
     assert "LLM call to 'gpt-4o' failed" in resp.json()["detail"]
+
+
+# ── contact secrets (#143) ────────────────────────────────────────────────────
+
+def test_contact_reads_mask_secrets(client, source):
+    from blue_data_user_source.interaction.contact import ContactMethod
+
+    email = ContactMethod("email", "work", {"address": "a@example.com", "smtp_password": "hunter2"})
+    hook = ContactMethod("webhook", "hook", {"url": "https://hooks.example.com/s3cr3t",
+                                             "headers": {"Authorization": "Bearer abc"}})
+    source.list_contact_methods = AsyncMock(return_value=[email, hook])
+    source.get_contact_method = AsyncMock(return_value=email)
+
+    listed = client.get("/alice/contacts").text
+    got = client.get("/alice/contacts/email/work").json()
+
+    for secret in ("hunter2", "s3cr3t", "Bearer abc"):
+        assert secret not in listed
+    assert got["details"] == {"address": "a@example.com", "smtp_password": "***"}

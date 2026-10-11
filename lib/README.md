@@ -339,7 +339,7 @@ await us.add_contact_method("alice", "webhook", "ops", {
 | `smtp_host` | yes¹ | — | SMTP server hostname |
 | `smtp_port` | no | `587` | SMTP port |
 | `smtp_user` | no | `from_address` | SMTP username |
-| `smtp_password` | no | `""` | SMTP password |
+| `smtp_password` | no | `""` | SMTP password. Masked on reads; may be a `$VAR` reference |
 | `smtp_use_tls` | no | `True` | Use STARTTLS |
 | `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
 | `response_base_url` | yes¹ | — | Base URL of `blue-userdb-api` (link in email body + inbound endpoint) |
@@ -347,6 +347,8 @@ await us.add_contact_method("alice", "webhook", "ops", {
 | `timeout` | no | `300` | Seconds to wait for a reply |
 
 ¹ Not required when `inbound_provider` is `"stdio"`.
+
+**Secrets.** `smtp_password`, a webhook's `url` and `headers`, and a notification `endpoint` are secret: every read path (REST, MCP tools, `blue-userdb contact list/get`) returns them masked as `***`. To keep them out of the contacts store too, store a reference to an environment variable instead, e.g. `"smtp_password": "$SMTP_PASSWORD"`; it is resolved when a message is sent, and shown as-is on reads.
 
 **`inbound_provider: "stdio"`** — development / testing mode. Prints a formatted email block to stdout and reads the reply from stdin. No SMTP connection is made and no `blue-userdb-api` is needed.
 

@@ -15,6 +15,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from blue_data_user_source import FileUserSource, UDbError
+from blue_data_user_source.interaction.contact import redact_contacts, redact_details
 from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
 
 from blue_data_user_cli.profile import profile_group, profile_store, resolver_for
@@ -2068,7 +2069,9 @@ def contact_list(obj: dict, path: tuple[str, ...], recursive: bool, fmt: str) ->
     db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
     try:
-        all_contacts: dict = source._get_manager(db).get_contacts()
+        # Secrets (an SMTP password, a webhook's Authorization header) are masked
+        # on every read path; a $VAR reference is shown as stored (#143).
+        all_contacts: dict = redact_contacts(source._get_manager(db).get_contacts())
     except (UDbError, Exception) as exc:
         _fail(f"{exc}", fmt)
 
@@ -2226,9 +2229,11 @@ def contact_get(obj: dict, path: tuple[str, ...]) -> None:
         if len(path) == 2:
             proto, name = path
             value = manager.get_contact(proto, name)
+            value = redact_details(proto, value) if isinstance(value, dict) else value
         else:
             proto, name, *field_parts = path
             entry = manager.get_contact(proto, name)
+            entry = redact_details(proto, entry) if isinstance(entry, dict) else entry
             if entry is None:
                 err.print(f"[red]Error:[/red] Contact {proto!r}/{name!r} not found.")
                 sys.exit(1)

@@ -271,3 +271,13 @@ async def test_create_database_rejects_a_name_that_is_not_a_path_segment():
     """#146: the library rejects it before writing anything; the tool reports it."""
     result = json.loads(await create_database(".."))
     assert "invalid database name" in result["error"]
+
+
+async def test_contact_tools_mask_secrets():
+    """What a tool returns lands in the LLM's context, so secrets are masked (#143)."""
+    await add_contact(USER, "email", "work", {"address": "a@example.com", "smtp_password": "hunter2"})
+    got = json.loads(await get_contact(USER, "email", "work"))
+    listed = await list_contacts(USER)
+    assert got["details"]["smtp_password"] == "***"
+    assert got["details"]["address"] == "a@example.com"
+    assert "hunter2" not in listed

@@ -1205,3 +1205,21 @@ def test_database_create_registers_the_configured_schema_paths(
     args = make_source.call_args.args
     assert str(metadata_schema) in [str(a) for a in args]
     assert str(contact_schema) in [str(a) for a in args]
+
+
+def test_contact_get_and_list_mask_secrets(runner: CliRunner, data_dir: Path) -> None:
+    """#143: the SMTP password is never printed; a $VAR reference is."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    stored = {"address": "a@example.com", "smtp_password": "hunter2", "smtp_user": "$SMTP_USER"}
+    mock._get_manager.return_value.get_contact.return_value = stored
+    mock._get_manager.return_value.get_contacts.return_value = {"email": {"work": stored}}
+    with _patched(mock):
+        entry = _invoke(runner, data_dir, ["contact", "get", "email", "work"])
+        field = _invoke(runner, data_dir, ["contact", "get", "email", "work", "smtp_password"])
+        listed = _invoke(runner, data_dir, ["contact", "list", "email", "work", "--format", "json"])
+    for result in (entry, field, listed):
+        assert result.exit_code == 0, result.output
+        assert "hunter2" not in result.output
+    assert "***" in field.output
+    assert "a@example.com" in entry.output

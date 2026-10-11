@@ -25,7 +25,7 @@ class ContactUpdateRequest(BaseModel):
 @router.get("/{name}/contacts", summary="List contact methods")
 async def list_contacts(name: str, protocol: str | None = None, request: Request = None) -> dict:
     methods = await request.app.state.source.list_contact_methods(name, protocol)
-    return {"database": name, "contacts": [m.__dict__ for m in methods]}
+    return {"database": name, "contacts": [m.public_dict() for m in methods]}  # secrets masked (#143)
 
 
 @router.post("/{name}/contacts", status_code=status.HTTP_201_CREATED, summary="Add contact method")
@@ -42,7 +42,7 @@ async def get_contact(name: str, protocol: str, contact_name: str, request: Requ
     if method is None:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Contact {protocol}/{contact_name!r} not found")
-    return {"database": name, **method.__dict__}
+    return {"database": name, **method.public_dict()}
 
 
 @router.patch("/{name}/contacts/{protocol}/{contact_name}", summary="Update contact method")

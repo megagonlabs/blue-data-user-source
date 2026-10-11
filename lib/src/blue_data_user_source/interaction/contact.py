@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import html
+import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -12,6 +16,76 @@ from zoneinfo import ZoneInfo
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
 from blue_data_user_source.types import InteractionError, LLMError
+
+# ------------------------------------------------------------------ #
+# Secrets in contact details (#143)                                    #
+# ------------------------------------------------------------------ #
+
+_CONTACT_SCHEMA = Path(__file__).parent.parent / "data" / "contact_schema.json"
+MASK = "***"
+_ENV_REF = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _secret_fields() -> dict[str, frozenset[str]]:
+    """``{protocol: {field, ...}}`` for the fields the contact schema marks ``"secret": true``."""
+    schema = json.loads(_CONTACT_SCHEMA.read_text())
+    return {
+        protocol: frozenset(f for f, spec in fields.items() if isinstance(spec, dict) and spec.get("secret"))
+        for protocol, fields in schema.items()
+    }
+
+
+SECRET_FIELDS: dict[str, frozenset[str]] = _secret_fields()
+
+
+def _mask(value: Any) -> Any:
+    """Mask a secret value. A ``$VAR`` reference names a secret without holding it, so it is shown."""
+    if isinstance(value, dict):
+        return {k: _mask(v) for k, v in value.items()}
+    if value in (None, "") or (isinstance(value, str) and _ENV_REF.fullmatch(value)):
+        return value
+    return MASK
+
+
+def redact_details(protocol: str, details: dict[str, Any]) -> dict[str, Any]:
+    """A copy of one contact's *details* with its secret fields masked, for any read path.
+
+    Contacts carry credentials (an SMTP password, a webhook's Authorization
+    header or secret URL). Returned by the REST API or an MCP tool, they would
+    land in a client or an LLM's context, so every read path masks them.
+    """
+    secret = SECRET_FIELDS.get(protocol, frozenset())
+    return {k: (_mask(v) if k in secret else copy.deepcopy(v)) for k, v in details.items()}
+
+
+def redact_contacts(contacts: dict[str, Any]) -> dict[str, Any]:
+    """A copy of a whole ``{protocol: {name: details}}`` contacts tree with secrets masked."""
+    return {
+        protocol: (
+            {name: redact_details(protocol, d) if isinstance(d, dict) else d for name, d in entries.items()}
+            if isinstance(entries, dict) else entries
+        )
+        for protocol, entries in contacts.items()
+    }
+
+
+def resolve_secret(value: Any) -> Any:
+    """Resolve a ``$VAR`` reference from the environment, at the moment the secret is used.
+
+    Storing ``"$SMTP_PASSWORD"`` instead of the password keeps it out of the
+    contacts store. Other values are returned unchanged; dict values are
+    resolved one by one (webhook headers).
+    """
+    if isinstance(value, dict):
+        return {k: resolve_secret(v) for k, v in value.items()}
+    match = _ENV_REF.fullmatch(value) if isinstance(value, str) else None
+    if match is None:
+        return value
+    resolved = os.environ.get(match.group(1))
+    if not resolved:
+        raise InteractionError(f"Contact secret references ${match.group(1)}, which is not set in the environment.")
+    return resolved
+
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _WORKING_HOURS_RE = re.compile(
@@ -89,6 +163,10 @@ class ContactMethod:
     def is_async(self) -> bool:
         return self.protocol in self.ASYNC_PROTOCOLS
 
+    def public_dict(self) -> dict[str, Any]:
+        """``{protocol, name, details}`` with secret fields masked — what read paths return."""
+        return {"protocol": self.protocol, "name": self.name, "details": redact_details(self.protocol, self.details)}
+
     @property
     def has_transport(self) -> bool:
         """True when this release can contact the user through this method (#129)."""
@@ -148,9 +226,9 @@ class ContactMethod:
             headers           — extra HTTP headers for the outgoing POST
             timeout           — seconds to wait for a response (default: 300)
         """
-        url: str = self.details["url"]
+        url: str = resolve_secret(self.details["url"])
         response_base_url: str = self.details["response_base_url"].rstrip("/")
-        headers: dict[str, str] = self.details.get("headers") or {}
+        headers: dict[str, str] = resolve_secret(self.details.get("headers") or {})
         timeout: float = float(self.details.get("timeout", 300))
 
         async def _start() -> None:
@@ -269,7 +347,7 @@ class ContactMethod:
         response_base_url: str = self.details["response_base_url"].rstrip("/")
         smtp_port: int = int(self.details.get("smtp_port", 587))
         smtp_user: str = self.details.get("smtp_user") or from_address
-        smtp_password: str = self.details.get("smtp_password") or ""
+        smtp_password: str = resolve_secret(self.details.get("smtp_password") or "")
         smtp_use_tls: bool = bool(self.details.get("smtp_use_tls", True))
         subject: str = self.details.get("subject") or "A question for you"
         timeout: float = float(self.details.get("timeout", 300))

@@ -462,7 +462,10 @@ async def add_contact(
 ) -> str:
     """Add a contact method for a user.
 
-    Supported protocols: 'email', 'slack', 'sms', 'webhook'.
+    Protocols with a transport: 'stdio', 'email', 'webhook'. 'sms', 'messaging',
+    'enterprise', 'notification' and 'session' are recorded only. Secret fields
+    (smtp_password, a webhook's url and headers) can be '$VAR' references to
+    environment variables, resolved when used; read tools mask them.
 
     Args:
         user:       User name.
@@ -540,7 +543,8 @@ async def list_contacts(user: str, protocol: Optional[str] = None) -> str:
     """
     try:
         methods = await get_source().list_contact_methods(user, protocol)
-        return _ok([m.__dict__ for m in methods])
+        # Secrets are masked: what a tool returns lands in the LLM's context (#143).
+        return _ok([m.public_dict() for m in methods])
     except Exception as e:
         return _err(e)
 
@@ -558,7 +562,7 @@ async def get_contact(user: str, protocol: str, name: str) -> str:
         method = await get_source().get_contact_method(user, protocol, name)
         if method is None:
             return _err(ValueError(f"Contact {protocol}/{name!r} not found for {user!r}"))
-        return _ok(method.__dict__)
+        return _ok(method.public_dict())
     except Exception as e:
         return _err(e)
 
