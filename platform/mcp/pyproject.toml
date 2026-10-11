@@ -5,6 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "blue-data-user-mcp"
 version = "0.1.0"
+authors = [
+    {name = "Eser Kandogan", email = "eser@megagon.ai"},
+]
+maintainers = [
+    {name = "Eser Kandogan", email = "eser@megagon.ai"},
+]
 description = "MCP server exposing UserSource operations to LLM clients"
 requires-python = ">=3.10"
 dependencies = [
