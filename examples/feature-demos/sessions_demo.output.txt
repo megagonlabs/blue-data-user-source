@@ -1,33 +1,21 @@
 ------------------------------------------------------------
 1. No session id -- auto-creates a new single-query session
 ------------------------------------------------------------
-Query executed: What locations has Alice traveled to?
-Query executed: What is Alice's timezone?
-Query executed: Where does Alice live?
-Query executed: What places has Alice traveled to?
-Query executed: Where does Alice live?
-Query executed: What is Alice's timezone?
-  Query 1 landed in session: cb196621-3a03-4cf3-adb4-c7cd37facda3
-  Query 2 landed in session: c26c4866-1951-415f-a2d5-c3a6f9a77f69
+  Query 1 landed in session: 29e9853a-8301-43ed-af9b-e1625dd07040
+  Query 2 landed in session: 39e123f2-0b00-4d7c-9a0a-4e5076120f95
   Different sessions (auto-create each time): True
 
 ------------------------------------------------------------
 2. Explicit session id -- reused across queries
 ------------------------------------------------------------
-Query executed: What is Alice's occupation?
-Query executed: What courses has Alice taken?
-Query executed: What degree does Alice have?
-Query executed: Where has Alice worked at?
-Query executed: To which job postings has Alice applied?
-Query executed: What skills does Alice possess?
-  Reused session id: cb196621-3a03-4cf3-adb4-c7cd37facda3 (matches session_a: True)
+  Reused session id: 29e9853a-8301-43ed-af9b-e1625dd07040 (matches session_a: True)
   Queries recorded in session_a: 2
 
 ------------------------------------------------------------
 3. Ending a session -- no more queries can be appended
 ------------------------------------------------------------
   session_a status: ended
-  Querying an ended session raised QueryError: Session 'cb196621-3a03-4cf3-adb4-c7cd37facda3' has ended; cannot add a query to it.
+  Querying an ended session raised QueryError: Session '29e9853a-8301-43ed-af9b-e1625dd07040' has ended; cannot add a query to it.
 
 ------------------------------------------------------------
 4. Querying an unknown session id also raises QueryError

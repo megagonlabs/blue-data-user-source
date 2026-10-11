@@ -1,4 +1,4 @@
-Working directory: /tmp/blue-userdb-file-backend-demo-4v_ynctk
+Working directory: /tmp/blue-userdb-file-backend-demo-c48vo5ed
 
 ------------------------------------------------------------
 1. Create user (file-backed registry, KB, metadata, contacts, sessions)
@@ -9,7 +9,7 @@ Metadata auto-seeded from schema: ['identity', 'preferences', 'availability', 'p
 ------------------------------------------------------------
 2. Set metadata, register a contact method, start a session
 ------------------------------------------------------------
-Session created: 69624322-8ca1-4750-84da-e96b6a2dae89
+Session created: 111236e0-d923-45f1-9307-919af9cfea20
 
 ------------------------------------------------------------
 3. add_source -- register a file and extract facts from it
@@ -27,13 +27,7 @@ Sessions survived: True
 ------------------------------------------------------------
 5. Query the reopened database
 ------------------------------------------------------------
-Query executed: What job postings has Alice applied to?
-Query executed: Where does Alice work?
-Query executed: What does Alice do for work?
-Query executed: What organization has Alice worked at?
-Query executed: What degree does Alice have?
-Query executed: What skills does Alice have?
-Answer (session 69624322-8ca1-4750-84da-e96b6a2dae89): Alice is a data scientist who works at IBM.
+Answer (session 111236e0-d923-45f1-9307-919af9cfea20): Alice is a data scientist who has worked at IBM for six years.
 
-Cleaned up /tmp/blue-userdb-file-backend-demo-4v_ynctk
+Cleaned up /tmp/blue-userdb-file-backend-demo-c48vo5ed
 Demo complete.

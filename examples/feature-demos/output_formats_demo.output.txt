@@ -1,49 +1,35 @@
 ------------------------------------------------------------
 1. output_form="json"  --  query: 'What does alice do for work, and where?'
 ------------------------------------------------------------
-Query executed: Where does Alice work?
-Query executed: What does Alice do for work, and where?
-Query executed: At which organization has Alice worked?
 Result type: list
-Result: [{'Work': 'Data Scientist', 'Organization': 'IBM', 'Location': 'Austin, Texas'}]
+Result: [{'position': 'Data Scientist', 'company': 'IBM', 'location': 'Austin, Texas'}]
 
 ------------------------------------------------------------
 2. output_form="nl"
 ------------------------------------------------------------
-Query executed: What degrees has Alice attained?
-Query executed: What courses has Alice taken?
-Query executed: What skills does Alice have?
-Query executed: What does Alice do for work, and where?
-Query executed: Where does Alice work?
 Result type: str
 Result: Alice is a data scientist at IBM, based in Austin, Texas.
 
 ------------------------------------------------------------
 3. include_expanded=True, output_form="json"
 ------------------------------------------------------------
-Query executed: Where does Alice work?
-Query executed: What does Alice do for work, and where?
-Query executed: At which organization has Alice worked?
 Top-level keys: ['expanded', 'result']
-result: [{'What does Alice do for work?': 'Data Scientist', 'Where?': 'IBM, Austin, Texas'}]
+result: [{'Name': 'Alice', 'Occupation': 'Data Scientist', 'Company': 'IBM', 'Location': 'Austin, Texas'}]
 expanded: 3 sub-question/result pair(s)
-  - Q: 'Where does Alice work?'
-    A: [{'text': 'Alice is a data scientist at IBM, based in Austin, Texas.', 'source': 'external_documents', 'file_name': 'alice_bio.txt', 'score': 0.32666271924972534}]
-  - Q: 'At which organization has Alice worked?'
-    A: [{'text': 'Alice is a data scientist at IBM, based in Austin, Texas.', 'source': 'external_documents', 'file_name': 'alice_bio.txt', 'score': 0.19099938869476318}]
+  - Q: 'Where has Alice worked?'
+    A: [{'text': 'Alice is a data scientist at IBM, based in Austin, Texas.', 'source': 'external_documents', 'file_name': 'alice_bio.txt', 'score': 0.2344561219215393}]
+  - Q: "What is Alice's current place of employment?"
+    A: [{'text': 'Alice is a data scientist at IBM, based in Austin, Texas.', 'source': 'external_documents', 'file_name': 'alice_bio.txt', 'score': 0.27475494146347046}]
   - Q: 'What does Alice do for work, and where?'
     A: [{'text': 'Alice is a data scientist at IBM, based in Austin, Texas.', 'source': 'external_documents', 'file_name': 'alice_bio.txt', 'score': 0.09714668989181519}]
 
 ------------------------------------------------------------
 4. include_expanded=True, output_form="nl"
 ------------------------------------------------------------
-Query executed: Where does Alice work?
-Query executed: What organization does Alice work for?
-Query executed: What does Alice do for work, and where?
 Top-level keys: ['expanded', 'result']
 result (prose): Alice is a data scientist at IBM, based in Austin, Texas.
-expanded (prose): Alice is a professional who has carved out a niche in the field of data science. Her expertise is backed by her current role as a data scientist at IBM, a leading technology company. Alice's career is anchored in Austin, Texas, where IBM has a significant presence. There, she applies her skills and knowledge to tackle complex data-driven challenges, contributing to the innovative projects and solutions that IBM is renowned for.
+expanded (prose): Alice is a professional working in the field of data science. She holds the position of a data scientist at IBM, which is a renowned multinational technology corporation. Her expertise in data science positions her as a significant asset to the company, contributing to the innovative solutions and technological advancements that IBM is known for.
 
-In her capacity as a data scientist, Alice is likely involved in analyzing vast sets of data to derive insights and support decision-making processes. Her work requires a combination of statistical knowledge, programming expertise, and a curiosity-driven approach to problem-solving. At IBM, she is well-positioned to collaborate with other experts in technology and engineering, ensuring she remains at the forefront of developments in the industry. 
+Alice is based in Austin, Texas, which is one of the key locations for IBM's operations. Austin is known for its vibrant tech scene and dynamic work environment, providing Alice with ample opportunities to engage in cutting-edge projects and collaborate with other professionals in the field. Her role at IBM likely involves working with large datasets, developing predictive models, and employing analytical techniques to support business goals and drive decision-making processes.
 
-Alice's affiliation with IBM underscores her alignment with a company known for its commitment to research and development in technology. Her career in Austin, a city known for its vibrant tech scene, offers her the opportunity to not only grow professionally but also contribute to the dynamic landscape of innovation in the region.
+Overall, Alice's position at IBM in Austin not only highlights her professional abilities but also her contribution to one of the leading names in the technology industry. Her work as a data scientist is essential in leveraging data-driven insights that help steer the company towards achieving its strategic objectives.

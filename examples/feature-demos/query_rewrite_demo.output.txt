@@ -10,15 +10,15 @@
 ------------------------------------------------------------
 Query: 'What jobs is Alice suitable for?'
   - What degrees does Alice have?
-  - What courses has Alice taken?
   - What skills does Alice possess?
-  - What jobs has Alice applied to?
   - What organizations has Alice worked at?
+  - What courses has Alice taken?
+  - What job postings has Alice applied to?
 (5 sub-question(s) -- each targets a distinct schema facet)
 
 ------------------------------------------------------------
 3. expand_query -- a narrow, already-specific lookup
 ------------------------------------------------------------
 Query: "What is Alice's timezone?"
-Sub-questions: ['Where does Alice live?', 'Where has Alice traveled to?']
+Sub-questions: ['Where does Alice live?', 'Where has Alice traveled recently?']
 (2 -- the model may return zero here, since the original query is already a single specific lookup; it isn't required to)

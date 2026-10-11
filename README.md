@@ -26,7 +26,7 @@ blue-data-user-source/
 │   ├── scripts/                # install.sh, build.sh, publish.sh
 │   └── tests/
 │       ├── unit/               # fast offline tests, no API key
-│       └── benchmarks/         # report-only LLM benchmarks (VCR-replayed)
+│       └── benchmarks/         # report-only LLM benchmarks, compared to a committed baseline
 ├── platform/
 │   ├── cli/                    # Command-line interface (blue-userdb)
 │   ├── mcp/                    # MCP server (blue-userdb-mcp)

@@ -120,6 +120,21 @@ Deleted database: alice
 
 ---
 
+## `blue-userdb profile`
+
+Configuration profiles: named sets of the parameters in the [global options](#global-options) table, stored in `~/.blue-userdb/.profiles` (written `0600`). The full parameter table is in [platform/cli/README.md](../platform/cli/README.md#profiles-and-configuration).
+
+| Command | Description |
+|---|---|
+| `blue-userdb profile add NAME` | Create an additional profile (`default` is created on first use) |
+| `blue-userdb profile remove NAME [--confirm]` | Delete a profile and its configuration |
+| `blue-userdb profile list [--format table\|json]` | List profiles, marking the selected one |
+| `blue-userdb profile select NAME` | Set the default profile |
+| `blue-userdb profile inspect [NAME] [--format table\|json]` | Show every value and the tier it came from; secrets masked |
+| `blue-userdb profile config [PARAM [VALUE]] [--profile NAME]` | Set configuration: no arguments walks every required parameter, `PARAM` prompts for one, `PARAM VALUE` sets it; secrets always prompt |
+
+---
+
 ## `blue-userdb database`
 
 Manage user databases.

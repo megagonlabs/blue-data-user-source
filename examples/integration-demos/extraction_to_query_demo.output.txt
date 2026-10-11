@@ -6,27 +6,16 @@ Created user 'bob'
 ------------------------------------------------------------
 2. add_source(queries=...) -- extract structured data from a bio into the KB
 ------------------------------------------------------------
-list_data('bob') -> 13 row(s) extracted from one bio paragraph
+list_data('bob') -> 21 row(s) extracted from one bio paragraph
 
 ------------------------------------------------------------
 3. execute_query -- query the KB that add_source just built
 ------------------------------------------------------------
-Query executed: What are Bob's technical skills?
-Query executed: What skills does Bob have?
-Metric completeness: score=1.0, passes=True, reasoning=The result set is complete for answering the query as it explicitly lists all of Bob Chen's technical skills mentioned in the source document: Python, PyTorch, and SQL. The information is corroborated by multiple provenances from the same source document. There is no indication of additional skills beyond those specified, ensuring that the results comprehensively address the query.
-Metric freshness: score=1.0, passes=True, reasoning=All data nodes are 0 days old, indicating that the data is very fresh and relevant for answering the query about Bob's technical skills. Data this recent is considered to have maximum freshness.
-Metric privacy: score=0.9, passes=True, reasoning=The results provided do not contain any sensitive personal information such as addresses, contact numbers, or confidential financial data about Bob Chen. The information shared is related to his professional skills, which is generally considered public domain data, particularly when associated with professional profiles such as LinkedIn or resumes. These types of details are typically used for professional networking and employment purposes and are not inherently private data. However, since there are no explicit user privacy preferences specified, a slight deduction is made from a perfect score to account for any unarticulated privacy concerns. The source of the data, '/tmp/blue-userdb-extraction-to-query-demo-9t8m3gf4/bob-bio.txt', suggests it might be extracted from non-public sources, but no sensitive personal data is exposed in the information provided.
 
 Q: What are Bob's technical skills?
-A: Bob's technical skills include proficiency in Python, PyTorch, and SQL.
-Query executed: What skills does Bob possess according to the data store?
-Query executed: Where has Bob been employed according to the data store?
-Query executed: Where does Bob currently work and what does Bob specialize in?
-Metric completeness: score=0.9, passes=True, reasoning=The result set provides comprehensive information about Bob's current employment and specialization. It clearly states that Bob Chen currently works as a data scientist at Nimbus Analytics, which directly answers the query about his current workplace and specialization. Additionally, the provided skills (Python, PyTorch, SQL) complement the understanding of his specialization. However, the exact duration of his employment at Nimbus Analytics is missing, marked by an incomplete sentence ('where he has worked since'). Despite this minor incompleteness regarding the timing, the essential details necessary to answer the query are present.
-Metric freshness: score=1.0, passes=True, reasoning=All data nodes are 0 days old, indicating that the information is up-to-date as of today. This freshness ensures the highest level of data accuracy and relevance for the query regarding Bob's current place of work and specialization.
-Metric privacy: score=1.0, passes=True, reasoning=The results provided do not include any sensitive personal information about Bob Chen. The information is limited to his professional background, including his current workplace, specific skills, and previous work experience, which are typically considered public professional information. There is no indication that any private personal data, such as home address, personal identification numbers, or private communications, has been disclosed. Therefore, these results do not raise privacy concerns.
+A: Bob's technical skills include proficiency in natural language processing, Python, PyTorch, and SQL.
 
 Q: Where does Bob currently work and what does he specialize in?
-A: Bob currently works as a data scientist at Nimbus Analytics. He specializes in data science and is proficient in Python, PyTorch, and SQL.
+A: Bob currently works as a data scientist at Nimbus Analytics, where he has been employed since 2021. He specializes in natural language processing and has published papers on retrieval-augmented generation.
 
 Demo complete.

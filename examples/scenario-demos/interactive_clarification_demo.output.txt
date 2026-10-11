@@ -22,41 +22,31 @@ Step 3 -- run the query: 'What salary range and notice period should a recruiter
 ------------------------------------------------------------
 (the KB has nothing about salary or notice period, so the completeness check
 is expected to fail and trigger a clarifying question over stdio)
-Query executed: What salary range and notice period should a recruiter expect for Alice?
-Metric completeness: score=0.2, passes=False, reasoning=The result set provides information about Alice's professional background, including her role, experience, and accomplishments. However, it does not directly address the query regarding salary range and notice period expectations. The information is incomplete for the purpose of predicting or understanding Alice's salary and notice period requirements. Additional data related to compensation benchmarks in her field, as well as standard notice periods for comparable positions, would be necessary to accurately answer the query.
-Metric freshness: score=0.0, passes=False, reasoning=No provenance timestamps available.
-Metric privacy: score=1.0, passes=True, reasoning=The results provided do not include any personally identifiable information about Alice, such as her full name, contact details, or current employer. The information is presented in a professional context, focusing on her role, experience, and contributions, which are typical and expected for assessing a candidate's fit for a position. As such, there are no privacy concerns, aligning with a typical job application scenario.
 
-Could you provide more details about the salary range and notice period that a recruiter should expect from you? Some of the data quality checks, like completeness and freshness, didn't pass, so more information would be helpful.
+Could you provide more information about the salary range and notice period a recruiter should expect, as I'm missing some details due to the quality checks not passing for completeness and freshness?
 > 
 ============================================================
 Result
 ============================================================
-Session: 4e794983-ef07-4538-ba90-759195284051
+Session: 6a4ee8ad-845c-460d-afb5-f1818c45c4b2
 
 Synthesized answer:
-Alice's expected salary range is $150,000 to $170,000 base, plus standard equity. She would need to give her current employer a 4-week notice period.
+Alice, a senior software engineer with 8 years of experience, is looking for a salary range of $150,000 to $170,000 base with standard equity. She requires a 4-week notice period for her current employer.
 
 Expanded (per-sub-question) results -- look for the query answered by Alice herself:
-Alice is a seasoned professional in the field of software engineering, with a wealth of experience accumulated over eight years. Her specialization lies in distributed systems, a complex area that demands a high level of expertise and understanding. Throughout her career, Alice has demonstrated significant leadership skills by spearheading two major platform migrations, a testament to her ability to manage and execute large-scale projects effectively. Additionally, she contributes to the development of her team by mentoring junior engineers, highlighting her commitment to fostering talent and teamwork.
+Alice is a seasoned professional specializing in software engineering, boasting eight years of expertise in distributed systems. Her experience includes leading two major platform migrations, a role that not only requires deep technical knowledge but also strategic planning and execution skills. Additionally, Alice plays a crucial role in guiding the next generation of talent, as she actively mentors junior engineers within her team. This mentorship not only enhances her leadership profile but also contributes positively to her team's overall performance and growth.
 
-In terms of compensation, Alice is seeking a base salary in the range of $150,000 to $170,000. This figure reflects her considerable experience and the specialized skills she brings to the table. Furthermore, Alice values comprehensive compensation packages that include not just a competitive salary but also standard equity, indicating an interest in having a stake in the company's growth and success.
-
-Regarding her current employment, Alice is required to provide a four-week notice period. This timeline allows her to ensure a smooth transition and fulfill any final responsibilities, which demonstrates her professionalism and dedication to her current role. This notice period should be taken into account by any potential recruiter or employer when considering Alice for a new position.
+In terms of compensation and logistics, Alice is aiming for a base salary between $150,000 and $170,000, which aligns with her extensive experience and expertise as a senior software engineer. Furthermore, she expects standard equity as part of her compensation package, reflecting her interest in long-term incentives and company growth. When it comes to transitioning from her current role, Alice would need to provide her employer with a notice period of four weeks. This time frame is typically sufficient for knowledge transfer and to ensure a smooth handover of her responsibilities, demonstrating her professionalism and commitment to both her current and prospective employers.
 
 Session record shows 1 interaction(s) over this query:
-  channel=stdio/default question="Could you provide more details about the salary range and notice period that a recruiter should expect from you? Some of the data quality checks, like completeness and freshness, didn't pass, so more information would be helpful." response="I'm looking for $150,000-$170,000 base plus standard equity, and I'd need to give my current employer 4 weeks notice."
+  channel=stdio/default question="Could you provide more information about the salary range and notice period a recruiter should expect, as I'm missing some details due to the quality checks not passing for completeness and freshness?" response="I'm looking for $150,000-$170,000 base plus standard equity, and I'd need to give my current employer 4 weeks notice."
 
 The completeness check failed on the first pass, Alice was asked directly,
 and her answer resolved it -- the caller only ever made one execute_query call.
 
-Gotcha: FreshnessMetric (evaluated alongside CompletenessMetric on every round)
-still fails even after Alice answers -- it scores off `modified`/`created`
-timestamps that only show up in query_results_metadata when the KB answer-agent
-happens to call get_metadata for that lookup, which it doesn't always do. With no
-timestamps at all, freshness scores 0.0 and can never pass, regardless of what the
-user says. In a real deployment with max_interaction_rounds > 1 this can burn every
-remaining round on an unresolvable metric even after the metric that actually
-needed the user's input has already passed.
+Note: FreshnessMetric is evaluated alongside CompletenessMetric. Alice's reply
+joins the evidence with a fresh timestamp, so a confirmation or correction from
+her can make the answer current (#125). Retrieved evidence that carries no
+timestamp at all still scores 0 on its own (#98).
 
 Demo complete.

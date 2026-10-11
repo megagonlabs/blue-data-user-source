@@ -7,8 +7,11 @@ blue-data-user-source/
 │
 ├── README.md                            # one-line description, layout, quick start, package table
 ├── .gitignore
+├── LICENSE                              # BSD 3-Clause with Attribution / NOTICE, as the other Blue repos
+├── scripts/
+│   └── install.sh                       # installs every package, editable, after the sibling repos
 ├── dev.envrc                            # local-only secrets (git-ignored via *.envrc)
-├── treehouse.toml                       # local tooling config (untracked)
+├── treehouse.toml                       # local tooling config (git-ignored, like .python-version and .lavish/)
 │
 ├── data/                                # sample input used by the docs and examples
 │   └── resume.txt
@@ -35,6 +38,7 @@ blue-data-user-source/
 │   ├── README.md
 │   ├── scripts/
 │   │   ├── build.sh                     # build the distribution package
+│   │   ├── install.sh                   # sibling repos, then lib with its extras, editable
 │   │   └── publish.sh                   # twine upload dist/*
 │   ├── src/
 │   │   └── blue_data_user_source/
@@ -49,7 +53,8 @@ blue-data-user-source/
 │   │       │
 │   │       ├── data/
 │   │       │   ├── manager.py           # UserDataManager
-│   │       │   └── planner.py           # UserDataPlanner
+│   │       │   ├── paths.py             # backend-agnostic dot-path reads (get_path)
+│   │       │   └── planner.py           # UserDataPlanner (placeholder, not on the query path)
 │   │       │
 │   │       ├── reasoning/
 │   │       │   ├── reasoner.py          # UserQueryReasoner
@@ -69,15 +74,20 @@ blue-data-user-source/
 │   │
 │   └── tests/
 │       ├── conftest.py                  # shared fixtures and in-memory doubles
-│       ├── unit/                        # fast, offline, no API key
+│       ├── unit/                        # fast, offline, no API key; conftest.py fails any network access
 │       │   ├── backends/  data/  doubles/  interaction/  reasoning/  sources/
-│       └── benchmarks/                  # report-only LLM benchmarks (VCR-replayed)
+│       └── benchmarks/                  # report-only LLM benchmarks, run live against a baseline
 │           ├── common/  extraction/  querying/  reasoning/
+│           ├── results/                 # committed, versioned live runs
+│           └── baseline.json            # per-case values the runners compare against
 │
 └── platform/                            # external interface services
     ├── cli/                             # command-line interface (blue-userdb)
     │   ├── pyproject.toml               # declares the `blue-userdb` console script
     │   ├── README.md
+    │   ├── scripts/
+    │   │   ├── build.sh
+    │   │   └── install.sh               # sibling repos, lib, then the CLI
     │   ├── src/
     │   │   └── blue_data_user_cli/
     │   │       ├── commands.py          # Click command groups

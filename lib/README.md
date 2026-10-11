@@ -2,7 +2,7 @@
 
 Python library for UDb — a multi-user knowledge base with natural language querying, LLM-based extraction, and interactive data quality assurance.
 
-Backed by [blue-data](../blue-data), [blue-data-kb-source](../blue-data-kb-source), and [blue-data-doc-source](../blue-data-doc-source) (per-session interaction transcripts, and files registered via `add_source`).
+Backed by [blue-data](https://github.com/megagon-internal/blue-data), [blue-data-kb-source](https://github.com/megagon-internal/blue-data-kb-source), and [blue-data-doc-source](https://github.com/megagon-internal/blue-data-doc-source) (per-session interaction transcripts, and files registered via `add_source`).
 
 See [docs/](../docs/README.md) for the full documentation set — [guide.md](../docs/guide.md) for a task-oriented walkthrough and [api-reference.md](../docs/api-reference.md) for the complete method-by-method reference. This README covers installation, a quick usage sample, and running this package's tests.
 

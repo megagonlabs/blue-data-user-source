@@ -112,12 +112,10 @@ async def main() -> None:
         "What is Carol's job title and where does she work?",
         database="carol",
         optional_properties={
-            # max_interaction_rounds=1: FreshnessMetric fails whenever the KB
-            # answer-agent doesn't happen to call get_metadata for a lookup (no
-            # modified/created timestamp ends up in query_results_metadata), and
-            # then never recovers regardless of what the user says -- capped here
-            # to keep this walkthrough's output focused. See the freshness gotcha
-            # in scenario-demos/interactive_clarification_demo.py for the full story.
+            # max_interaction_rounds=1 keeps this walkthrough's output focused. Whether
+            # Carol is asked at all depends on the quality checks (LLM-scored, so it
+            # varies run to run); scenario-demos/interactive_clarification_demo.py
+            # walks through a clarification in detail.
             "output_form": "nl", "session": session_id, "max_interaction_rounds": 1,
         },
     )
@@ -127,12 +125,10 @@ async def main() -> None:
         "Where is Carol based?",
         database="carol",
         optional_properties={
-            # max_interaction_rounds=1: FreshnessMetric fails whenever the KB
-            # answer-agent doesn't happen to call get_metadata for a lookup (no
-            # modified/created timestamp ends up in query_results_metadata), and
-            # then never recovers regardless of what the user says -- capped here
-            # to keep this walkthrough's output focused. See the freshness gotcha
-            # in scenario-demos/interactive_clarification_demo.py for the full story.
+            # max_interaction_rounds=1 keeps this walkthrough's output focused. Whether
+            # Carol is asked at all depends on the quality checks (LLM-scored, so it
+            # varies run to run); scenario-demos/interactive_clarification_demo.py
+            # walks through a clarification in detail.
             "output_form": "nl", "session": session_id, "max_interaction_rounds": 1,
         },
     )

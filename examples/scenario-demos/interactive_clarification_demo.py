@@ -120,15 +120,11 @@ async def main() -> None:
     real_stdin = sys.stdin
     sys.stdin = io.StringIO(ALICE_REPLY + "\n")
     try:
-        # max_interaction_rounds=1: FreshnessMetric (the other default metric run
-        # alongside CompletenessMetric) scores purely off `modified`/`created`
-        # timestamps in query_results_metadata -- and the KB answer-agent only
-        # populates those when it happens to call get_metadata for a given
-        # lookup, which it doesn't always do. When it doesn't, freshness scores
-        # 0.0 and never recovers no matter what the user says, so raising
-        # max_rounds here would just consume repeated empty stdin reads once
-        # completeness is already satisfied. This is real, current system
-        # behavior (see examples/README.md), not something this demo hides.
+        # max_interaction_rounds=1 keeps the walkthrough to one question. Alice's
+        # reply is added to the evidence with a fresh timestamp (#125), so it can
+        # satisfy FreshnessMetric as well as CompletenessMetric; retrieved
+        # evidence that carries no timestamp at all still scores 0 on its own
+        # (#98), which a second round could not change.
         answer, session_id = await us.async_execute_query(
             QUERY, database="alice",
             optional_properties={
@@ -168,14 +164,10 @@ async def main() -> None:
         print("The completeness check failed on the first pass, Alice was asked directly,")
         print("and her answer resolved it -- the caller only ever made one execute_query call.")
         print()
-        print("Gotcha: FreshnessMetric (evaluated alongside CompletenessMetric on every round)")
-        print("still fails even after Alice answers -- it scores off `modified`/`created`")
-        print("timestamps that only show up in query_results_metadata when the KB answer-agent")
-        print("happens to call get_metadata for that lookup, which it doesn't always do. With no")
-        print("timestamps at all, freshness scores 0.0 and can never pass, regardless of what the")
-        print("user says. In a real deployment with max_interaction_rounds > 1 this can burn every")
-        print("remaining round on an unresolvable metric even after the metric that actually")
-        print("needed the user's input has already passed.")
+        print("Note: FreshnessMetric is evaluated alongside CompletenessMetric. Alice's reply")
+        print("joins the evidence with a fresh timestamp, so a confirmation or correction from")
+        print("her can make the answer current (#125). Retrieved evidence that carries no")
+        print("timestamp at all still scores 0 on its own (#98).")
     else:
         print("No clarification was needed this run -- the model judged the initial lookup")
         print("complete enough on its own (LLM-scored, so this can vary run to run).")

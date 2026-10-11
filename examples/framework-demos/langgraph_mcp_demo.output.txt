@@ -1,43 +1,4 @@
-[09/04/26 22:27:47] INFO     Processing request of type            server.py:733
-                             ListToolsRequest                                   
-/home/eser/megagon-internal/blue-data-user-source-treehouse/.treehouse/blue-data-user-source-7fa8c7/1/blue-data-user-source/examples/framework-demos/langgraph_mcp_demo.py:57: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.
-  agent = create_react_agent(model, tools)
-[09/04/26 22:27:48] INFO     Processing request of type            server.py:733
-                             CallToolRequest                                    
-                    INFO     Started source user_source             source.py:54
-                    INFO     Started source user_source_registry    source.py:54
-                    INFO     Started source registry                source.py:54
-                    INFO     Started source kb                      source.py:54
-[09/04/26 22:27:49] INFO     Started source metadata                source.py:54
-                    INFO     Started source contacts                source.py:54
-                    INFO     Started source sessions                source.py:54
-                    INFO     Processing request of type            server.py:733
-                             ListToolsRequest                                   
-[09/04/26 22:27:51] INFO     Processing request of type            server.py:733
-                             CallToolRequest                                    
-                    INFO     Started source user_source             source.py:54
-                    INFO     Started source user_source_registry    source.py:54
-                    INFO     Started source registry                source.py:54
-                    INFO     Started source metadata                source.py:54
-                    INFO     Processing request of type            server.py:733
-                             ListToolsRequest                                   
-[09/04/26 22:27:51] INFO     Processing request of type            server.py:733
-                             CallToolRequest                                    
-                    INFO     Started source user_source             source.py:54
-                    INFO     Started source user_source_registry    source.py:54
-                    INFO     Started source registry                source.py:54
-                    INFO     Started source metadata                source.py:54
-                    INFO     Processing request of type            server.py:733
-                             ListToolsRequest                                   
-[09/04/26 22:27:54] INFO     Processing request of type            server.py:733
-                             CallToolRequest                                    
-                    INFO     Started source user_source             source.py:54
-                    INFO     Started source user_source_registry    source.py:54
-                    INFO     Started source registry                source.py:54
-                    INFO     Started source metadata                source.py:54
-                    INFO     Processing request of type            server.py:733
-                             ListToolsRequest                                   
-Scratch data directory: /tmp/blue-data-user-mcp-demo-82liexa1
+Scratch data directory: /tmp/blue-data-user-mcp-demo-eveb1nri
 
 Loaded 23 tools from blue-data-user-mcp: ['create_database', 'delete_database', 'reset_database', 'list_databases', 'get_database', 'query', 'session_start', 'session_end', 'get_session', 'list_sessions', 'add_source', 'remove_source', 'list_data', 'list_sources', 'set_metadata', 'delete_metadata', 'get_metadata', 'list_metadata', 'add_contact', 'update_contact', 'remove_contact', 'list_contacts', 'get_contact']
 
@@ -73,4 +34,4 @@ Answer: Here is the metadata currently stored for Dana:
   - Retention Days: null
   - Consent Level: null
 
-Cleaned up /tmp/blue-data-user-mcp-demo-82liexa1
+Cleaned up /tmp/blue-data-user-mcp-demo-eveb1nri

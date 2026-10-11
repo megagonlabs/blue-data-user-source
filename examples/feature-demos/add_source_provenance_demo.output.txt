@@ -12,12 +12,6 @@
 ------------------------------------------------------------
 3. Both files are searchable via execute_query regardless of type
 ------------------------------------------------------------
-Query executed: What courses has Alice taken?
-Query executed: What experience does Alice have?
-Query executed: Where has Alice worked?
-Query executed: What institutions has Alice studied at?
-Query executed: What skills does Alice possess?
-Query executed: What degrees has Alice attained?
-  Answer: Alice has 10 years of experience in machine learning and has worked at IBM as a data scientist for six years.
+  Answer: Alice has worked at IBM as a Data Scientist for six years and is a Senior Data Scientist with 10 years of experience in machine learning.
 
 Demo complete.

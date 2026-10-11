@@ -65,7 +65,7 @@ cd platform/api && bash scripts/build.sh
 ## Requirements
 
 - Python 3.10+
-- [`blue-data`](../../blue-data), [`blue-data-kb-source`](../../blue-data-kb-source), and [`blue-data-doc-source`](../../blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
+- [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source), and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
 - An OpenAI API key (`OPENAI_API_KEY`) for any LLM feature: query rewriting/expansion, LLM-based extraction (`add_source` with `queries`), result assessment prompts, and natural-language answer synthesis. Sessions, metadata, and contact-method CRUD are plain Python with no network calls.
 
 None of the four packages are published to PyPI yet — always install from the local checkout as shown above.
@@ -111,7 +111,7 @@ Run from each component's root directory:
 
 ```bash
 cd lib && pytest tests/unit/           # unit tests — fast, offline, no API key needed
-cd lib && pytest tests/benchmarks/     # report-only LLM benchmarks (VCR-replayed)
+cd lib && pytest tests/benchmarks/     # report-only LLM benchmarks; see lib/README.md for live runs
 cd platform/cli && pytest              # CLI tests — all-memory backend
 cd platform/mcp && pytest              # MCP server tests — in-memory UserSource
 cd platform/api && pytest              # REST API tests
