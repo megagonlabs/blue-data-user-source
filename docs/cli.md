@@ -159,7 +159,7 @@ Manage user databases.
 | `--neo4j-host` | `localhost` | Neo4j host (`neo4j` backend only) |
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
-| `--neo4j-password` | the profile's `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | Neo4j password (required for `neo4j` backend). Prefer the profile secret or that environment variable: a value on the command line lands in shell history |
+| _(password)_ | the profile's `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | Neo4j password (required for `neo4j` backend). Not a command-line option, so it stays out of shell history: set it with `blue-userdb profile config BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` (prompts) or export that variable |
 | `--doc-backend` | `file` | Vector backend for per-session/per-file document stores: `memory` or `file` |
 
 ```bash

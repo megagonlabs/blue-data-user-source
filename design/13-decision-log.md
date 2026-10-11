@@ -339,3 +339,17 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Rationale:** Elsewhere in `blue-data` the second segment names where the bytes live for the whole source — `sql/postgres`, `json/redis`, `vector/chromadb`. A `UserSource` is a composite and cannot honor that literally: the per-user `kb`/`metadata`/`contacts`/`sessions`/`documents` backends are chosen at `create_user` time and may differ between users of the same source. The one backend fixed at instantiation is the registry holding the catalog of which users exist, which is exactly what separates `FileUserSource` from `MemoryUserSource` from `RedisUserSource` — so that is what the segment names, and `docs/architecture.md` already described it that way. `user/registry` broke the convention it appeared to follow: "registry" is not a backend but this family's own machinery, so a consumer splitting on `/` got a backend name that names no backend. Naming the family alone is true — family known, backend unspecified — and does not force a breaking change on anyone subclassing `UserSource` without their own registry. The protocol string carries no instantiation burden here in any case: `DataRegistry.create_source` dispatches on `_class`, and the sole protocol dispatch in the codebase (`get_data_source_schema`'s `protocol == "bn"`) is a family-level check.
 
 **Consequences:** A bare `UserSource` reports `user`; all three concrete subclasses already override, so no shipped backend changes its string. Per-user backend discovery stays where it belongs — each leaf source record carries its own honest protocol (`kb/file`, `json/file`, `vector/file`) — rather than being encoded in the composite's. `docs/architecture.md` gained the two-level reading of the convention, and the lifecycle test now asserts the family-only default.
+
+---
+
+## ADR-026 — The Neo4j Password Is a Profile Secret, Never a Command-Line Option
+
+**Date:** 2026-10-11
+**Status:** Accepted (supersedes the `--neo4j-password` note in "CLI: Profile-Driven Configuration")
+
+**Decision:** `blue-userdb database create` no longer has a `--neo4j-password` option. The password is the profile parameter `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD`, cast `secret`: `blue-userdb profile config` prompts for it and stores it encoded or as a `$VAR` reference, `profile inspect` masks it, and an exported variable of the same name overrides it.
+
+**Rationale:** A value given as a command-line option lands in shell history and in process listings, which the CLI compliance checklist (#104, Secrets) rules out. The profile machinery already handles secrets this way for API keys. The option had been kept for compatibility, matching the KB CLI's deferral; with no release yet depending on it, 1.0 is the cheapest moment to remove it.
+
+**Consequences:** Scripts that passed `--neo4j-password` must set the profile parameter or export the variable instead; `database create --kb-backend neo4j` without one fails with a message naming both. The KB CLI still has the option, so the family differs here until it follows.
+

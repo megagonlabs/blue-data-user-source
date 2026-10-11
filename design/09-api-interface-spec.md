@@ -504,7 +504,7 @@ blue-userdb [--database NAME] [--data-dir DIR] [--schema-path PATH] COMMAND
 | `--neo4j-host` | `localhost` | Neo4j host (neo4j backend only) |
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
-| `--neo4j-password` | — | Neo4j password (required for neo4j backend) |
+| _(password)_ | — | Neo4j password (required for neo4j backend): the profile secret `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` or that environment variable, never an option (ADR-026) |
 | `--doc-backend` | `file` | Vector backend for per-session interaction transcripts: `memory` or `file` |
 
 ---

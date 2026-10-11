@@ -1267,3 +1267,11 @@ def test_database_create_skips_onboarding_without_a_terminal(runner: CliRunner, 
     text = " ".join(result.output.split())  # Rich wraps long lines
     assert "skipped onboarding" in text and "database onboard" in text
     mock.onboard_user.assert_not_called()
+
+
+def test_neo4j_password_is_not_a_command_line_option(runner: CliRunner, data_dir: Path) -> None:
+    """ADR-026: a password on the command line lands in shell history."""
+    result = _invoke(runner, data_dir, ["database", "create", "alice", "--kb-backend", "neo4j",
+                                        "--neo4j-password", "s3cret", "--no-onboard"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output

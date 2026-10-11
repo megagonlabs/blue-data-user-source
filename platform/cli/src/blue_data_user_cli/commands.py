@@ -579,11 +579,6 @@ def database_list(obj: dict, fmt: str) -> None:
 @click.option("--neo4j-port", default=None, type=int, help="Neo4j bolt port.")
 @click.option("--neo4j-user", default=None, help="Neo4j username.")
 @click.option(
-    "--neo4j-password", default=None,
-    help="Neo4j password. Prefer the profile's BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD (or that "
-         "environment variable), which keeps it out of shell history and process listings.",
-)
-@click.option(
     "--kb-search-mode",
     default=None,
     type=click.Choice(["none", "bm25", "semantic"]),
@@ -630,7 +625,6 @@ def database_create(
     neo4j_host: str | None,
     neo4j_port: int | None,
     neo4j_user: str | None,
-    neo4j_password: str | None,
     kb_search_mode: str | None,
     kb_vector_backend: str | None,
     kb_embedding_model: str | None,
@@ -649,7 +643,9 @@ def database_create(
     neo4j_host = _db_default(obj, "NEO4J_HOST", neo4j_host)
     neo4j_port = _db_default(obj, "NEO4J_PORT", neo4j_port)
     neo4j_user = _db_default(obj, "NEO4J_USER", neo4j_user)
-    neo4j_password = _db_default(obj, "NEO4J_PASSWORD", neo4j_password)
+    # A secret, so never a command-line option: it would land in shell history
+    # and process listings. It comes from the profile or the environment.
+    neo4j_password = obj["config"].get("BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD")
     data_dir: Path = obj["data_dir"]
     source = _seeding_source(obj)
 
