@@ -33,7 +33,7 @@ async def create_database(name: str, request: Request, body: CreateDatabaseReque
     try:
         validate_user_name(name)
     except QueryError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
     props = _default_user_props(name, request.app.state.data_dir)
     await request.app.state.source.create_user(
         name,

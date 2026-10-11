@@ -127,7 +127,7 @@ async def email_inbound(request: Request, provider: str = "mailgun") -> dict:
     try:
         interaction_id, reply_text = adapter.extract(body, content_type, headers)
     except (ValueError, NotImplementedError) as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
 
     future = pending_interactions.get(interaction_id)
     if future is None:
