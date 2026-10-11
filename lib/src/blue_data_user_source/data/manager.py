@@ -289,7 +289,12 @@ class UserDataManager:
                 self._registry.deregister(record)
 
     def destroy(self) -> None:
-        """Delete all backing files for this user's sources, if file backends."""
+        """Delete this user's stored data: backing files, and namespaced stores (e.g. Redis).
+
+        A store with neither a file path nor its own ``namespace`` is left
+        alone: before #136 such stores shared the backend's default keys with
+        every other user, so clearing "its" keys would delete theirs.
+        """
         if self._registry is not None:
             # KB — file backend stores {database}.json inside the directory
             kb_props = self._registry.get_source_properties("kb") or {}
@@ -300,12 +305,20 @@ class UserDataManager:
                 with contextlib.suppress(OSError):
                     user_dir.rmdir()
 
-            # Metadata, contacts, and sessions — file path
+            # Metadata, contacts, and sessions — a file, or a namespaced store
+            # whose keys used to be left behind on Redis (#153).
             for src_name in ("metadata", "contacts", "sessions"):
                 props = self._registry.get_source_properties(src_name) or {}
                 conn = props.get("connection", {})
                 if "path" in conn:
                     Path(conn["path"]).unlink(missing_ok=True)
+                elif props.get("namespace"):
+                    self._registry.connect_source(src_name).delete(None)
+                elif conn.get("protocol", "").startswith("json/redis"):
+                    logger.warning(
+                        "Not clearing %s store of %r: it has no namespace of its own and may hold other users' data",
+                        src_name, self._database,
+                    )
 
         # Session content — vector store + raw transcripts directory, if file-backed
         session_content_dir = self._session_vector_directory()
@@ -317,10 +330,12 @@ class UserDataManager:
         if external_documents_dir is not None and external_documents_dir.exists():
             shutil.rmtree(external_documents_dir)
 
-        # Per-user registry file
+        # Per-user registry — a file, or a namespaced store
         reg_conn = self._registry_props.get("connection", self._registry_props)
         if "path" in reg_conn:
             Path(reg_conn["path"]).unlink(missing_ok=True)
+        elif self._registry_props.get("namespace"):
+            _build_json_source("registry", self._registry_props).delete(None)
 
     # ------------------------------------------------------------------ #
     # Internal source access (via DataRegistry.connect_source)            #

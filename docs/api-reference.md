@@ -32,7 +32,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `get_user(name)` | `dict \| None` | The user's registry properties dict, or `None` |
 | `remove_user(name)` | `None` | Remove from the outer registry only — backing files unchanged |
 | `await reset_user(name)` | `None` | Clear KB data + imported sources for the user, reseed schemas |
-| `await delete_user(name)` | `None` | Destroy all backing files and remove from the outer registry |
+| `await delete_user(name)` | `None` | Destroy the user's stored data — backing files, and namespaced stores such as Redis keys — and remove it from the outer registry. A non-file store without its own `namespace` is left alone (it may be shared) and a warning is logged |
 
 ### Query
 

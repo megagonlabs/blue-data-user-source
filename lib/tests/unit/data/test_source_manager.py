@@ -668,3 +668,30 @@ async def test_a_text_source_location_defaults_to_a_text_label(tmp_path: Path, u
     await mgr.add_source(None, text="hello", name="memo")
     [added] = await mgr.list_sources()
     assert added["source"] == "text:memo"
+
+
+# ── destroy() on non-file stores (#153) ───────────────────────────────────────
+
+async def test_destroy_clears_namespaced_stores_and_never_shared_ones(caplog) -> None:
+    """Redis keys were left behind; a store without its own namespace may be shared, so it is kept."""
+    from unittest.mock import MagicMock
+
+    mgr = UserDataManager("alice", _MEM_JSON)
+    await mgr.build(
+        schema_path=_SCHEMA, kb_source_props=_MEM_KB,
+        metadata_schema_path=None, metadata_source_props={**_MEM_JSON, "namespace": "t:alice-metadata"},
+        contact_schema_path=None, contact_source_props={**_MEM_JSON, "namespace": "t:alice-contacts"},
+        session_source_props=_MEM_JSON,
+    )
+    stores = {name: MagicMock() for name in ("metadata", "contacts", "sessions")}
+    redis_props = {"connection": {"protocol": "json/redis"}}  # no namespace: possibly shared (pre-#136)
+    real_props = mgr._registry.get_source_properties
+    with patch.object(mgr._registry, "connect_source", side_effect=lambda n: stores[n]), \
+         patch.object(mgr._registry, "get_source_properties",
+                      side_effect=lambda n: redis_props if n == "sessions" else real_props(n)):
+        mgr.destroy()
+
+    stores["metadata"].delete.assert_called_once_with(None)
+    stores["contacts"].delete.assert_called_once_with(None)
+    stores["sessions"].delete.assert_not_called()
+    assert "no namespace of its own" in caplog.text
