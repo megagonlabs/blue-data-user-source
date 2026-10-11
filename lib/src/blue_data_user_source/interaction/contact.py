@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
-from blue_data_user_source.types import InteractionError, InteractionTimeoutError, LLMError
+from blue_data_user_source.types import ContactNotFoundError, InteractionError, InteractionTimeoutError, LLMError
 
 # ------------------------------------------------------------------ #
 # Secrets in contact details (#143)                                    #
@@ -503,7 +503,7 @@ class ContactManager:
         store = self._store()
         entry = store.get(f"contacts.{protocol}.{name}")
         if entry is None:
-            raise InteractionError(f"Contact method {protocol!r}/{name!r} not found.")
+            raise ContactNotFoundError(f"Contact method {protocol!r}/{name!r} not found.")
         secret = SECRET_FIELDS.get(protocol, frozenset())
         if details is not None:
             replaced = {k: (_unmask(v, entry.get(k)) if k in secret else v) for k, v in details.items()}

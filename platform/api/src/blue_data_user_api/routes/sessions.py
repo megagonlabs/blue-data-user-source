@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from blue_data_user_api.auth import require_api_key
-from blue_data_user_source.types import InteractionError
 
 router = APIRouter(tags=["sessions"], dependencies=[Depends(require_api_key)])
 
@@ -30,8 +29,5 @@ async def get_session(name: str, session_id: str, request: Request) -> dict:
 
 @router.post("/{name}/sessions/{session_id}/end", summary="End a session")
 async def end_session(name: str, session_id: str, request: Request) -> dict:
-    try:
-        await request.app.state.source.end_session(name, session_id)
-    except InteractionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+    await request.app.state.source.end_session(name, session_id)  # unknown session: 404 (app handlers)
     return {"database": name, "session_id": session_id, "ended": True}

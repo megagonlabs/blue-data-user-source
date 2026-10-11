@@ -19,7 +19,9 @@ from blue_data_user_source.data.manager import (
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
-from blue_data_user_source.types import QueryError, QueryResult, UserExistsError, UserNotFoundError
+from blue_data_user_source.types import (
+    QueryError, QueryResult, SessionEndedError, SessionNotFoundError, UserExistsError, UserNotFoundError,
+)
 
 # A user's name becomes file and directory names under the data directory, so it
 # must be a plain path segment. Same rule as blue-data-kb-source's database names.
@@ -853,9 +855,9 @@ class UserSource(DataSource):
             session_id = str(props["session"])
             session = await session_manager.get_session(session_id)
             if session is None:
-                raise QueryError(f"Unknown session {session_id!r}")
+                raise SessionNotFoundError(f"Unknown session {session_id!r}")
             if session.get("status") == "ended":
-                raise QueryError(f"Session {session_id!r} has ended; cannot add a query to it.")
+                raise SessionEndedError(f"Session {session_id!r} has ended; cannot add a query to it.")
         else:
             session_id = await session_manager.create_session()
         query_id = await session_manager.create_query(session_id, query, output_form)

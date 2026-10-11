@@ -43,3 +43,23 @@ def test_creating_an_existing_user_is_409_and_keeps_its_data(client):
     assert again.status_code == 409
     assert "already exists" in again.json()["detail"]
     assert client.get("/ana/metadata/identity.timezone").json()["value"] == "Asia/Tokyo"
+
+
+# ── library errors are client errors, not 500s (#140) ─────────────────────────
+
+def test_session_and_contact_errors_map_to_client_statuses(client):
+    assert client.post("/databases/bo").status_code == 201
+
+    unknown = client.post("/bo/query", json={"query": "where?", "session": "no-such-session"})
+    assert unknown.status_code == 404 and "no-such-session" in unknown.json()["detail"]
+    assert client.post("/bo/sessions/no-such-session/end").status_code == 404
+
+    sid = client.post("/bo/sessions").json()["session_id"]
+    assert client.post(f"/bo/sessions/{sid}/end").status_code == 200
+    ended = client.post("/bo/query", json={"query": "where?", "session": sid})
+    assert ended.status_code == 409 and "has ended" in ended.json()["detail"]
+
+    bad = client.post("/bo/contacts", json={"protocol": "carrier-pigeon", "name": "x", "details": {}})
+    assert bad.status_code == 422 and "Unsupported contact protocol" in bad.json()["detail"]
+    missing = client.patch("/bo/contacts/email/nope", json={"preference": 1})
+    assert missing.status_code == 404 and "not found" in missing.json()["detail"]

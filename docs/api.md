@@ -109,7 +109,7 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 }
 ```
 
-`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused, `404` if unknown/ended); omit it to auto-create a new single-query session.
+`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused; `404` if unknown, `409` if it has ended); omit it to auto-create a new single-query session.
 
 **Response `200 OK`:**
 
@@ -321,9 +321,9 @@ Errors use FastAPI's standard body, a `detail` string (or, for request validatio
 | 400 | Unknown inbound-email provider, or an interaction response that is missing its answer |
 | 401 | Missing or wrong API key, when `BLUE_DATA_USER_SOURCE_API_KEY` is set |
 | 403 | A state-changing request from a foreign browser origin |
-| 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session, source or pending interaction does not |
-| 409 | The user already exists (`POST /databases/{name}`), or the interaction was already answered |
-| 422 | Request validation: a malformed body, an unknown body key, an invalid database name, or an inbound email the adapter cannot parse |
+| 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session (`SessionNotFoundError`), contact method (`ContactNotFoundError`), source or pending interaction does not |
+| 409 | The user already exists (`UserExistsError`), the session has ended (`SessionEndedError`), or the interaction was already answered |
+| 422 | Request validation (a malformed body, an unknown body key, an invalid database name, an inbound email the adapter cannot parse), or any other library error about the input (`QueryError`, `InteractionError`, e.g. an unsupported contact protocol) |
 | 502 | The language model could not be reached or gave an unusable reply (`LLMError`) |
 | 500 | Anything else — a bug; please report it |
 

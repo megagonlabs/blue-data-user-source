@@ -296,6 +296,10 @@ All inherit from `UDbError`.
 | `ImportError` | A source import fails |
 | `InteractionError` | User interaction fails (channel unavailable, timeout, etc.) |
 | `LLMError` | The language model cannot be reached (authentication, network, rate limit, timeout, unknown model — any OpenAI SDK error), the `openai` package is missing, or a JSON-mode reply is not a JSON object. Raised rather than returning an empty result; the REST API maps it to `502` |
+| `UserNotFoundError` / `UserExistsError` | `QueryError` subclasses: the named user does not exist / already exists |
+| `SessionNotFoundError` / `SessionEndedError` | The named session does not exist / has ended (both are `QueryError` and `InteractionError`) |
+| `ContactNotFoundError` | `InteractionError` subclass: the named contact method does not exist |
+| `InteractionTimeoutError` | `InteractionError` subclass: the user did not answer within the contact's timeout |
 | `NoContactMethodError` | Subclass of `InteractionError`: no contact method can reach the user from this process (no console, and nothing else registered). The query path catches it and answers without asking |
 
 `ImportError` shadows the Python builtin within this package's namespace (`# noqa: A001` in `types.py`) — import it explicitly from `blue_data_user_source` rather than relying on it resolving to the builtin.

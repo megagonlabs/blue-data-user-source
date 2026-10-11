@@ -7,7 +7,10 @@ from typing import AsyncIterator
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from blue_data_user_source import LLMError, UserExistsError, UserNotFoundError
+from blue_data_user_source import (
+    ContactNotFoundError, InteractionError, LLMError, QueryError, SessionEndedError, SessionNotFoundError,
+    UDbError, UserExistsError, UserNotFoundError,
+)
 
 from blue_data_user_api.config import settings
 from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query, sessions
@@ -79,16 +82,28 @@ async def reject_cross_origin_writes(request: Request, call_next):  # type: igno
     return await call_next(request)
 
 
-@app.exception_handler(UserNotFoundError)
-async def user_not_found(request: Request, exc: UserNotFoundError) -> JSONResponse:
-    """Any route naming a user that does not exist (#145)."""
-    return JSONResponse(status_code=404, content={"detail": str(exc)})
+# Library errors become client errors instead of 500s (#140). Starlette picks
+# the handler of the most specific class in the exception's MRO, so these
+# subclasses win over the generic 422 below.
+_STATUS: dict[type[Exception], int] = {
+    UserNotFoundError: 404,      # #145
+    SessionNotFoundError: 404,
+    ContactNotFoundError: 404,
+    UserExistsError: 409,        # #141
+    SessionEndedError: 409,
+    QueryError: 422,             # bad input to a query or a lookup
+    InteractionError: 422,       # e.g. an unsupported contact protocol
+    UDbError: 422,
+}
 
 
-@app.exception_handler(UserExistsError)
-async def user_exists(request: Request, exc: UserExistsError) -> JSONResponse:
-    """Creating a user that already exists (#141)."""
-    return JSONResponse(status_code=409, content={"detail": str(exc)})
+async def _library_error(request: Request, exc: Exception) -> JSONResponse:
+    status_code = next(_STATUS[cls] for cls in type(exc).__mro__ if cls in _STATUS)
+    return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+
+for _cls in _STATUS:
+    app.add_exception_handler(_cls, _library_error)
 
 
 @app.exception_handler(LLMError)

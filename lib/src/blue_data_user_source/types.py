@@ -44,6 +44,22 @@ class InteractionError(UDbError):
     """Raised when user interaction fails (channel unavailable, timeout, etc.)."""
 
 
+class SessionNotFoundError(QueryError, InteractionError):
+    """Raised when an operation names a session that does not exist.
+
+    Both a ``QueryError`` (the query path's session lookup) and an
+    ``InteractionError`` (``SessionManager``), so existing handlers keep working.
+    """
+
+
+class SessionEndedError(QueryError, InteractionError):
+    """Raised when adding a query to a session that has ended."""
+
+
+class ContactNotFoundError(InteractionError):
+    """Raised when an operation names a contact method that does not exist."""
+
+
 class InteractionTimeoutError(InteractionError):
     """Raised when the user did not answer within the contact method's timeout."""
 

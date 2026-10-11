@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from blue_data_user_source.types import InteractionError
+from blue_data_user_source.types import SessionEndedError, SessionNotFoundError
 
 
 class SessionManager:
@@ -58,7 +58,7 @@ class SessionManager:
 
     async def end_session(self, session_id: str) -> None:
         if await self.get_session(session_id) is None:
-            raise InteractionError(f"Session {session_id!r} not found.")
+            raise SessionNotFoundError(f"Session {session_id!r} not found.")
         self._store().set(f"sessions.{session_id}.status", "ended")
         self._store().set(f"sessions.{session_id}.ended_at", self._now())
 
@@ -69,9 +69,9 @@ class SessionManager:
     async def create_query(self, session_id: str, query: str, output_form: str = "json") -> str:
         session = await self.get_session(session_id)
         if session is None:
-            raise InteractionError(f"Session {session_id!r} not found.")
+            raise SessionNotFoundError(f"Session {session_id!r} not found.")
         if session.get("status") == "ended":
-            raise InteractionError(f"Session {session_id!r} has ended; cannot add a query to it.")
+            raise SessionEndedError(f"Session {session_id!r} has ended; cannot add a query to it.")
         query_id = str(uuid4())
         self._store().set(f"sessions.{session_id}.queries.{query_id}", {
             "query": query,
