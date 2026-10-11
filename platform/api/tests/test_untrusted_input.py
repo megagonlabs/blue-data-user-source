@@ -172,3 +172,40 @@ def test_contact_reads_mask_secrets(client, source):
     for secret in ("hunter2", "s3cr3t", "Bearer abc"):
         assert secret not in listed
     assert got["details"] == {"address": "a@example.com", "smtp_password": "***"}
+
+
+# ── cross-origin writes (#139) ────────────────────────────────────────────────
+
+def test_a_cross_site_post_is_refused(client, source):
+    source.reset_user = AsyncMock()
+    resp = client.post("/databases/ivy/reset", headers={"Origin": "https://evil.example"})
+    assert resp.status_code == 403
+    assert "evil.example" in resp.json()["detail"]
+    source.reset_user.assert_not_awaited()
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+def test_every_write_method_checks_the_origin(client, source, method):
+    resp = client.request(method, "/databases/ivy", headers={"Origin": "null"})
+    assert resp.status_code == 403
+
+
+def test_same_origin_and_non_browser_writes_still_work(client, source):
+    source.reset_user = AsyncMock()
+    assert client.post("/databases/ivy/reset").status_code == 200                                  # curl, SDKs
+    assert client.post("/databases/ivy/reset", headers={"Origin": "http://testserver"}).status_code == 200  # own page
+    assert source.reset_user.await_count == 2
+
+
+def test_reads_are_not_affected(client, source):
+    source.list_users = MagicMock(return_value=[])
+    assert client.get("/databases", headers={"Origin": "https://evil.example"}).status_code == 200
+
+
+def test_an_allowed_origin_can_write(client, source, monkeypatch):
+    from blue_data_user_api.config import settings
+
+    monkeypatch.setattr(settings, "allowed_origins", "https://ui.example.com, https://other.example")
+    source.reset_user = AsyncMock()
+    resp = client.post("/databases/ivy/reset", headers={"Origin": "https://ui.example.com"})
+    assert resp.status_code == 200

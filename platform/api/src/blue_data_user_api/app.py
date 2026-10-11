@@ -51,6 +51,34 @@ app.include_router(interactions.router)
 app.include_router(sessions.router)
 
 
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+@app.middleware("http")
+async def reject_cross_origin_writes(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Refuse state-changing requests that a browser sends on behalf of another site (#139).
+
+    A page on any site can make the browser POST to this API — a plain HTML
+    form needs no CORS preflight — so with the default local setup (no API
+    key) any page the operator visits could reset a user. Browsers attach an
+    ``Origin`` header to such requests; scripts and SDKs send none. A write is
+    allowed when it has no ``Origin`` (not a browser), or when the origin is
+    this server's own or listed in ``BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS``.
+    ``Origin: null`` (sandboxed or opaque contexts) is refused.
+    """
+    origin = request.headers.get("origin")
+    if request.method in _WRITE_METHODS and origin is not None:
+        own = f"{request.url.scheme}://{request.url.netloc}"
+        allowed = {own, *(o.strip().rstrip("/") for o in settings.allowed_origins.split(",") if o.strip())}
+        if origin.rstrip("/") not in allowed:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"Cross-origin {request.method} from {origin!r} refused; "
+                                   "set BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS to allow it."},
+            )
+    return await call_next(request)
+
+
 @app.exception_handler(UserNotFoundError)
 async def user_not_found(request: Request, exc: UserNotFoundError) -> JSONResponse:
     """Any route naming a user that does not exist (#145)."""

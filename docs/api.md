@@ -52,11 +52,14 @@ These share their names with the `blue-userdb` CLI's profile parameters but noth
 |---|---|---|
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `BLUE_DATA_USER_SOURCE_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; unset disables auth |
+| `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins, besides the API's own, allowed to make state-changing requests |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to a custom `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | _(packaged `contact_schema.json`)_ | Path to a custom contact schema |
 | `BLUE_DATA_USER_SOURCE_HOST` | `127.0.0.1` | Server bind address |
 | `BLUE_DATA_USER_SOURCE_PORT` | `8000` | Server port |
+
+**Cross-origin writes.** A state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a browser `Origin` header other than the API's own or one listed in `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` is refused with `403`. Without it, any web page the operator visits could make the browser post to a local, keyless API, e.g. reset a user. Scripts and SDKs send no `Origin` and are unaffected.
 
 ## Authentication
 
@@ -317,6 +320,7 @@ Errors use FastAPI's standard body, a `detail` string (or, for request validatio
 |---|---|
 | 400 | Unknown inbound-email provider, or an interaction response that is missing its answer |
 | 401 | Missing or wrong API key, when `BLUE_DATA_USER_SOURCE_API_KEY` is set |
+| 403 | A state-changing request from a foreign browser origin |
 | 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session, source or pending interaction does not |
 | 409 | The interaction was already answered |
 | 422 | Request validation: a malformed body, an unknown body key, an invalid database name, or an inbound email the adapter cannot parse |

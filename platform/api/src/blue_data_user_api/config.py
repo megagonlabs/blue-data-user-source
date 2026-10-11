@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     contact_schema_path: str = ""
     host: str = "127.0.0.1"
     port: int = 8000
+    # Extra browser origins allowed to make state-changing requests, comma
+    # separated (e.g. a UI served from another host). The API's own origin is
+    # always allowed; see the cross-origin guard in app.py (#139).
+    allowed_origins: str = ""
 
 
 settings = Settings()
