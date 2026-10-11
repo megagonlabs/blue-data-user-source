@@ -443,8 +443,13 @@ class UserDataManager:
         on_tool_call=None,
         on_tool_result=None,
         session_id: str | None = None,
+        top_k: int = DOC_SEARCH_TOP_K,
     ) -> tuple[list[Any], dict[str, Any]]:
-        """Answer *query* against the KB, session_content, and external_documents combined."""
+        """Answer *query* against the KB, session_content, and external_documents combined.
+
+        ``top_k`` caps the chunks taken from each document store; the KB answers
+        through its own agent and has no result limit.
+        """
         result, metadata = await self._ensure_kb_source().answer(
             self._database, query,
             include_metadata=True,
@@ -456,12 +461,16 @@ class UserDataManager:
 
         session_doc_source = self.ensure_session_doc_source(session_id or "")
         data.extend(
-            self._search_doc_source(session_doc_source, query, "session_content", metadata)
+            self._search_doc_source(
+                session_doc_source, query, "session_content", metadata, top_k,
+            )
         )
 
         external_doc_source = self.ensure_external_documents_source()
         data.extend(
-            self._search_doc_source(external_doc_source, query, "external_documents", metadata)
+            self._search_doc_source(
+                external_doc_source, query, "external_documents", metadata, top_k,
+            )
         )
 
         logger.debug("Query executed: %s", query)
@@ -469,9 +478,10 @@ class UserDataManager:
 
     def _search_doc_source(
         self, doc_source: Any, query: str, source_name: str, metadata: dict[str, Any],
+        top_k: int = DOC_SEARCH_TOP_K,
     ) -> list[dict[str, Any]]:
         """Run DOCUMENT.SEARCH against *doc_source*, tagging each hit with *source_name*."""
-        request = {"op": "DOCUMENT.SEARCH", "query": query, "k": DOC_SEARCH_TOP_K}
+        request = {"op": "DOCUMENT.SEARCH", "query": query, "k": top_k}
         chunks = doc_source.execute_query(request)
         entries: list[dict[str, Any]] = []
         for chunk in chunks:

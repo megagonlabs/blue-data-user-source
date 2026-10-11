@@ -12,6 +12,7 @@ from blue_data.source.source import DataSource
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
     DEFAULT_DOC_SOURCE_PROPS,
+    DOC_SEARCH_TOP_K,
     UserDataManager,
     _build_json_source,
     _enrich_props,
@@ -866,10 +867,17 @@ class UserSource(DataSource):
         ``max_interaction_rounds`` (default 3) bounds how many times the user is
         asked for clarification when quality metrics fail; the loop stops early
         once all metrics pass.
+
+        ``top_k`` (default 5) caps the chunks taken from each document store
+        (``session_content``, ``external_documents``) per sub-question.
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
         include_expanded = bool(props.get("include_expanded", False))
+        top_k = props.get("top_k", DOC_SEARCH_TOP_K)
+        # bool is an int, and top_k=True would quietly mean 1.
+        if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
+            raise QueryError(f"top_k must be a positive integer, got {top_k!r}.")
 
         manager = self._get_manager(database)
         session_manager = self._session_manager(database)
@@ -901,6 +909,7 @@ class UserSource(DataSource):
         raw_results: list[tuple[list, dict]] = list(await asyncio.gather(*[
             manager.execute_query(
                 q, on_tool_call=on_tool_call, on_tool_result=on_tool_result, session_id=session_id,
+                top_k=top_k,
             )
             for q in questions
         ]))

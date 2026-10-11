@@ -1212,7 +1212,10 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
     default="table",
     show_default=True,
 )
-@click.option("--top-k", "top_k", default=10, type=int, show_default=True)
+@click.option(
+    "--top-k", "top_k", default=None, type=click.IntRange(min=1),
+    help="Max chunks taken from each document store per sub-question [default: 5].",
+)
 @click.option(
     "--include-expanded", "include_expanded", is_flag=True, default=False,
     help="Also return the per-sub-question queries and their raw results.",
@@ -1227,13 +1230,15 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
 @click.option("--log-limit", "log_limit", default=None, type=int, help="Truncation limit for logged values. Default: the profile's BLUE_DATA_CLI_LOG_LIMIT.")
 @click.pass_obj
 def data_query(
-    obj: dict, text: str, session: str | None, fmt: str, top_k: int, include_expanded: bool,
+    obj: dict, text: str, session: str | None, fmt: str, top_k: int | None, include_expanded: bool,
     model: str | None, verbose: bool, log: bool, log_limit: int | None,
 ) -> None:
     """Answer a question from the database."""
     db = _get_db(obj, fmt)
     source = _make_source(obj["data_dir"])
-    props: dict[str, Any] = {"top_k": top_k}
+    props: dict[str, Any] = {}
+    if top_k is not None:
+        props["top_k"] = top_k
     resolved_session = _get_session(obj, session)
     if resolved_session:
         props["session"] = resolved_session

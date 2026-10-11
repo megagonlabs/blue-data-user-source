@@ -204,7 +204,7 @@ Instance data management. All `data` commands require an active database.
 |---|---|
 | `--session SESSION_ID` | Session to append this query to — falls back per the resolution order above |
 | `--format table\|json\|nl` | Output format (default `table`) |
-| `--top-k N` | Accepted but has no effect in 1.0 |
+| `--top-k N` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit |
 | `--verbose` / `-v` | Show tool-call arguments in the status line |
 | `--log` / `-l` | Also print each tool call and result, each sub-query and each quality-metric score on its own persistent line |
 | `--log-limit N` | Truncation length for verbose/log output (default 80) |

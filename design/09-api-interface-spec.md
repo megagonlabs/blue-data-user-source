@@ -190,7 +190,7 @@ answer, session_id = us.execute_query(
 | `"include_expanded"` | `bool` | `execute_query` | When `True` (default `False`), also returns the per-sub-question queries and raw results alongside the synthesized answer, in the same `output_form`; the return shape becomes `{"result": ..., "expanded": ...}` |
 | `"max_interaction_rounds"` | `int` | `execute_query` | Max clarification rounds when quality metrics fail (default: 3); the loop stops early once all metrics pass |
 | `"model"` | `str` | `execute_query` | LLM model for this query (default `gpt-4o`) |
-| `"top_k"` | `int` | `execute_query` | Accepted (the CLI's `data query --top-k` sends it) but not used in 1.0 |
+| `"top_k"` | `int` | `execute_query` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit. A non-positive or non-integer value raises `QueryError` |
 | `"queries"` | `list[str]` | `add_source`, `add_text_source` | Extraction queries — drives Type 2 ingestion (one `KBSource.import_text` call with all of them) |
 | `"name"`, `"description"`, `"original"`, `"location"` | `str` | `add_source`, `add_text_source` | Recorded on the source's KB SOURCE node; `original` is the source's own date, `location` defaults to the path (or `text:<name>`) |
 | `"effort"` | `"low"` \| `"medium"` \| `"high"` | `add_source`, `add_text_source` | Extraction passes over the text: 1, 2 or 3 (default `medium`) |
@@ -626,7 +626,7 @@ All `data` commands require an active database.
 |--------|-------------|
 | `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (see `blue-userdb session` above), then to auto-create if neither is set |
 | `--format table\|json\|nl` | Output format (default: `table`) |
-| `--top-k N` | Accepted but has no effect in 1.0 (the library ignores `top_k`) |
+| `--top-k N` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit |
 | `--include-expanded` | Also show each sub-question's raw results |
 | `--model` | LLM model for this query |
 

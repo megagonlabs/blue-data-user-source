@@ -596,6 +596,21 @@ def test_data_query_top_k_is_forwarded(runner: CliRunner, data_dir: Path) -> Non
     assert props["top_k"] == 5
 
 
+def test_data_query_without_top_k_leaves_the_library_default(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.execute_query.return_value = ([], "sess-1")
+    with _patched(mock):
+        _invoke(runner, data_dir, ["data", "query", "q"])
+    assert "top_k" not in mock.execute_query.call_args.kwargs["optional_properties"]
+
+
+def test_data_query_top_k_must_be_positive(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    result = _invoke(runner, data_dir, ["data", "query", "q", "--top-k", "0"])
+    assert result.exit_code == 2
+
+
 def test_data_query_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
