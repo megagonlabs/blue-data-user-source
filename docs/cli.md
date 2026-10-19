@@ -4,7 +4,7 @@ Command-line interface for the user database — a per-user knowledge store with
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10–3.14
 - [`blue-data-user-source`](../lib) (local dependency)
 
 ## Installation

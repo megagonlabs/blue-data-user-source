@@ -9,7 +9,7 @@
 | Concern | Choice |
 |---------|--------|
 | Language | Python |
-| Minimum version | 3.10 |
+| Supported versions | 3.10–3.14 (`requires-python = ">=3.10,<3.15"`) |
 | Package manager | pip |
 | Project config | `pyproject.toml` (one per package: `lib/`, `platform/cli/`, `platform/mcp/`, `platform/api/`) |
 

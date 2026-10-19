@@ -9,7 +9,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Date:** 2026-05-12
 **Status:** Accepted
 
-**Decision:** Python, minimum version 3.10.
+**Decision:** Python, minimum version 3.10; 1.0 supports 3.10 through 3.14 (`requires-python = ">=3.10,<3.15"`).
 
 **Rationale:** Python is the dominant language in the AI/ML ecosystem, providing the broadest access to LLM clients, vector store clients, and data tooling relevant to UDb.
 

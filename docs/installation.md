@@ -64,7 +64,7 @@ cd platform/api && bash scripts/build.sh
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10–3.14
 - [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source), and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
 - An OpenAI API key (`OPENAI_API_KEY`) for any LLM feature: query rewriting/expansion, LLM-based extraction (`add_source` with `queries`), result assessment prompts, and natural-language answer synthesis. Sessions, metadata, and contact-method CRUD are plain Python with no network calls.
 
