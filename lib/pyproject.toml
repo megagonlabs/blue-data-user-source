@@ -41,11 +41,11 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Loaded at runtime from beside the code (source.py, interaction/contact.py);
-# without this a wheel installs none of them (#162). schema.txt is only the
-# input to tools/convert_schema.py, so it is not shipped.
+# The schemas are loaded at runtime from beside the code (source.py,
+# interaction/contact.py); without this a wheel installs none of them (#162,
+# #163). schema.txt, the readable source of schema.json, ships with them.
 "blue_data_user_source" = ["py.typed"]
-"blue_data_user_source.data" = ["*.json"]
+"blue_data_user_source.data" = ["*.json", "*.txt"]
 
 [tool.ruff]
 line-length = 100
