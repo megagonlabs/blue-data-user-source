@@ -20,7 +20,6 @@ from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
 
 from blue_data_user_cli.profile import profile_group, profile_store, resolver_for
 from blue_data_user_source.data.manager import (
-    CLS_JSON_FILE,
     CLS_JSON_MEMORY,
     CLS_KB_FILE,
     CLS_KB_MEMORY,
@@ -181,16 +180,6 @@ def _contact_schema(obj: dict) -> dict:
     return _schema_doc("contact_schema.json", obj.get("contact_schema_path"))
 
 
-def _user_registry_props(data_dir: Path, name: str) -> dict:
-    return {
-        "_class": CLS_JSON_FILE,
-        "connection": {
-            "protocol": "json/file",
-            "path": str(data_dir / "registries" / f"{name}.json"),
-        },
-    }
-
-
 def _kb_search_props(
     data_dir: Path,
     name: str,
@@ -262,36 +251,6 @@ def _user_kb_props(
             **search_props,
         }
     raise ValueError(f"Unknown KB backend: {kb_backend!r}")
-
-
-def _user_metadata_props(data_dir: Path, name: str) -> dict:
-    return {
-        "_class": CLS_JSON_FILE,
-        "connection": {
-            "protocol": "json/file",
-            "path": str(data_dir / "sources" / name / "metadata.json"),
-        },
-    }
-
-
-def _user_contact_props(data_dir: Path, name: str) -> dict:
-    return {
-        "_class": CLS_JSON_FILE,
-        "connection": {
-            "protocol": "json/file",
-            "path": str(data_dir / "sources" / name / "contacts.json"),
-        },
-    }
-
-
-def _user_session_props(data_dir: Path, name: str) -> dict:
-    return {
-        "_class": CLS_JSON_FILE,
-        "connection": {
-            "protocol": "json/file",
-            "path": str(data_dir / "sources" / name / "sessions.json"),
-        },
-    }
 
 
 def _user_doc_source_props(data_dir: Path, name: str, doc_backend: str) -> dict:
@@ -670,9 +629,12 @@ def database_create(
         }
 
     try:
+        # The plain stores follow the library's file layout; the KB and the
+        # transcript store take this command's backend options.
+        defaults = source.default_user_props(name)
         asyncio.run(source.create_user(
             name,
-            _user_registry_props(data_dir, name),
+            defaults["registry"],
             _user_kb_props(
                 data_dir, name, kb_backend,
                 kb_search_mode=kb_search_mode,
@@ -680,9 +642,9 @@ def database_create(
                 kb_embedding_model=kb_embedding_model,
                 **kb_extras,
             ),
-            _user_metadata_props(data_dir, name),
-            _user_contact_props(data_dir, name),
-            _user_session_props(data_dir, name),
+            defaults["metadata_source"],
+            defaults["contact_source"],
+            defaults["session_source"],
             _user_doc_source_props(data_dir, name, doc_backend),
             # Onboarded below, once the database exists and is selected, so a
             # failed interview (e.g. the LLM is unreachable) cannot leave a

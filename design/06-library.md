@@ -109,7 +109,7 @@ Delegates to `UserDataManager.create_user(name)`.
 
 Alias for `create_user(name)`.
 
-**Current implementation** — `create_user` also takes the store configs for the user's registry, KB, metadata, contacts, sessions and document stores, and onboards the user by default (`onboard=False` skips it). `create_database(name, properties)` is the synchronous `DataSource` form.
+**Current implementation** — `create_user` also takes the store configs for the user's registry, KB, metadata, contacts, sessions and document stores, and onboards the user by default (`onboard=False` skips it). `create_database(name, properties=None)` is the synchronous `DataSource` form: it fills every store from the backend's `default_user_props` and does not onboard unless asked (#165).
 
 ---
 

@@ -26,7 +26,8 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 | Method | Returns | Description |
 |---|---|---|
-| `create_database(database, properties=None)` | `dict` | Sync `DataSource` override; delegates to `create_user` via `asyncio.run()` |
+| `create_database(database, properties=None, overwrite=False)` | `dict` | Sync `DataSource` override; delegates to `create_user` via `asyncio.run()`. Works with no properties: the stores come from `default_user_props`, and any store config given in `properties` replaces that default. `overwrite=True` replaces an existing user. Does not onboard unless `properties["onboard"]` is true |
+| `default_user_props(name)` | `dict` | A new user's store configs: in memory for `MemoryUserSource`, files beside the registry for `FileUserSource` (`registries/<name>.json`, `sources/<name>/`), Redis JSON stores (no KB default) for `RedisUserSource` |
 | `await create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None)` | `None` | Build a new user's `DataRegistry` + all built-in sources from scratch, seed schemas |
 | `list_users()` | `list[str]` | Registered user names |
 | `get_user(name)` | `dict \| None` | The user's registry properties dict, or `None` |

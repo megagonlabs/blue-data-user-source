@@ -13,11 +13,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from blue_data_user_api.app import app
+from blue_data_user_api.source import create_source
 
 
 @pytest.fixture
 def source(tmp_path):
     fake = MagicMock()
+    # The store layout is the library's (#165): ask the source the server really builds.
+    fake.default_user_props = create_source(tmp_path).default_user_props
     fake.create_user = AsyncMock()
     fake.add_source = AsyncMock()
     app.state.source = fake

@@ -11,6 +11,7 @@ from blue_data.source.source import DataSource
 
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
+    CLS_KB_MEMORY,
     DEFAULT_DOC_SOURCE_PROPS,
     DOC_SEARCH_TOP_K,
     UserDataManager,
@@ -42,6 +43,8 @@ def validate_user_name(name: Any) -> str:
 _DEFAULT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "schema.json")
 _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_schema.json")
 _DEFAULT_CONTACT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "contact_schema.json")
+# The stores every user needs; ``doc_source`` is optional (an in-memory default).
+_STORE_KEYS = ("registry", "kb_source", "metadata_source", "contact_source", "session_source")
 
 # Built-in per-user collections that carry stats; anything else (e.g. a
 # user-added file source) has no stats concept and yields None.
@@ -233,12 +236,49 @@ class UserSource(DataSource):
         return self.get_user(database) or {}
 
 
-    def create_database(self, database: str, properties: dict | None = None) -> dict:
-        """Create a new user.  ``properties`` must contain:
-        ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``, ``session_source``.
-        ``doc_source`` is optional (defaults to a dummy-embedding, in-memory vector backend).
+    def default_user_props(self, name: str) -> dict[str, dict]:
+        """The store configs a new user gets when none are given: all in memory.
+
+        Keyed like ``create_database``'s properties (``registry``, ``kb_source``,
+        ``metadata_source``, ``contact_source``, ``session_source``, and
+        optionally ``doc_source``). Backend subclasses override this to keep a
+        user's stores where the class keeps its registry; a store left out has
+        no default and must be given.
         """
-        p = properties or {}
+        validate_user_name(name)
+        memory_json = {"_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}}
+        return {
+            "registry": dict(memory_json),
+            "kb_source": {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}},
+            "metadata_source": dict(memory_json),
+            "contact_source": dict(memory_json),
+            "session_source": dict(memory_json),
+        }
+
+    def create_database(
+        self, database: str, properties: dict | None = None, overwrite: bool = False,
+    ) -> dict:
+        """Create a new user, synchronously (the ``DataSource`` interface).
+
+        Store configs come from :meth:`default_user_props`; any of
+        ``registry``, ``kb_source``, ``metadata_source``, ``contact_source``,
+        ``session_source`` or ``doc_source`` in *properties* replaces that one
+        default. A store with no default that is not given raises ``QueryError``.
+
+        ``overwrite`` deletes an existing user of that name first; without it an
+        existing user raises ``UserExistsError``. Unlike :meth:`create_user`, this
+        does not onboard unless ``properties["onboard"]`` is true: a synchronous
+        call should not start an interview on whatever terminal it runs under.
+        """
+        p = {**self.default_user_props(database), **(properties or {})}
+        missing = [key for key in _STORE_KEYS if not isinstance(p.get(key), dict)]
+        if missing:
+            raise QueryError(
+                f"Cannot create {database!r}: {type(self).__name__} has no default for "
+                f"{', '.join(missing)}; pass {'it' if len(missing) == 1 else 'them'} in properties."
+            )
+        if overwrite and database in self.list_users():
+            asyncio.run(self.delete_user(database))
         asyncio.run(self.create_user(
             database,
             registry_props=p["registry"],
@@ -247,7 +287,8 @@ class UserSource(DataSource):
             contact_source_props=p["contact_source"],
             session_source_props=p["session_source"],
             doc_source_props=p.get("doc_source"),
-            onboard=p.get("onboard", True),
+            onboard=bool(p.get("onboard", False)),
+            onboard_metadata=bool(p.get("onboard_metadata", True)),
         ))
         return {}
 

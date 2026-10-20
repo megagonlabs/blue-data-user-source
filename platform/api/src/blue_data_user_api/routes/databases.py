@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from blue_data_user_api.auth import require_api_key
-from blue_data_user_api.source import _default_user_props
 from blue_data_user_source import QueryError, validate_user_name
 
 router = APIRouter(prefix="/databases", tags=["databases"], dependencies=[Depends(require_api_key)])
@@ -34,7 +33,7 @@ async def create_database(name: str, request: Request, body: CreateDatabaseReque
         validate_user_name(name)
     except QueryError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    props = _default_user_props(name, request.app.state.data_dir)
+    props = request.app.state.source.default_user_props(name)
     await request.app.state.source.create_user(
         name,
         registry_props=props["registry"],
@@ -42,7 +41,7 @@ async def create_database(name: str, request: Request, body: CreateDatabaseReque
         metadata_source_props=props["metadata_source"],
         contact_source_props=props["contact_source"],
         session_source_props=props["session_source"],
-        doc_source_props=props["doc_source"],
+        doc_source_props=props.get("doc_source"),
         # Onboarding is an interview; a REST call has nobody to interview.
         onboard=False,
         onboard_metadata=False,

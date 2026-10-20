@@ -17,11 +17,21 @@ class UserSource(DataSource):
 
     # ---- database (= user) management ----
 
-    def create_database(self, database: str, properties: dict | None = None) -> dict: ...
+    def create_database(
+        self, database: str, properties: dict | None = None, overwrite: bool = False,
+    ) -> dict: ...
     # Sync DataSource override; delegates to create_user via asyncio.run().
-    # properties must contain: registry, kb_source, metadata_source, contact_source,
-    # session_source keys. doc_source is optional (defaults to a dummy-embedding,
-    # in-memory vector backend — see Session Manager below).
+    # Store configs come from default_user_props(database); a registry, kb_source,
+    # metadata_source, contact_source, session_source or doc_source key in
+    # properties replaces that one default, and a store with no default that is
+    # not given raises QueryError (#165). overwrite=True replaces an existing user;
+    # otherwise it raises UserExistsError. Onboards only if properties["onboard"].
+
+    def default_user_props(self, name: str) -> dict[str, dict]: ...
+    # A new user's store configs: all in memory (UserSource, MemoryUserSource);
+    # files beside the registry file (FileUserSource: registries/<name>.json and
+    # sources/<name>/ — the layout the CLI and servers use); Redis JSON stores,
+    # with no kb_source default (RedisUserSource).
 
     async def create_user(
         self,

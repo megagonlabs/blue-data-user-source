@@ -50,7 +50,7 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from blue_data_user_mcp.config import default_user_props, get_source
+from blue_data_user_mcp.config import get_source
 
 mcp = FastMCP(
     "blue-data-user",
@@ -96,7 +96,7 @@ async def create_database(name: str) -> str:
             # re-registers the record — so the guard lives here, as it does in
             # the CLI's `database create`.
             raise ValueError(f"Database '{name}' already exists.")
-        props = default_user_props(name)
+        props = source.default_user_props(name)
         await source.create_user(
             name,
             registry_props=props["registry"],
@@ -104,7 +104,7 @@ async def create_database(name: str) -> str:
             metadata_source_props=props["metadata_source"],
             contact_source_props=props["contact_source"],
             session_source_props=props["session_source"],
-            doc_source_props=props["doc_source"],
+            doc_source_props=props.get("doc_source"),
             # `create_user` onboards by default, which prompts on the console.
             # A server has none: the prompts would go nowhere and the call would
             # block or read EOF. Onboarding belongs to the CLI.

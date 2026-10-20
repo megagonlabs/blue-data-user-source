@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from blue_data_user_source.data.manager import CLS_JSON_REDIS
-from blue_data_user_source.source import UserSource
+from blue_data_user_source.source import UserSource, validate_user_name
 
 
 class RedisUserSource(UserSource):
@@ -50,3 +50,28 @@ class RedisUserSource(UserSource):
         conn.setdefault("port", 6379)
         conn.setdefault("db", 0)
         conn.setdefault("namespace", self.name)
+
+    def default_user_props(self, name: str) -> dict[str, dict]:
+        """A new user's JSON stores in this Redis, each under its own namespace.
+
+        There is no ``kb_source`` default: blue-data-kb-source has no Redis
+        backend, and an in-memory KB would lose the user's knowledge graph on
+        restart while the rest persisted. Pass one (e.g. a file or Neo4j KB).
+        """
+        validate_user_name(name)
+        registry = self.properties["registry"]
+        namespace = registry.get("namespace", self.name)
+
+        def redis_json(store: str) -> dict:
+            return {
+                "_class": CLS_JSON_REDIS,
+                "connection": dict(registry["connection"]),
+                "namespace": f"{namespace}:{name}:{store}",
+            }
+
+        return {
+            "registry": redis_json("registry"),
+            "metadata_source": redis_json("metadata"),
+            "contact_source": redis_json("contacts"),
+            "session_source": redis_json("sessions"),
+        }

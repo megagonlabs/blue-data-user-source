@@ -16,9 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from blue_data_user_source import FileUserSource
-from blue_data_user_source.data.manager import CLS_JSON_FILE
 
-_CLS_KB_FILE = "blue_data_kb_source.file_kb_source.FileKBSource"
 
 _source: Optional[FileUserSource] = None
 _data_dir: Optional[Path] = None
@@ -42,38 +40,6 @@ def reset_source() -> None:
     global _source, _data_dir
     _source = None
     _data_dir = None
-
-
-def default_user_props(name: str) -> dict[str, Any]:
-    """Derive all four sub-source configs from get_data_dir() for a given user name."""
-    d = get_data_dir()
-    base = d / "sources" / name
-    return {
-        "registry": {
-            "_class": CLS_JSON_FILE,
-            "connection": {"protocol": "json/file", "path": str(d / "registries" / f"{name}.json")},
-        },
-        "kb_source": {
-            "_class": _CLS_KB_FILE,
-            "connection": {"protocol": "kb/file", "directory": str(base)},
-        },
-        "metadata_source": {
-            "_class": CLS_JSON_FILE,
-            "connection": {"protocol": "json/file", "path": str(base / "metadata.json")},
-        },
-        "contact_source": {
-            "_class": CLS_JSON_FILE,
-            "connection": {"protocol": "json/file", "path": str(base / "contacts.json")},
-        },
-        "session_source": {
-            "_class": CLS_JSON_FILE,
-            "connection": {"protocol": "json/file", "path": str(base / "sessions.json")},
-        },
-        "doc_source": {
-            "embedding_model": "dummy",
-            "vector_source": {"backend": "file", "directory": str(base / "sessions")},
-        },
-    }
 
 
 def _build_source() -> tuple[FileUserSource, Path]:
