@@ -69,7 +69,7 @@
   │  │      cli        │   │      mcp        │   │         api             │  │
   │  │ (Click + Rich)  │   │ (FastMCP server) │   │ (FastAPI + Uvicorn)    │  │
   │  │ terminal, one   │   │ stdio/MCP        │   │ HTTP/JSON, 20+ routes  │  │
-  │  │ FileUserSource  │   │ protocol, 20     │   │ over one FileUserSource│  │
+  │  │ FileUserSource  │   │ protocol, 23     │   │ over one FileUserSource│  │
   │  │ per invocation   │   │ tools            │   │ per process             │  │
   │  └────────┬─────────┘   └────────┬─────────┘   └───────────┬────────────┘  │
   │           │                      │                          │              │
