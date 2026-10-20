@@ -40,6 +40,13 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Loaded at runtime from beside the code (source.py, interaction/contact.py);
+# without this a wheel installs none of them (#162). schema.txt is only the
+# input to tools/convert_schema.py, so it is not shipped.
+"blue_data_user_source" = ["py.typed"]
+"blue_data_user_source.data" = ["*.json"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

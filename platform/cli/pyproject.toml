@@ -25,6 +25,11 @@ blue-userdb = "blue_data_user_cli.commands:cli"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# profile.py loads profile_spec.json from beside the module; without this a
+# wheel leaves it out and every command fails (#162).
+"blue_data_user_cli" = ["*.json"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
