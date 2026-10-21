@@ -62,14 +62,18 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> tuple[Any, str]: ...
-    # Returns (answer, session_id) — the session is the reused or newly-created
-    # one this query landed in. See "Result shape" and "session" below.
+    ) -> list[dict]: ...
+    # The DataSource form: list[dict] rows, as blue-data's contract requires
+    # (design/14 §1, #164) — the answer's table, one {"answer": ...} row for "nl",
+    # one {"result", "expanded"} row with include_expanded. No session id: pass
+    # one created with create_session as "session" to choose it.
 
     async def async_execute_query(
         self, query: str, database: str | None = None, optional_properties: dict | None = None,
     ) -> tuple[Any, str]: ...
-    # The same call for async callers (the REST API and MCP server use it).
+    # UserSource's own query call: (answer, session_id), the session being the
+    # reused or newly-created one this query landed in. The CLI, MCP server and
+    # REST API use it. See "Result shape" and "session" below.
 
     def execute_query_nl(
         self,
@@ -77,8 +81,10 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> tuple[Any, str]: ...
-    # Same as execute_query; the DataSource interface's NL entry point.
+    ) -> list[dict]: ...
+    # Same as execute_query; the DataSource interface's NL entry point. Accepts
+    # schema= and llm_fn= as the registry passes them, but answers with its own
+    # reasoning pipeline (an allowed exception to the contract).
 
     # ---- sessions ----
 
@@ -207,7 +213,9 @@ answer, session_id = us.execute_query(
 
 ### Result shape
 
-`execute_query` answers the whole question, synthesized across every sub-question: one aggregated table (a list of dicts sharing a schema derived from the query) for `"json"`, or prose for `"nl"`. With `include_expanded=True` the answer becomes `{"result": answer, "expanded": ...}`, where `expanded` lists each sub-question with its raw results (`{"query", "results"}` dicts for `"json"`, a prose summary for `"nl"`).
+`async_execute_query` answers the whole question, synthesized across every sub-question: one aggregated table (a list of dicts sharing a schema derived from the query) for `"json"`, or prose for `"nl"`. With `include_expanded=True` the answer becomes `{"result": answer, "expanded": ...}`, where `expanded` lists each sub-question with its raw results (`{"query", "results"}` dicts for `"json"`, a prose summary for `"nl"`).
+
+`execute_query` and `execute_query_nl` return the same answer as `list[dict]` rows: the table itself, one `{"answer": ...}` row for `"nl"`, or one `{"result", "expanded"}` row with `include_expanded` (blue-data design/14 §1, #164).
 
 ```python
 @dataclass
@@ -223,7 +231,7 @@ class QueryResult:
 ```python
 session_id = await us.create_session("alice")
 
-results, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"session": session_id},
 )

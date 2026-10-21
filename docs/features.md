@@ -39,14 +39,14 @@ await us.add_source(
 `execute_query` runs a multi-step reasoning pipeline rather than a single lookup: it rewrites the query (resolving self-references like "me"/"you" to the user's actual name), expands it into schema-grounded sub-questions, retrieves data for each from the knowledge graph *and* any registered documents, and assesses the combined result against quality metrics — prompting the user for clarification when checks fail.
 
 ```python
-results, session_id = us.execute_query("jobs suitable for me", database="alice")
-for r in results:
-    print(r.query, "→", r.results)
+answer, session_id = await us.async_execute_query("jobs suitable for me", database="alice")
+print(answer)          # one aggregated table: a list of dicts
 
-answer, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"output_form": "nl"},
 )
+print(answer)          # prose
 ```
 
 Two quality metrics run by default — `CompletenessMetric` and `FreshnessMetric` — plus `PrivacyMetric` whenever a data manager is available, whose pass threshold moves with the user's `privacy.consent_level` (stricter at `minimal`, looser at `full`). See [architecture.md](architecture.md#reasoning-layer) for the full assess-interact-reassess loop.
@@ -55,12 +55,12 @@ Two quality metrics run by default — `CompletenessMetric` and `FreshnessMetric
 
 ## Sessions
 
-A session groups the queries and clarification interactions of one conversation, so later queries have context from earlier ones and every interaction is recorded durably. `execute_query` uses reuse-or-create semantics: pass a `session` id to continue one, or omit it to auto-create a single-query session.
+A session groups the queries and clarification interactions of one conversation, so later queries have context from earlier ones and every interaction is recorded durably. Queries use reuse-or-create semantics: pass a `session` id to continue one, or omit it to auto-create a single-query session.
 
 ```python
 session_id = await us.create_session("alice")
 
-results, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"session": session_id},
 )
@@ -70,7 +70,7 @@ sessions = await us.list_sessions("alice")
 await us.end_session("alice", session_id)
 ```
 
-Resolved clarification Q/A pairs are also ingested as text into a per-session document store for later semantic recall.
+Resolved clarification Q/A pairs are also ingested as text into the user's `session_content` document store, which every later query searches.
 
 ---
 

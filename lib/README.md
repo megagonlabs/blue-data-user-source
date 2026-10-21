@@ -150,14 +150,14 @@ async def main() -> None:
     # Remove a source: its document leaves search; facts extracted from it are kept
     await us.remove_source("alice", "resume.txt")
 
-    # Query — returns (list[QueryResult], session_id). Omitting "session" auto-creates
-    # a new single-query session; pass the returned session_id back in to continue it.
-    results, session_id = us.execute_query("jobs suitable for me", database="alice")
-    for r in results:
-        print(r.query, "→", r.results)
+    # Query — returns (answer, session_id): the answer is one aggregated table (a list
+    # of dicts). Omitting "session" auto-creates a new single-query session; pass the
+    # returned session_id back in to continue it.
+    answer, session_id = await us.async_execute_query("jobs suitable for me", database="alice")
+    print(answer)
 
-    # Query — returns (natural language string, session_id)
-    answer, session_id = us.execute_query(
+    # Query — the answer as prose
+    answer, session_id = await us.async_execute_query(
         "jobs suitable for me",
         database="alice",
         optional_properties={"output_form": "nl", "session": session_id},
@@ -366,12 +366,12 @@ await us.add_contact_method("alice", "email", "dev", {
 
 ### Sessions
 
-A session groups the queries and clarification interactions of one conversation. `execute_query`/`execute_query_nl` use **reuse-or-create** semantics: pass `session` in `optional_properties` to append to an existing session, or omit it to auto-create a new single-query one. Every `execute_query` call returns the `session_id` it landed in.
+A session groups the queries and clarification interactions of one conversation. Queries use **reuse-or-create** semantics: pass `session` in `optional_properties` to append to an existing session, or omit it to auto-create a new single-query one. `async_execute_query` returns the `session_id` each query landed in; the `DataSource` forms `execute_query`/`execute_query_nl` return `list[dict]` rows only (blue-data's contract), so with them you create the session first and pass it.
 
 ```python
 session_id = await us.create_session("alice")
 
-results, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"session": session_id},
 )
@@ -379,7 +379,7 @@ results, session_id = us.execute_query(
 
 record = await us.get_session("alice", session_id)
 # {"created_at": ..., "ended_at": None, "status": "active",
-#  "doc_source_name": "session-<id>",
+#  "doc_source_name": "session_content",
 #  "queries": {"<query_id>": {"query": ..., "interactions": {...}}}}
 
 sessions = await us.list_sessions("alice")   # dict[session_id, record]

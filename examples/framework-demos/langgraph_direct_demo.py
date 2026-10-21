@@ -69,7 +69,9 @@ class State(TypedDict):
 # --------------------------------------------------------------------------- #
 
 def lookup(state: State) -> dict:
-    answer, _session_id = us.execute_query_nl(
+    # The DataSource form returns list[dict] rows; an "nl" answer is one
+    # {"answer": ...} row (#164).
+    [row] = us.execute_query_nl(
         state["question"], database="alice",
         # max_interaction_rounds=1: FreshnessMetric fails whenever the KB
         # answer-agent doesn't call get_metadata for a lookup and never
@@ -78,6 +80,7 @@ def lookup(state: State) -> dict:
         # keep this pipeline's output focused on the LangGraph wiring.
         optional_properties={"output_form": "nl", "max_interaction_rounds": 1},
     )
+    answer = row["answer"]
     print(f"[lookup] execute_query_nl({state['question']!r}) -> {answer!r}")
     return {"lookup": answer}
 

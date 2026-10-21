@@ -353,3 +353,25 @@ Architectural decisions are recorded here as they are made, throughout the desig
 
 **Consequences:** Scripts that passed `--neo4j-password` must set the profile parameter or export the variable instead; `database create --kb-backend neo4j` without one fails with a message naming both. The KB CLI still has the option, so the family differs here until it follows.
 
+
+---
+
+## ADR-027 — UserSource Meets blue-data's DataSource Contract; the Session Id Moves to `async_execute_query`
+
+**Date:** 2026-10-21
+**Status:** Accepted (amends ADR-018's return shape for the `DataSource` methods)
+
+**Decision:** `UserSource` passes blue-data's conformance kit (`blue_data.testing.conformance.DataSourceConformance`, design/14 in blue-data), run in `lib/tests/unit/sources/test_conformance.py` for the memory and file backends (#164). As a result:
+
+- **Rows (§1).** `execute_query` and `execute_query_nl` return `list[dict]` rows: the answer's table for `"json"`, one `{"answer": ...}` row for `"nl"`, and one `{"result", "expanded"}` row with `include_expanded`. They no longer return `(answer, session_id)` (#167).
+- **The session id.** It travels through `async_execute_query`, which still returns `(answer, session_id)` and is not part of the `DataSource` interface. The CLI, MCP server and REST API all use it. A caller of the `DataSource` forms that needs a session creates it first and passes it as `session`.
+- **No `asyncio.run` in sync methods (§6).** The synchronous `DataSource` methods run their async work through one bridge (`_sync.run_sync`). The bridge uses `asyncio.run` when no loop is running, and a worker thread with its own loop when one is (#168).
+- **NL-tool signature (§5).** `execute_nl_tool` accepts `read_only`; every tool here only reads. `fetch_entity_stats` accepts the contract's `row_sample_size` (#169).
+- **`llm_fn` is unused.** `execute_query_nl` accepts `llm_fn` and `schema` but does not use them. This is an allowed exception: answering runs this source's own pipeline (rewriting, expansion, quality assessment, clarification), which a `prompt -> text` function cannot drive. blue-data-kb-source documents the same exception.
+
+**Rationale:** Under ADR-018, the session id rode along as a second tuple element. That broke every generic `DataSource` caller: the registry, the planner, and frameworks that expect rows. The contract names exactly that pattern as forbidden. Keeping the richer tuple on the async method preserves what this repo's own front ends need, without bending the shared interface.
+
+**Consequences:**
+- Library callers that unpacked `answer, session_id = us.execute_query(...)` switch to `await us.async_execute_query(...)`, or to the rows.
+- The CLI's `data query` now calls `async_execute_query`.
+- Inside a running loop, the bridge runs the coroutine on another thread with its own fresh loop. Each synchronous call already got a fresh loop from `asyncio.run`, so loop-bound state behaves as before; only the thread differs.

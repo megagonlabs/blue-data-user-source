@@ -84,15 +84,17 @@ await us.remove_source("alice", "resume.txt")   # document leaves search; extrac
 `execute_query` rewrites the query, expands it into sub-questions, retrieves data for each, and assesses the combined result — asking for clarification via a contact method when quality checks fail. Requires `OPENAI_API_KEY` for the rewriting/expansion/assessment prompts.
 
 ```python
-results, session_id = us.execute_query("jobs suitable for me", database="alice")
-for r in results:
-    print(r.query, "→", r.results)
+answer, session_id = await us.async_execute_query("jobs suitable for me", database="alice")
+print(answer)          # one aggregated table: a list of dicts
 
-answer, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"output_form": "nl", "session": session_id},
 )
-print(answer)
+print(answer)          # prose
+
+# The DataSource form (blue-data's contract) returns rows only, with no session id:
+rows = us.execute_query("jobs suitable for me", database="alice")   # the table; "nl" gives [{"answer": ...}]
 ```
 
 `optional_properties`:
@@ -100,23 +102,23 @@ print(answer)
 | Key | Type | Description |
 |---|---|---|
 | `session` | `str` | Session to append this query to (reused). Omit to auto-create a new single-query session |
-| `output_form` | `"json"` \| `"nl"` | `"json"` (default) returns `list[QueryResult]`; `"nl"` returns a synthesized string |
+| `output_form` | `"json"` \| `"nl"` | `"json"` (default) returns one aggregated table (a list of dicts); `"nl"` returns prose |
 | `include_expanded` | `bool` | Also return the per-sub-question queries/results alongside the synthesized answer |
 | `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default 3) |
-| `top_k` | `int` | Max KB results per sub-question (default 10) |
+| `top_k` | `int` | Max chunks taken from each document store per sub-question (default 5) |
 
-`execute_query_nl` is an alias with identical behavior.
+`async_execute_query` is the library's own query call and returns `(answer, session_id)`. `execute_query` and `execute_query_nl` are the `DataSource` forms: blue-data's contract has them return `list[dict]` rows, so the answer comes back as rows (the table, or one `{"answer": ...}` row for `"nl"`) and the session id does not. To use a session through them, create it first and pass it as `session`.
 
 ---
 
 ## Sessions
 
-A session groups the queries and clarification interactions of one conversation. `execute_query` uses reuse-or-create semantics: pass a `session` id to continue one, omit it to auto-create a single-query session — every call returns the `session_id` it landed in.
+A session groups the queries and clarification interactions of one conversation. Queries use reuse-or-create semantics: pass a `session` id to continue one, omit it to auto-create a single-query session. `async_execute_query` returns the `session_id` each query landed in.
 
 ```python
 session_id = await us.create_session("alice")
 
-results, session_id = us.execute_query(
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me", database="alice",
     optional_properties={"session": session_id},
 )
@@ -124,7 +126,7 @@ results, session_id = us.execute_query(
 
 record = await us.get_session("alice", session_id)
 # {"created_at": ..., "ended_at": None, "status": "active",
-#  "doc_source_name": "session-<id>",
+#  "doc_source_name": "session_content",
 #  "queries": {"<query_id>": {"query": ..., "interactions": {...}}}}
 
 sessions = await us.list_sessions("alice")   # dict[session_id, record]

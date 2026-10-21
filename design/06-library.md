@@ -67,7 +67,7 @@ List of result objects, one per question in the resolved question set:
 
 Includes the original query if it has full coverage, plus any complementary queries that were necessary.
 
-**Current implementation** — returns `(answer, session_id)`. The answer is synthesized across all sub-questions: one aggregated table (a list of dicts) for `"json"`, prose for `"nl"`. The per-sub-question `{"query", "results"}` list above is returned only with `include_expanded=True`, as `{"result": answer, "expanded": [...]}`. `async_execute_query` is the same call for async callers.
+**Current implementation** — the answer is synthesized across all sub-questions: one aggregated table (a list of dicts) for `"json"`, prose for `"nl"`. The per-sub-question `{"query", "results"}` list above is returned only with `include_expanded=True`, as `{"result": answer, "expanded": [...]}`. `async_execute_query` returns `(answer, session_id)`. `execute_query` / `execute_query_nl`, the `DataSource` forms, return that answer as `list[dict]` rows, without the session id, as blue-data's contract requires (#164).
 
 **Algorithm**
 

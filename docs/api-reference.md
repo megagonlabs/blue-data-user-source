@@ -39,9 +39,9 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 | Method | Returns | Description |
 |---|---|---|
-| `execute_query(query, database=None, collection=None, optional_properties=None)` | `tuple[list[QueryResult] \| str, str]` | Sync wrapper (`asyncio.run` internally); returns `(results, session_id)` |
-| `execute_query_nl(query, database=None, collection=None, optional_properties=None)` | `tuple[list[QueryResult] \| str, str]` | Alias — identical behavior |
-| `await async_execute_query(query, database=None, collection=None, optional_properties=None)` | `tuple[list[QueryResult] \| str, str]` | The `async` form both sync wrappers call |
+| `await async_execute_query(query, database=None, optional_properties=None)` | `tuple[Any, str]` | The library's own query call: `(answer, session_id)`. The answer is one aggregated table (a list of dicts) for `"json"`, prose for `"nl"`, `{"result", "expanded"}` with `include_expanded`; `session_id` is the session it landed in. The CLI, MCP server and REST API use it |
+| `execute_query(query, database=None, collection=None, optional_properties=None)` | `list[dict]` | The `DataSource` form: the same answer as `list[dict]` rows (the table, one `{"answer": ...}` row for `"nl"`, one `{"result", "expanded"}` row with `include_expanded`), as blue-data's contract requires. No session id: create one with `create_session` and pass it as `session` to choose it. Safe to call inside a running event loop |
+| `execute_query_nl(query, database=None, collection=None, schema=None, llm_fn=None, optional_properties=None)` | `list[dict]` | Same as `execute_query`. Accepts `schema` and `llm_fn` as the registry passes them, but answers with its own pipeline (an allowed exception to the contract) |
 
 `optional_properties`:
 

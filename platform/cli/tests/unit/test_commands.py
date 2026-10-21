@@ -492,7 +492,7 @@ def test_session_show_not_found_exits_with_code_1(runner: CliRunner, data_dir: P
 def test_data_query_table_output_contains_result(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([{"skill": "Python"}], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([{"skill": "Python"}], "sess-1"))
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "query", "skills?"])
     assert result.exit_code == 0
@@ -502,7 +502,7 @@ def test_data_query_table_output_contains_result(runner: CliRunner, data_dir: Pa
 def test_data_query_json_format_outputs_valid_json(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([{"skill": "Python"}], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([{"skill": "Python"}], "sess-1"))
     with _patched(mock):
         result = _invoke(
             runner, data_dir, ["data", "query", "skills?", "--format", "json"]
@@ -515,7 +515,7 @@ def test_data_query_json_format_outputs_valid_json(runner: CliRunner, data_dir: 
 def test_data_query_nl_format_echoes_answer(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ("Alice knows Python.", "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=("Alice knows Python.", "sess-1"))
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "query", "skills?", "--format", "nl"])
     assert result.exit_code == 0
@@ -527,7 +527,7 @@ def test_data_query_selects_new_session_when_none_given(
 ) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-new")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-new"))
     with _patched(mock):
         _invoke(runner, data_dir, ["data", "query", "q"])
     assert (data_dir / ".selected.session").read_text() == "sess-new"
@@ -537,13 +537,13 @@ def test_root_session_option_is_forwarded(runner: CliRunner, data_dir: Path) -> 
     """`--session` is a root option like `--database`, not just a `data query` one."""
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         result = runner.invoke(
             cli, ["--data-dir", str(data_dir), "--session", "sess-root", "data", "query", "q"]
         )
     assert result.exit_code == 0, result.output
-    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-root"
+    assert mock.async_execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-root"
 
 
 def test_session_env_var_is_forwarded(runner: CliRunner, data_dir: Path, monkeypatch) -> None:
@@ -552,11 +552,11 @@ def test_session_env_var_is_forwarded(runner: CliRunner, data_dir: Path, monkeyp
     _select_database(data_dir, "alice")
     monkeypatch.setenv("BLUE_DATA_USER_SOURCE_SESSION", "sess-env")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "query", "q"])
     assert result.exit_code == 0, result.output
-    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-env"
+    assert mock.async_execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-env"
 
 
 def test_command_session_option_outranks_the_root_one(
@@ -564,14 +564,14 @@ def test_command_session_option_outranks_the_root_one(
 ) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         result = runner.invoke(cli, [
             "--data-dir", str(data_dir), "--session", "sess-root",
             "data", "query", "q", "--session", "sess-cmd",
         ])
     assert result.exit_code == 0, result.output
-    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-cmd"
+    assert mock.async_execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-cmd"
 
 
 def test_selected_session_file_is_the_last_resort(runner: CliRunner, data_dir: Path) -> None:
@@ -579,30 +579,30 @@ def test_selected_session_file_is_the_last_resort(runner: CliRunner, data_dir: P
     _select_database(data_dir, "alice")
     (data_dir / ".selected.session").write_text("sess-file")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "query", "q"])
     assert result.exit_code == 0, result.output
-    assert mock.execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-file"
+    assert mock.async_execute_query.call_args.kwargs["optional_properties"]["session"] == "sess-file"
 
 
 def test_data_query_top_k_is_forwarded(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         _invoke(runner, data_dir, ["data", "query", "q", "--top-k", "5"])
-    props = mock.execute_query.call_args.kwargs["optional_properties"]
+    props = mock.async_execute_query.call_args.kwargs["optional_properties"]
     assert props["top_k"] == 5
 
 
 def test_data_query_without_top_k_leaves_the_library_default(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.return_value = ([], "sess-1")
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
         _invoke(runner, data_dir, ["data", "query", "q"])
-    assert "top_k" not in mock.execute_query.call_args.kwargs["optional_properties"]
+    assert "top_k" not in mock.async_execute_query.call_args.kwargs["optional_properties"]
 
 
 def test_data_query_top_k_must_be_positive(runner: CliRunner, data_dir: Path) -> None:
@@ -614,7 +614,7 @@ def test_data_query_top_k_must_be_positive(runner: CliRunner, data_dir: Path) ->
 def test_data_query_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.execute_query.side_effect = QueryError("no db")
+    mock.async_execute_query = AsyncMock(side_effect=QueryError("no db"))
     with _patched(mock):
         result = _invoke(runner, data_dir, ["data", "query", "q"])
     assert result.exit_code == 1

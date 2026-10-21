@@ -1216,7 +1216,11 @@ def data_query(
             props["on_tool_call"] = on_tool_call
             props["on_tool_result"] = on_tool_result
             props["model"] = _model_for(obj, "REASONING", model)
-            results, session_id = source.execute_query(text, database=db, optional_properties=props)
+            # async_execute_query, not the DataSource execute_query: the CLI needs the
+            # session id, which the contract's list[dict] rows do not carry (#164).
+            results, session_id = asyncio.run(
+                source.async_execute_query(text, database=db, optional_properties=props)
+            )
     except (UDbError, Exception) as exc:
         _fail(f"{exc}", fmt)
     if not resolved_session:

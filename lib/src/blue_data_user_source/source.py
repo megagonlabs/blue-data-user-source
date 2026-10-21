@@ -9,6 +9,7 @@ from typing import Any
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 
+from blue_data_user_source._sync import run_sync
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
     CLS_KB_MEMORY,
@@ -45,6 +46,17 @@ _DEFAULT_METADATA_SCHEMA_PATH = str(Path(__file__).parent / "data" / "metadata_s
 _DEFAULT_CONTACT_SCHEMA_PATH = str(Path(__file__).parent / "data" / "contact_schema.json")
 # The stores every user needs; ``doc_source`` is optional (an in-memory default).
 _STORE_KEYS = ("registry", "kb_source", "metadata_source", "contact_source", "session_source")
+
+
+def _as_rows(answer: Any) -> list[dict]:
+    """An answer of every output form as ``list[dict]`` rows (blue-data design/14 §1)."""
+    if answer is None:
+        return []
+    if isinstance(answer, list):
+        return [row if isinstance(row, dict) else {"value": row} for row in answer]
+    if isinstance(answer, dict):
+        return [answer]  # include_expanded: {"result": ..., "expanded": ...}
+    return [{"answer": answer}]  # output_form="nl": prose
 
 # Built-in per-user collections that carry stats; anything else (e.g. a
 # user-added file source) has no stats concept and yields None.
@@ -278,8 +290,8 @@ class UserSource(DataSource):
                 f"{', '.join(missing)}; pass {'it' if len(missing) == 1 else 'them'} in properties."
             )
         if overwrite and database in self.list_users():
-            asyncio.run(self.delete_user(database))
-        asyncio.run(self.create_user(
+            run_sync(self.delete_user(database))
+        run_sync(self.create_user(
             database,
             registry_props=p["registry"],
             kb_source_props=p["kb_source"],
@@ -330,7 +342,7 @@ class UserSource(DataSource):
         """A user's live KB schema — ``{"entities", "relations", "subclasses"}`` —
         including any expansion (new classes/properties) since onboarding."""
         manager = self._get_manager(database)
-        return asyncio.run(manager._ensure_kb_source().export_database_schema(manager._database))
+        return run_sync(manager._ensure_kb_source().export_database_schema(manager._database))
 
     def fetch_database_collection_entities(self, database: str, collection: str) -> dict:
         """Entity type definitions for ``collection``. Only ``"kb"`` has entities —
@@ -355,10 +367,13 @@ class UserSource(DataSource):
         database: str | None = None,
         optional_properties: dict | None = None,
     ) -> tuple[Any, str]:
-        """Async version of execute_query for use from async contexts (e.g. FastAPI).
+        """Answer *query* and return ``(answer, session_id)``: UserSource's own query API.
 
-        Returns ``(results, session_id)`` — the reused or newly-created session
-        this query landed in (see "session" in optional_properties).
+        The answer is a list of dicts for ``output_form="json"`` (the default),
+        prose for ``"nl"``, or ``{"result", "expanded"}`` with ``include_expanded``.
+        ``session_id`` is the reused or newly-created session this query landed in
+        (see "session" in optional_properties). The CLI, MCP server and REST API use
+        this; :meth:`execute_query` is the ``DataSource`` form.
         """
         return await self._run_query(query, database, optional_properties=optional_properties)
 
@@ -368,9 +383,20 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
-    ) -> tuple[list[dict], str]:
-        """Returns ``(results, session_id)`` — see async_execute_query."""
-        return asyncio.run(self._run_query(query, database, collection, optional_properties))
+    ) -> list[dict]:
+        """Answer *query* as ``list[dict]`` rows, as blue-data's DataSource contract requires.
+
+        The rows are the answer of :meth:`async_execute_query`: its table for
+        ``"json"``, one ``{"answer": ...}`` row for ``"nl"``, one
+        ``{"result", "expanded"}`` row with ``include_expanded``. The session id
+        does not ride along (design/14 §1); a caller that needs it creates the
+        session first (:meth:`create_session`) and passes it as
+        ``optional_properties["session"]``, or uses :meth:`async_execute_query`.
+        """
+        answer, _session_id = run_sync(
+            self._run_query(query, database, collection, optional_properties)
+        )
+        return _as_rows(answer)
 
     def execute_query_nl(
         self,
@@ -378,11 +404,19 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         schema: dict | None = None,    # noqa: ARG002 — UserSource uses its own reasoner
-        llm_fn=None,                   # noqa: ARG002 — UserSource uses its own reasoner
+        llm_fn=None,                   # noqa: ARG002 — see below
         optional_properties: dict | None = None,
-    ) -> tuple[list[dict], str]:
-        """Returns ``(results, session_id)`` — see async_execute_query."""
-        return asyncio.run(self._run_query(query, database, collection, optional_properties))
+    ) -> list[dict]:
+        """The same as :meth:`execute_query`: the query is already natural language.
+
+        ``llm_fn`` and ``schema`` are accepted, as the registry passes them, but not
+        used: an allowed exception to the DataSource contract (as in
+        blue-data-kb-source). Answering runs this source's own reasoning pipeline,
+        rewriting, expansion, quality assessment and clarification, which a plain
+        ``llm_fn(prompt) -> text`` cannot drive. The model is
+        ``optional_properties["model"]``, else ``gpt-4o``.
+        """
+        return self.execute_query(query, database, collection, optional_properties)
 
     # ------------------------------------------------------------------ #
     # DataSource: import                                                   #
@@ -400,7 +434,7 @@ class UserSource(DataSource):
         """Signature matches ``DataSource.import_data`` (``database`` before
         ``collection``, both defaulted) — a positional call valid against the
         base class binds the same arguments here."""
-        return asyncio.run(
+        return run_sync(
             self._get_manager(database).import_data(source, collection, entity, mode, options)
         )
 
@@ -438,7 +472,7 @@ class UserSource(DataSource):
             contacts = manager.get_contacts()
             return {"methods": sum(len(names) for names in contacts.values())}
         if collection == "sessions":
-            sessions = asyncio.run(self._session_manager(database).list_sessions())
+            sessions = run_sync(self._session_manager(database).list_sessions())
             return {"sessions": len(sessions)}
         return None
 
@@ -449,7 +483,7 @@ class UserSource(DataSource):
         relations: list | None,
         sample_limit: int | None,
     ) -> dict:
-        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        rows = run_sync(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
         by_class: dict[str, int] = {}
         sample_entities: list[str] = []
         for r in rows:
@@ -485,18 +519,20 @@ class UserSource(DataSource):
         collection: str,
         entity: str,
         sample_limit: int | None = None,
+        row_sample_size: int | None = None,
     ) -> dict | None:
         """Instance count and per-property fill counts for the ``entity`` class in ``"kb"``.
 
-        ``sample_limit`` is an extension over the ``DataSource`` base signature
-        (an optional widening, not a breaking change) — it caps the number of
-        instance names returned under ``"sample"``, used by the ``get_sample``
-        NL tool.
+        ``row_sample_size`` (the DataSource contract's name, design/14 §5) or its
+        older alias ``sample_limit`` caps the number of instance names returned
+        under ``"sample"``, used by the ``get_sample`` NL tool.
         """
         if collection != "kb":
             return None
+        if row_sample_size is not None:
+            sample_limit = row_sample_size
         manager = self._get_manager(database)
-        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        rows = run_sync(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
         instance_names = {
             r["entity_name"] for r in rows
             if r.get("relation_type") == "IS_INSTANCE_OF" and r.get("class_name") == entity
@@ -530,7 +566,7 @@ class UserSource(DataSource):
         if collection != "kb":
             return None
         manager = self._get_manager(database)
-        rows = asyncio.run(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
+        rows = run_sync(manager._ensure_kb_source().fetch_database_data(manager._database, compact=True))
         instance_names = {
             r["entity_name"] for r in rows
             if r.get("relation_type") == "IS_INSTANCE_OF" and r.get("class_name") == entity
@@ -580,14 +616,16 @@ class UserSource(DataSource):
         database: str | None = None,
         collection: str | None = None,
         optional_properties: dict | None = None,
+        read_only: bool = True,  # noqa: ARG002 — every tool here only reads
     ):
         """Dispatch a single NL-tool call (see ``DataSource.get_nl_tools``).
 
         Overridden rather than inherited because ``execute_query`` here takes
-        natural language directly (no native-query stage) and returns a
-        ``(results, session_id)`` tuple — the tool loop only wants ``results``
-        — and because ``get_sample`` needs to pass the requested sample size
-        through to :meth:`fetch_entity_stats`.
+        natural language directly (no native-query stage), and because
+        ``get_sample`` passes the requested sample size through to
+        :meth:`fetch_entity_stats`. ``read_only`` is the contract's flag
+        (design/14 §5); every tool this source offers only reads, so it changes
+        nothing here.
         """
         db = tool_input.get("database", database)
         coll = tool_input.get("collection", collection)
@@ -604,15 +642,14 @@ class UserSource(DataSource):
         if name == "get_metadata":
             return self.fetch_database_collection_metadata(db, coll)
         if name == "execute_query":
-            results, _session_id = self.execute_query(
+            return self.execute_query(
                 tool_input["query"], database=db, collection=coll,
                 optional_properties=optional_properties,
             )
-            return results
         if name == "get_sample":
             return self.fetch_entity_stats(
                 db, coll, tool_input["entity"],
-                sample_limit=tool_input.get("sample_size", 10),
+                row_sample_size=tool_input.get("sample_size", 10),
             )
         if name == "get_column_stats":
             return self.fetch_property_stats(db, coll, tool_input["entity"], tool_input["column"])

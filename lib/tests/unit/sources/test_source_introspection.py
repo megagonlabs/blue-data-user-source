@@ -180,11 +180,10 @@ def test_get_nl_tools_rewords_execute_query_for_no_native_language() -> None:
     assert "no separate native query language" in execute_query_tool["description"]
 
 
-def test_execute_nl_tool_execute_query_unwraps_session_id() -> None:
+def test_execute_nl_tool_execute_query_returns_the_rows() -> None:
+    """execute_query is the DataSource form, so its rows go straight to the tool loop (#164)."""
     source = MemoryUserSource()
-    with patch.object(
-        source, "execute_query", return_value=([{"answer": "Alice"}], "session-1")
-    ) as mock_exec:
+    with patch.object(source, "execute_query", return_value=[{"answer": "Alice"}]) as mock_exec:
         result = source.execute_nl_tool(
             "execute_query", {"query": "what is the user's name?"}, database="alice",
         )

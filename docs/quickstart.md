@@ -97,9 +97,8 @@ async def main():
 
     await us.add_source("data/resume.txt", database="alice")
 
-    results, session_id = us.execute_query("jobs suitable for me", database="alice")
-    for r in results:
-        print(r.query, "→", r.results)
+    answer, session_id = await us.async_execute_query("jobs suitable for me", database="alice")
+    print(answer)
 
 asyncio.run(main())
 ```
