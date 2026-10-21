@@ -1615,33 +1615,36 @@ def schema_list(obj: dict, fmt: str) -> None:
     try:
         manager = source._get_manager(db)
         kb = manager._ensure_kb_source()
-        schema = asyncio.run(kb.fetch_database_schema(db))
+        # Synchronous, returning DataSchema.to_json()'s dict, since kb-source #147.
+        schema = kb.fetch_database_schema(db)
     except (UDbError, Exception) as exc:
         _fail(f"{exc}", fmt)
     if fmt == "json":
-        console.print_json(json.dumps(schema.to_json()))
+        console.print_json(json.dumps(schema))
         return
-    if not schema.entities and not schema.relations:
+    entities: dict = schema.get("entities") or {}
+    relations: dict = schema.get("relations") or {}
+    if not entities and not relations:
         console.print("[dim](no schema declared)[/dim]")
         return
 
-    class_names = set(schema.entities.keys())
-    subclass_rels = [r for r in schema.relations.values() if r["name"] == "IS_SUBCLASS_OF"]
-    real_relations = {k: v for k, v in schema.relations.items() if v["name"] != "IS_SUBCLASS_OF"}
+    class_names = set(entities.keys())
+    subclass_rels = [r for r in relations.values() if r["name"] == "IS_SUBCLASS_OF"]
+    real_relations = {k: v for k, v in relations.items() if v["name"] != "IS_SUBCLASS_OF"}
     class_hierarchy    = [(r["source"], r["target"]) for r in subclass_rels if r["source"] in class_names]
     relation_hierarchy = [(r["source"], r["target"]) for r in subclass_rels if r["source"] not in class_names]
 
-    if schema.entities:
+    if entities:
         t = Table(title="Classes", show_header=True, header_style="bold")
         t.add_column("Name", style="bold", min_width=12)
         t.add_column("Description")
-        for entity in sorted(schema.entities.values(), key=lambda e: e["name"]):
+        for entity in sorted(entities.values(), key=lambda e: e["name"]):
             t.add_row(entity["name"], entity.get("description", ""))
         console.print(t)
 
     class_props = [
         (entity["name"], attr_name, attr.get("description", ""))
-        for entity in schema.entities.values()
+        for entity in entities.values()
         for attr_name, attr in entity.get("contents", {}).get("attributes", {}).items()
     ]
     if class_props:

@@ -820,35 +820,39 @@ def test_source_remove_unknown_source_errors(runner: CliRunner, data_dir: Path) 
 
 # ── schema group ───────────────────────────────────────────────────────────────
 
-class _FakeSchema:
-    def __init__(self, entities: dict | None = None, relations: dict | None = None) -> None:
-        self.entities = entities or {}
-        self.relations = relations or {}
-
-    def to_json(self) -> dict:
-        return {"entities": self.entities, "relations": self.relations}
+def _create_real_database(runner: CliRunner, data_dir: Path, *extra: str) -> None:
+    """A real file-backed database, so the KB below is the real one, not a mock (#166)."""
+    result = _invoke(runner, data_dir, [*extra, "database", "create", "alice", "--no-onboard"])
+    assert result.exit_code == 0, result.output
 
 
 def test_schema_list_shows_classes(runner: CliRunner, data_dir: Path) -> None:
-    _select_database(data_dir, "alice")
-    schema = _FakeSchema(
-        entities={"PERSON": {"name": "PERSON", "description": "A person", "contents": {}}}
-    )
-    kb = _kb_source(fetch_database_schema=schema)
-    mock = _source_with_manager(_manager_with_kb(kb))
-    with _patched(mock):
-        result = _invoke(runner, data_dir, ["schema", "list"])
-    assert result.exit_code == 0
+    _create_real_database(runner, data_dir)
+    result = _invoke(runner, data_dir, ["schema", "list"])
+    assert result.exit_code == 0, result.output
+    assert "Classes" in result.output
     assert "PERSON" in result.output
+    assert "Class Hierarchy" in result.output  # USER is a subclass of PERSON
 
 
-def test_schema_list_empty_shows_placeholder(runner: CliRunner, data_dir: Path) -> None:
-    _select_database(data_dir, "alice")
-    kb = _kb_source(fetch_database_schema=_FakeSchema())
-    mock = _source_with_manager(_manager_with_kb(kb))
-    with _patched(mock):
-        result = _invoke(runner, data_dir, ["schema", "list"])
-    assert result.exit_code == 0
+def test_schema_list_json_is_the_kb_schema(runner: CliRunner, data_dir: Path) -> None:
+    """kb-source returns DataSchema.to_json()'s dict; the CLI prints it unchanged."""
+    _create_real_database(runner, data_dir)
+    result = _invoke(runner, data_dir, ["schema", "list", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    schema = json.loads(result.output)
+    assert "PERSON" in schema["entities"]
+    assert set(schema) >= {"entities", "relations"}
+
+
+def test_schema_list_empty_shows_placeholder(
+    runner: CliRunner, data_dir: Path, tmp_path: Path
+) -> None:
+    empty = tmp_path / "empty_schema.json"
+    empty.write_text(json.dumps({"entities": {}, "relations": {}}))
+    _create_real_database(runner, data_dir, "--schema-path", str(empty))
+    result = _invoke(runner, data_dir, ["schema", "list"])
+    assert result.exit_code == 0, result.output
     assert "no schema declared" in result.output
 
 
