@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 
-router = APIRouter(tags=["sessions"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["sessions"], dependencies=SECURITY)
 
 
 @router.post("/{name}/sessions", status_code=status.HTTP_201_CREATED, summary="Start a session")

@@ -294,7 +294,7 @@ await us.add_contact_method("alice", "email", "work", {
     "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
     "reply_domain": "blue-userdb.example.com",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
     "inbound_provider": "mailgun",   # mailgun | postmark | sendgrid | smtp_server | stdio
 }, preference=1)
 
@@ -325,7 +325,7 @@ await us.remove_contact_method("alice", "email", "work")
 ```python
 await us.add_contact_method("alice", "webhook", "ops", {
     "url": "https://example.com/hook",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
 }, preference=2)
 ```
 

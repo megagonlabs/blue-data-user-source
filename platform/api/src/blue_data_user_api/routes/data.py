@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 from blue_data_user_source import QueryError
 
-router = APIRouter(tags=["data"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["data"], dependencies=SECURITY)
 
 
 class AddSourceRequest(BaseModel):

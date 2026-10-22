@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 from blue_data_user_source.interaction.pending import pending_interactions
 
 router = APIRouter(prefix="/interactions", tags=["interactions"])
@@ -22,7 +22,7 @@ class InteractionResponse(BaseModel):
     "/{interaction_id}/response",
     status_code=status.HTTP_200_OK,
     summary="Post response to a pending interaction",
-    dependencies=[Depends(require_api_key)],
+    dependencies=SECURITY,
 )
 async def post_response(interaction_id: str, body: InteractionResponse) -> dict:
     future = pending_interactions.get(interaction_id)

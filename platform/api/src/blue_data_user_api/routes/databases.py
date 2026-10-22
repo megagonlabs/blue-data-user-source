@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 from blue_data_user_source import QueryError, validate_user_name
 
-router = APIRouter(prefix="/databases", tags=["databases"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/databases", tags=["databases"], dependencies=SECURITY)
 
 
 class CreateDatabaseRequest(BaseModel):

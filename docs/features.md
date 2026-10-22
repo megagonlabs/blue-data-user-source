@@ -84,7 +84,7 @@ await us.add_contact_method("alice", "email", "work", {
     "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
     "reply_domain": "blue-userdb.example.com",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
     "inbound_provider": "mailgun",
 }, preference=1)
 ```
@@ -148,7 +148,8 @@ An HTTP interface (FastAPI) exposing databases, queries, sessions, sources, meta
 
 ```bash
 blue-userdb-api
-curl -X POST http://localhost:8000/alice/query -d '{"query": "What skills does alice have?"}'
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -H 'Content-Type: application/json' \
+  -X POST http://localhost:8003/alice/query -d '{"query": "What skills does alice have?"}'
 ```
 
 See [api.md](api.md) for the full endpoint reference.

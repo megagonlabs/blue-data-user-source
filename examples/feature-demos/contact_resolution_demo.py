@@ -59,7 +59,7 @@ async def main():
     )
     await contacts.create_contact_method(
         "webhook", "chatbot", details={"url": "https://example.com/hook",
-                                        "response_base_url": "http://localhost:8000"},
+                                        "response_base_url": "http://localhost:8003"},
         preference=2,
     )
     manager.set_metadata("identity.timezone", "America/New_York")

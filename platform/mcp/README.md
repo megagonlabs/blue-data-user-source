@@ -280,7 +280,7 @@ Details by protocol:
 ```
 stdio   → {} (no details needed — prints to stdout, reads from stdin)
 webhook → {"url": "https://hooks.example.com/incoming",
-           "response_base_url": "http://localhost:8000",
+           "response_base_url": "http://localhost:8003",
            "timeout": 300}
 ```
 
@@ -361,7 +361,7 @@ add_contact("alice", "email", "work", {
     "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
     "reply_domain": "blue-userdb.example.com",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
     "inbound_provider": "mailgun",
 }, preference=1)
 

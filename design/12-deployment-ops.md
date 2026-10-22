@@ -25,14 +25,14 @@ Production deployments are self-hosted. Operators provision and manage their own
 |-------------|-------------|
 | `blue-userdb` | A process per command; state on disk |
 | `blue-userdb-mcp` | stdio MCP server, launched by the agent host (Claude Desktop, Claude Code, …) |
-| `blue-userdb-api` | Uvicorn on `BLUE_DATA_USER_SOURCE_HOST`:`BLUE_DATA_USER_SOURCE_PORT` (default `127.0.0.1:8000`); `platform/api/scripts/start.sh` binds `0.0.0.0` |
+| `blue-userdb-api` | Uvicorn on `BLUE_DATA_USER_API_HOST`:`BLUE_DATA_USER_API_PORT` (default `127.0.0.1:8003`, the user service's slot in the family port map); `platform/api/scripts/start.sh` binds `0.0.0.0` |
 
 **Storage.** File-backed by default under `~/.blue-userdb/` (`BLUE_DATA_USER_SOURCE_DATA_DIR`): the registry, every user's JSON stores, KB and document stores. The CLI can put a user's KB in Neo4j (`database create --kb-backend neo4j`). The library also offers `RedisUserSource` (JSON stores in Redis with RedisJSON); the KB has no Redis backend.
 
 **Configuration.**
 
 - CLI: `blue-data` profiles (`blue-userdb profile`), which hold settings and secrets (`OPENAI_API_KEY`, `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD`, …) and export them to the command; options and environment variables override.
-- REST API: `BLUE_DATA_USER_SOURCE_*` environment variables or a `.env` file — `DATA_DIR`, `HOST`, `PORT`, `API_KEY`, `ALLOWED_ORIGINS`, `SCHEMA_PATH`, `METADATA_SCHEMA_PATH`, `CONTACT_SCHEMA_PATH`.
+- REST API: `BLUE_DATA_USER_SOURCE_*` environment variables or a `.env` file — `DATA_DIR`, `ALLOWED_ORIGINS`, `SCHEMA_PATH`, `METADATA_SCHEMA_PATH`, `CONTACT_SCHEMA_PATH` — and, from the environment only, the family server settings from `blue_data.server`: `BLUE_DATA_USER_API_HOST`, `BLUE_DATA_USER_API_PORT`, `BLUE_DATA_USER_API_KEY` (required) and `BLUE_DATA_USER_API_AUTH_DISABLED` (#157).
 - MCP server: `BLUE_DATA_USER_SOURCE_DATA_DIR` and the three schema paths.
 - All: `OPENAI_API_KEY` for the LLM; the model defaults to `gpt-4o`.
 

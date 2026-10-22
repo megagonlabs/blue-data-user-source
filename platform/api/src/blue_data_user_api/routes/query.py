@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 
-router = APIRouter(tags=["query"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["query"], dependencies=SECURITY)
 
 
 class QueryRequest(BaseModel):

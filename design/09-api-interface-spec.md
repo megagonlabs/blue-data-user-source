@@ -274,7 +274,11 @@ Inside a query, an `InteractionError` does not fail the query: the clarification
 
 FastAPI application. Each route calls one library operation. All handlers are `async def`; blocking behavior on long-running queries is acceptable — callers are expected to hold the connection. The user is always in the path (`/{name}/...`); there is no server-side default database.
 
-**Access.** When `BLUE_DATA_USER_SOURCE_API_KEY` is set, every route except `/health`, the email-reply form (`/interactions/{id}/respond`, where the interaction id acts as the token) and the inbound-email webhook requires it in `X-API-Key` (401 otherwise). State-changing requests from a browser origin other than the API's own (or one listed in `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS`) are refused with 403 (#139).
+**Access.** The family's HTTP policy from `blue_data.server` (#157, blue-data#116):
+- **API key.** Every route except `/health`, the interactive docs, the email-reply form (`/interactions/{id}/respond`) and the inbound-email webhook requires `BLUE_DATA_USER_API_KEY`, sent as `X-API-Key` or `Authorization: Bearer`. A request without it gets 401, and so does every request when no key is configured, unless `BLUE_DATA_USER_API_AUTH_DISABLED=true`. On the two open routes, the interaction id in the URL or the reply address acts as the token.
+- **CSRF.** A state-changing request with a form, multipart or text body gets 415.
+- **Origins.** State-changing requests from a browser origin other than the API's own, or one listed in `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS`, are refused with 403 (#139).
+- **Bind.** The server listens on `BLUE_DATA_USER_API_HOST`:`BLUE_DATA_USER_API_PORT`, by default `127.0.0.1:8003`, the user service's slot in the family port map.
 
 **Routes in 1.0**
 
@@ -411,8 +415,9 @@ Errors use FastAPI's envelope, `{"detail": "<message>"}` (for request-validation
 
 | HTTP status | Condition |
 |------------|-----------|
-| 401 | Missing or wrong `X-API-Key`, when a key is configured |
+| 401 | Missing or wrong API key, or no key configured and `BLUE_DATA_USER_API_AUTH_DISABLED` not set |
 | 403 | State-changing request from a disallowed browser origin |
+| 415 | A state-changing request with a form, multipart or text body (CSRF guard) |
 | 404 | `UserNotFoundError`, `SessionNotFoundError`, `ContactNotFoundError`; unknown source |
 | 409 | `UserExistsError`, `SessionEndedError` |
 | 422 | Request validation; any other `UDbError` (`QueryError`, `InteractionError`, `ImportError`) |

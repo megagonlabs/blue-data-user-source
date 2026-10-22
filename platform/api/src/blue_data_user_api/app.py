@@ -12,6 +12,9 @@ from blue_data_user_source import (
     UDbError, UserExistsError, UserNotFoundError,
 )
 
+from blue_data.server import resolve_bind
+
+from blue_data_user_api.auth import DEFAULT_PORT, ENV_PREFIX
 from blue_data_user_api.config import settings
 from blue_data_user_api.routes import contacts, data, databases, interactions, metadata, query, sessions
 from blue_data_user_api.source import create_source
@@ -63,7 +66,7 @@ async def reject_cross_origin_writes(request: Request, call_next):  # type: igno
 
     A page on any site can make the browser POST to this API — a plain HTML
     form needs no CORS preflight — so with the default local setup (no API
-    key) any page the operator visits could reset a user. Browsers attach an
+    key, when auth is disabled) any page the operator visits could reset a user. Browsers attach an
     ``Origin`` header to such requests; scripts and SDKs send none. A write is
     allowed when it has no ``Origin`` (not a browser), or when the origin is
     this server's own or listed in ``BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS``.
@@ -118,12 +121,10 @@ async def health() -> dict:
 
 
 def main() -> None:
-    uvicorn.run(
-        "blue_data_user_api.app:app",
-        host=settings.host,
-        port=settings.port,
-        reload=False,
-    )
+    # Loopback and the family's port for this service unless BLUE_DATA_USER_API_HOST /
+    # BLUE_DATA_USER_API_PORT say otherwise (#157).
+    host, port = resolve_bind(ENV_PREFIX, default_port=DEFAULT_PORT)
+    uvicorn.run("blue_data_user_api.app:app", host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":

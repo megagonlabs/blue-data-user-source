@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 
-router = APIRouter(tags=["contacts"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["contacts"], dependencies=SECURITY)
 
 
 class ContactRequest(BaseModel):

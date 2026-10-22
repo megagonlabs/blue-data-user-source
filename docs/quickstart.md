@@ -132,13 +132,14 @@ See [mcp.md](mcp.md) for the Claude Desktop config and full tool reference.
 
 ```bash
 cd platform/api && bash scripts/install.sh
-blue-userdb-api
+export BLUE_DATA_USER_API_KEY=secret   # required; or BLUE_DATA_USER_API_AUTH_DISABLED=true for local use
+blue-userdb-api                        # http://127.0.0.1:8003
 ```
 
 ```bash
-curl -X POST http://localhost:8000/databases/alice
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/databases/alice
 
-curl -X POST http://localhost:8000/alice/query \
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/alice/query \
   -H 'Content-Type: application/json' \
   -d '{"query": "What skills does alice have?"}'
 ```

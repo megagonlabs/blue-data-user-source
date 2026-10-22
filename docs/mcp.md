@@ -242,7 +242,7 @@ Common keys: `identity.name`, `identity.timezone`, `preferences.verbosity`, `pre
 ```
 email   → {"address": "alice@example.com", "inbound_provider": "stdio"}   # dev mode, no SMTP needed
 webhook → {"url": "https://hooks.example.com/incoming",
-           "response_base_url": "http://localhost:8000", "timeout": 300}
+           "response_base_url": "http://localhost:8003", "timeout": 300}
 ```
 
 For a production email contact, also set `from_address`, `smtp_host`, `reply_domain`, `response_base_url`, and an `inbound_provider` of `mailgun`, `postmark`, or `sendgrid` — see [api.md](api.md#email-contact-method) for the full key set and the inbound webhook wiring.

@@ -21,28 +21,23 @@ pip install -e .
 `fastapi`, `uvicorn`, `httpx`, and `pydantic-settings` are pulled in automatically.
 
 ```bash
-export OPENAI_API_KEY=sk-...
-```
+# The API key is required (#157): set one, or opt out explicitly for local use
+export BLUE_DATA_USER_API_KEY=secret          # or: export BLUE_DATA_USER_API_AUTH_DISABLED=true
 
----
-
-## Running
-
-```bash
-# Defaults: 127.0.0.1:8000, no auth, ~/.blue-userdb data dir
+# Defaults: 127.0.0.1:8003, ~/.blue-userdb data dir
 blue-userdb-api
 
 # Or with explicit configuration
-BLUE_DATA_USER_SOURCE_DATA_DIR=/data/blue-userdb BLUE_DATA_USER_SOURCE_API_KEY=secret blue-userdb-api
+BLUE_DATA_USER_SOURCE_DATA_DIR=/data/blue-userdb BLUE_DATA_USER_API_PORT=9000 blue-userdb-api
 
 # Bind to all interfaces (scripts/start.sh does this by default)
 bash scripts/start.sh
 
 # Interactive docs
-open http://localhost:8000/docs
+open http://localhost:8003/docs
 ```
 
-Settings can also be loaded from a `.env` file in the working directory (`pydantic-settings`).
+The `BLUE_DATA_USER_SOURCE_*` settings can also be loaded from a `.env` file in the working directory (`pydantic-settings`); the `BLUE_DATA_USER_API_*` ones come from the environment only.
 
 ## Configuration reference
 
@@ -51,25 +46,28 @@ These share their names with the `blue-userdb` CLI's profile parameters but noth
 | Variable | Default | Description |
 |---|---|---|
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
-| `BLUE_DATA_USER_SOURCE_API_KEY` | _(empty — no auth)_ | API key required in `X-API-Key` header; unset disables auth |
 | `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins, besides the API's own, allowed to make state-changing requests |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | _(empty)_ | Path to a custom `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | _(packaged `metadata_schema.json`)_ | Path to a custom metadata schema |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | _(packaged `contact_schema.json`)_ | Path to a custom contact schema |
-| `BLUE_DATA_USER_SOURCE_HOST` | `127.0.0.1` | Server bind address |
-| `BLUE_DATA_USER_SOURCE_PORT` | `8000` | Server port |
+| `BLUE_DATA_USER_API_KEY` | _(none)_ | API key, sent as `X-API-Key` or `Authorization: Bearer`. Required: with none set, requests get `401` |
+| `BLUE_DATA_USER_API_AUTH_DISABLED` | _(unset)_ | `true` runs without an API key (local development only) |
+| `BLUE_DATA_USER_API_HOST` | `127.0.0.1` | Server bind address |
+| `BLUE_DATA_USER_API_PORT` | `8003` | Server port (the family port map: registry 8000, doc 8001, web 8002, user 8003) |
 
-**Cross-origin writes.** A state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a browser `Origin` header other than the API's own or one listed in `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` is refused with `403`. Without it, any web page the operator visits could make the browser post to a local, keyless API, e.g. reset a user. Scripts and SDKs send no `Origin` and are unaffected.
+**Cross-origin writes.** A state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a browser `Origin` header other than the API's own or one listed in `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` is refused with `403`. Without it, any web page the operator visits could make the browser post to a local API, e.g. reset a user; the JSON-only rule for writes blocks most of these too. Scripts and SDKs send no `Origin` and are unaffected.
 
 ## Authentication
 
-When `BLUE_DATA_USER_SOURCE_API_KEY` is set, every request must include:
+The service follows the Blue data family's HTTP policy (`blue_data.server`, #157):
 
-```
-X-API-Key: <your-key>
-```
+- **API key, required by default.** Every route except `/health`, the interactive docs and the two email-reply routes below needs `BLUE_DATA_USER_API_KEY`, sent as `X-API-Key: <key>` or `Authorization: Bearer <key>`. Without a valid key a request gets `401`. If no key is configured, requests are refused too, unless `BLUE_DATA_USER_API_AUTH_DISABLED=true`. The key is read from the process environment, not from `.env`.
+- **JSON for writes.** A `POST`, `PUT`, `PATCH` or `DELETE` with a form, multipart or plain-text body (what a cross-site HTML form can send) gets `415`. Send `application/json`, or no body.
+- **Open reply routes.** The reply form an email links to (`/interactions/{id}/respond`) and the inbound-email webhook (`/interactions/email/inbound`) need no key. A person clicking a link and a mail provider cannot send one. The interaction id in the link or reply address is their credential. The webhook reply route, `/interactions/{id}/response`, does need the key.
 
-Requests without a valid key receive `401 Unauthorized`. When the env var is unset, authentication is disabled entirely.
+```bash
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" http://localhost:8003/databases
+```
 
 ---
 
@@ -138,13 +136,13 @@ Requests without a valid key receive `401 Unauthorized`. When the env var is uns
 | `POST` | `/{name}/sessions/{session_id}/end` | End a session |
 
 ```bash
-SID=$(curl -s -X POST http://localhost:8000/alice/sessions | jq -r .session_id)
-curl -X POST http://localhost:8000/alice/query \
+SID=$(curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -s -X POST http://localhost:8003/alice/sessions | jq -r .session_id)
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/alice/query \
   -H 'Content-Type: application/json' \
   -d "{\"query\": \"What skills does alice have?\", \"session\": \"$SID\"}"
 
-curl http://localhost:8000/alice/sessions/$SID
-curl -X POST http://localhost:8000/alice/sessions/$SID/end
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" http://localhost:8003/alice/sessions/$SID
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/alice/sessions/$SID/end
 ```
 
 `GET .../sessions/{id}` returns `404` if unknown. `POST .../end` returns `404` if unknown; ending an already-ended session is idempotent (`200`). See [10-data-model.md](../design/10-data-model.md) §6 for the full record schema.
@@ -179,7 +177,7 @@ curl -X POST http://localhost:8000/alice/sessions/$SID/end
 | `DELETE` | `/{name}/metadata/{key}` | Delete a metadata key |
 
 ```bash
-curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X PUT http://localhost:8003/alice/metadata/preferences.verbosity \
   -H 'Content-Type: application/json' \
   -d '{"value": "brief"}'
 ```
@@ -205,7 +203,7 @@ curl -X PUT http://localhost:8000/alice/metadata/preferences.verbosity \
     "from_address": "agent@blue-userdb.example.com",
     "smtp_host": "smtp.example.com",
     "reply_domain": "blue-userdb.example.com",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
     "inbound_provider": "mailgun"
   },
   "preference": 1
@@ -220,7 +218,7 @@ Webhook contact method:
   "name": "slack-bot",
   "details": {
     "url": "https://hooks.example.com/incoming",
-    "response_base_url": "http://localhost:8000",
+    "response_base_url": "http://localhost:8003",
     "timeout": 300
   }
 }
@@ -232,7 +230,7 @@ When an agent needs to ask Alice a question, the webhook fires a `POST` to `url`
 {
   "interaction_id": "<uuid>",
   "message": "Which delivery address should I use?",
-  "response_url": "http://localhost:8000/interactions/<uuid>/response"
+  "response_url": "http://localhost:8003/interactions/<uuid>/response"
 }
 ```
 
@@ -297,7 +295,7 @@ When the agent needs to contact a user, it sends an SMTP email with a `Reply-To:
 **`inbound_provider: "stdio"`** — development mode: prints email content to stdout and reads the reply from stdin. Useful for local testing without an SMTP server or inbound webhook.
 
 ```bash
-curl -X POST http://localhost:8000/alice/contacts \
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/alice/contacts \
   -H 'Content-Type: application/json' \
   -d '{
     "protocol": "email",
@@ -321,8 +319,9 @@ Errors use FastAPI's standard body, a `detail` string (or, for request validatio
 | HTTP status | Condition |
 |---|---|
 | 400 | Unknown inbound-email provider, or an interaction response that is missing its answer |
-| 401 | Missing or wrong API key, when `BLUE_DATA_USER_SOURCE_API_KEY` is set |
+| 401 | Missing or wrong API key, or no key configured and `BLUE_DATA_USER_API_AUTH_DISABLED` not set |
 | 403 | A state-changing request from a foreign browser origin |
+| 415 | A state-changing request with a form, multipart or plain-text body (send `application/json`) |
 | 404 | The user (database) does not exist (`UserNotFoundError`, on every route that names one), or the session (`SessionNotFoundError`), contact method (`ContactNotFoundError`), source or pending interaction does not |
 | 409 | The user already exists (`UserExistsError`), the session has ended (`SessionEndedError`), or the interaction was already answered |
 | 422 | Request validation (a malformed body, an unknown body key, an invalid database name, an inbound email the adapter cannot parse), or any other library error about the input (`QueryError`, `InteractionError`, e.g. an unsupported contact protocol) |

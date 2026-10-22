@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from blue_data_user_api.auth import require_api_key
+from blue_data_user_api.auth import SECURITY
 
-router = APIRouter(tags=["metadata"], dependencies=[Depends(require_api_key)])
+router = APIRouter(tags=["metadata"], dependencies=SECURITY)
 
 
 class MetadataSetRequest(BaseModel):
