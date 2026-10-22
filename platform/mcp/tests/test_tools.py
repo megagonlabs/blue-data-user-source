@@ -122,6 +122,20 @@ async def test_delete_database_removes_user():
     assert USER not in users
 
 
+async def test_delete_database_reports_paths_it_kept(source, tmp_path):
+    """A recorded file outside the data directory is not deleted, and the tool says so (#156)."""
+    victim = tmp_path / "metadata.json"
+    source.create_database("kept", {"metadata_source": {
+        "_class": "blue_data.source.json.file_json_source.FileJSONSource",
+        "connection": {"protocol": "json/file", "path": str(victim)},
+    }})
+    source.set_metadata("kept", "identity.name", "K")
+    result = json.loads(await delete_database("kept"))
+    assert result["deleted"] is True
+    assert result["not_deleted"] == [str(victim)]
+    assert victim.exists()
+
+
 async def test_reset_database_returns_ok():
     result = json.loads(await reset_database(USER))
     assert result["reset"] is True

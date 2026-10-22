@@ -32,8 +32,8 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `list_users()` | `list[str]` | Registered user names |
 | `get_user(name)` | `dict \| None` | The user's registry properties dict, or `None` |
 | `remove_user(name)` | `None` | Remove from the outer registry only — backing files unchanged |
-| `await reset_user(name)` | `None` | Clear KB data + imported sources for the user, reseed schemas |
-| `await delete_user(name)` | `None` | Destroy the user's stored data — backing files, and namespaced stores such as Redis keys — and remove it from the outer registry. A non-file store without its own `namespace` is left alone (it may be shared) and a warning is logged |
+| `await reset_user(name)` | `list[str]` | Clear the user's KB data, ingested documents, metadata, contacts, sessions and imported sources, and reseed the schemas. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). Returns the paths kept, normally empty |
+| `await delete_user(name)` | `list[str]` | Destroy the user's stored data — backing files, and namespaced stores such as Redis keys — and remove it from the outer registry. A non-file store without its own `namespace` is left alone (it may be shared) and a warning is logged. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). The data directory is `FileUserSource`'s registry directory; other sources have none, so they delete no files. Returns the paths kept, normally empty |
 
 ### Query
 

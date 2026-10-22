@@ -124,8 +124,9 @@ async def delete_database(name: str) -> str:
         name: User name to delete.
     """
     try:
-        await get_source().delete_user(name)
-        return _ok({"name": name, "deleted": True})
+        kept = await get_source().delete_user(name)
+        # Recorded paths outside the data directory are never deleted (#156).
+        return _ok({"name": name, "deleted": True, **({"not_deleted": kept} if kept else {})})
     except Exception as e:
         return _err(e)
 
@@ -140,8 +141,8 @@ async def reset_database(name: str) -> str:
         name: User name to reset.
     """
     try:
-        await get_source().reset_user(name)
-        return _ok({"name": name, "reset": True})
+        kept = await get_source().reset_user(name)
+        return _ok({"name": name, "reset": True, **({"not_deleted": kept} if kept else {})})
     except Exception as e:
         return _err(e)
 

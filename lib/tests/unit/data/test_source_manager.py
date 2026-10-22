@@ -26,6 +26,7 @@ async def _build_file_backed_manager(tmp_path: Path, user_id: str, directory: Pa
             "embedding_model": "dummy",
             "vector_source": {"backend": "file", "directory": str(directory)},
         },
+        data_root=tmp_path,  # delete and reset remove files only under it (#156)
     )
     await mgr.build(
         schema_path=_SCHEMA,

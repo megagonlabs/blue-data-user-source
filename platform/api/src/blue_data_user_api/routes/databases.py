@@ -64,5 +64,7 @@ async def delete_database(name: str, request: Request) -> None:
 
 @router.post("/{name}/reset", summary="Reset user data")
 async def reset_database(name: str, request: Request) -> dict:
-    await request.app.state.source.reset_user(name)
-    return {"name": name, "reset": True}
+    kept = await request.app.state.source.reset_user(name)
+    # Recorded paths outside the data directory are never deleted (#156); a DELETE
+    # (204, no body) only logs them.
+    return {"name": name, "reset": True, **({"not_deleted": kept} if kept else {})}

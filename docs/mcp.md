@@ -115,11 +115,11 @@ Creates a new user with file-backed storage under `BLUE_DATA_USER_SOURCE_DATA_DI
 
 #### `delete_database`
 
-`name` — deletes the user and all their backing data files.
+`name` — deletes the user and all their backing data files. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). Any kept paths are listed under `not_deleted`.
 
 #### `reset_database`
 
-`name` — clears the user's KB data, ingested documents, metadata, contact methods and session history, and reseeds the schemas. The user stays registered. This cannot be undone.
+`name` — clears the user's KB data, ingested documents, metadata, contact methods and session history, and reseeds the schemas. The user stays registered. This cannot be undone. Paths outside the data directory are kept and listed under `not_deleted`.
 
 ---
 

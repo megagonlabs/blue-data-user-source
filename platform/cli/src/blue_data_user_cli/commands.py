@@ -709,10 +709,11 @@ def database_delete(obj: dict, name: str, yes: bool) -> None:
         click.confirm(f"Delete database '{name}' and all its data?", abort=True)
     source = _make_source(obj["data_dir"])
     try:
-        asyncio.run(source.delete_user(name))
+        kept = asyncio.run(source.delete_user(name))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
+    _warn_kept(kept)
     sel_path = _selected_db_path(obj["data_dir"])
     if sel_path.exists() and sel_path.read_text().strip() == name:
         sel_path.unlink()
@@ -778,11 +779,18 @@ def database_reset(obj: dict, yes: bool) -> None:
         click.confirm(f"Reset database '{db}'? This deletes its KB data, ingested documents, metadata, contacts and sessions.", abort=True)
     source = _seeding_source(obj)
     try:
-        asyncio.run(source.reset_user(db))
+        kept = asyncio.run(source.reset_user(db))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
+    _warn_kept(kept)
     console.print(f"Reset database: [bold]{db}[/bold]")
+
+
+def _warn_kept(paths: list[str]) -> None:
+    """Report recorded paths the library would not delete: outside the data directory (#156)."""
+    for path in paths:
+        err.print(f"[yellow]Warning:[/yellow] not deleted, outside the data directory: {path}")
 
 
 @database_group.group("config")

@@ -689,7 +689,9 @@ class UserSource(DataSource):
         validate_user_name(name)
         if self.get_user(name) is not None:
             raise UserExistsError(f"Database {name!r} already exists.")
-        manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
+        manager = UserDataManager(
+            name, registry_props, doc_source_props=doc_source_props, data_root=self._data_root(),
+        )
         await manager.build(
             schema_path=self._registry.get_source_property(self.name, "schema"),
             kb_source_props=kb_source_props,
@@ -745,17 +747,36 @@ class UserSource(DataSource):
         self._registry.deregister_source_database(self.name, name)
         self._managers.pop(name, None)
 
-    async def reset_user(self, name: str) -> None:
-        await self._get_manager(name).reset(
+    def _data_root(self) -> Path | None:
+        """The directory a user's files must lie under for delete and reset to remove
+        them (#156). None here: this source keeps no files of its own, so a file path
+        recorded in a store's settings is never deleted."""
+        return None
+
+    async def reset_user(self, name: str) -> list[str]:
+        """Clear a user's data back to the schema defaults.
+
+        Returns the recorded paths it refused to delete because they lie outside
+        the data directory (logged as warnings, #156); normally empty.
+        """
+        manager = self._get_manager(name)
+        await manager.reset(
             schema_path=self._registry.get_source_property(self.name, "schema"),
             metadata_schema_path=self._registry.get_source_property(self.name, "metadata_schema"),
             contact_schema_path=self._registry.get_source_property(self.name, "contact_schema"),
         )
+        return manager.refused_paths
 
-    async def delete_user(self, name: str) -> None:
+    async def delete_user(self, name: str) -> list[str]:
+        """Delete a user and its stored data.
+
+        Returns the recorded paths it refused to delete because they lie outside
+        the data directory (logged as warnings, #156); normally empty.
+        """
         manager = self._get_manager(name)
-        manager.destroy()
+        refused = manager.destroy()
         self.remove_user(name)
+        return refused
 
     # ------------------------------------------------------------------ #
     # Source management (UserSource-specific async API)                    #
@@ -1036,7 +1057,10 @@ class UserSource(DataSource):
                 "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
             }
             doc_source_props = db_props.get("doc_source") or DEFAULT_DOC_SOURCE_PROPS
-            manager = UserDataManager(name, registry_props, doc_source_props=doc_source_props)
+            manager = UserDataManager(
+                name, registry_props,
+                doc_source_props=doc_source_props, data_root=self._data_root(),
+            )
             manager.connect()
             self._managers[name] = manager
         return self._managers[name]

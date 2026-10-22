@@ -122,7 +122,7 @@ Returns `{"name": "...", "created": true}`.
 |---|---|---|
 | `name` | `str` | User name to delete |
 
-Deletes the user and all their backing data files.
+Deletes the user and all their backing data files. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). Any kept paths are listed under `not_deleted`.
 
 #### `reset_database`
 
@@ -131,7 +131,8 @@ Deletes the user and all their backing data files.
 | `name` | `str` | User name to reset |
 
 Clears the user's KB data, ingested documents, metadata, contact methods and session history, and
-reseeds the schemas. The user stays registered. This cannot be undone.
+reseeds the schemas. The user stays registered. This cannot be undone. Paths outside the data directory
+are kept and listed under `not_deleted`.
 
 ---
 

@@ -87,7 +87,7 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" http://localhost:8003/databases
 | `POST` | `/databases/{name}` | Create a new user (file-backend defaults from `BLUE_DATA_USER_SOURCE_DATA_DIR`); `409` if it already exists |
 | `GET` | `/databases/{name}` | Get user info and registry properties |
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
-| `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered |
+| `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered. Files outside the data directory are never deleted; any such paths are listed under `not_deleted` (a `DELETE` only logs them) |
 
 `POST /databases/{name}` takes no body (an empty `{}` is accepted): every store is a file under `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`, and any other key is rejected with `422`. `name` must be 1–64 letters, digits, `_` or `-`, starting with a letter, digit or `_`. Other backends (Redis, Neo4j) are configured through the library or the CLI, not over REST.
 

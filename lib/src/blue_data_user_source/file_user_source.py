@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from blue_data.core.utils.path_utils import contain
+
 from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_FILE
 from blue_data_user_source.source import UserSource, validate_user_name
 
@@ -37,6 +39,10 @@ class FileUserSource(UserSource):
         conn["protocol"] = "user/file"
         conn.setdefault("path", "registry.json")
 
+    def _data_root(self) -> Path:
+        """The registry file's directory: every user's files live under it (#156)."""
+        return Path(self.properties["registry"]["connection"]["path"]).expanduser().parent
+
     def default_user_props(self, name: str) -> dict[str, dict]:
         """A new user's stores as files beside the registry file.
 
@@ -46,16 +52,17 @@ class FileUserSource(UserSource):
         under ``<dir>/sources/<name>/`` — the layout the CLI and servers use.
         """
         validate_user_name(name)  # the name becomes a path (#134)
-        registry_path = self.properties["registry"]["connection"]["path"]
-        root = Path(registry_path).expanduser().parent
-        base = root / "sources" / name
+        root = self._data_root()
+        # Composed with blue-data's contain(), as delete and reset check them (#156).
+        base = Path(contain(contain(str(root), "sources"), name))
+        registry_file = Path(contain(contain(str(root), "registries"), name, ".json"))
 
         def json_file(path: Path) -> dict:
             connection = {"protocol": "json/file", "path": str(path)}
             return {"_class": CLS_JSON_FILE, "connection": connection}
 
         return {
-            "registry": json_file(root / "registries" / f"{name}.json"),
+            "registry": json_file(registry_file),
             "kb_source": {
                 "_class": CLS_KB_FILE,
                 "connection": {"protocol": "kb/file", "directory": str(base)},

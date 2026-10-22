@@ -299,7 +299,7 @@ def test_database_onboard_error_exits_with_code_1(runner: CliRunner, data_dir: P
 
 def test_database_delete_removes_and_prints(runner: CliRunner, data_dir: Path) -> None:
     mock = MagicMock()
-    mock.delete_user = AsyncMock(return_value=None)
+    mock.delete_user = AsyncMock(return_value=[])  # the paths it refused to delete (#156)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "delete", "alice", "--yes"])
     assert result.exit_code == 0
@@ -363,10 +363,20 @@ def test_database_search_table_format_renders_a_table(
     assert "┃" in result.output or "|" in result.output
 
 
+def test_database_delete_warns_about_paths_it_kept(runner: CliRunner, data_dir: Path) -> None:
+    """A recorded path outside the data directory is not deleted, and the CLI says so (#156)."""
+    mock = MagicMock()
+    mock.delete_user = AsyncMock(return_value=["/elsewhere/metadata.json"])
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "delete", "alice", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "not deleted, outside the data directory: /elsewhere/metadata.json" in result.output
+
+
 def test_database_reset_confirmed_calls_reset_user(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
-    mock.reset_user = AsyncMock(return_value=None)
+    mock.reset_user = AsyncMock(return_value=[])
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "reset", "--yes"])
     assert result.exit_code == 0

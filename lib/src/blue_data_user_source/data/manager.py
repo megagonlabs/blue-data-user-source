@@ -3,10 +3,12 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Any, Literal
 
+from blue_data.core.utils.path_utils import contain
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
@@ -180,11 +182,19 @@ class UserDataManager:
     """
 
     def __init__(
-        self, database: str, registry_props: dict, doc_source_props: dict | None = None,
+        self,
+        database: str,
+        registry_props: dict,
+        doc_source_props: dict | None = None,
+        data_root: str | Path | None = None,
     ) -> None:
         self._database = database
         self._registry_props = registry_props
         self._doc_source_props = doc_source_props or DEFAULT_DOC_SOURCE_PROPS
+        # The directory every file this user's stores record must lie under for
+        # delete and reset to remove it (#156); None when the source keeps no files.
+        self._data_root = Path(data_root).expanduser() if data_root is not None else None
+        self._refused: list[str] = []
         self._registry: DataRegistry | None = None
         # Optional overrides — set directly by callers (e.g. test mocks)
         self._kb_source: Any = None
@@ -255,7 +265,12 @@ class UserDataManager:
         contact_schema_path: str | None = None,
         sources: set[str] | None = None,
     ) -> None:
-        """Clear and reseed selected sources back to schema defaults."""
+        """Clear and reseed selected sources back to schema defaults.
+
+        Files are removed only inside the data directory (#156); see
+        :meth:`destroy`. Paths refused are logged and kept in ``refused_paths``.
+        """
+        self._refused = []
         if sources is None:
             sources = {"kb", "metadata", "contacts", "sessions"}
 
@@ -290,22 +305,76 @@ class UserDataManager:
             if record["name"] not in ("kb", "metadata", "contacts", "sessions"):
                 self._registry.deregister(record)
 
-    def destroy(self) -> None:
+    def _contained(self, path: str | Path) -> Path | None:
+        """*path* if it lies inside the data root, else ``None``, refused and logged.
+
+        A path recorded in a store's connection settings may have been written
+        by another tool, an older version or a shared registry, so delete and
+        reset remove nothing outside this user's data directory (#156). Each
+        component is checked with blue-data's ``contain()``, which resolves
+        symlinks, so a link inside the root that points out of it is refused too.
+        """
+        if self._data_root is None:
+            return self._refuse(path, "this source keeps no data directory to contain it in")
+        target = Path(os.path.normpath(Path(path).expanduser().absolute()))
+        for root in (Path(os.path.normpath(self._data_root.absolute())), self._data_root.resolve()):
+            try:
+                parts = target.relative_to(root).parts
+                break
+            except ValueError:
+                continue
+        else:
+            return self._refuse(path, f"outside the data directory {str(self._data_root)!r}")
+        if not parts:
+            return self._refuse(path, "it is the data directory itself")
+        current = str(self._data_root)
+        try:
+            for part in parts:
+                current = contain(current, part)
+        except ValueError as exc:
+            return self._refuse(path, str(exc))
+        return Path(current)
+
+    @property
+    def refused_paths(self) -> list[str]:
+        """The recorded paths the last destroy or reset would not delete."""
+        return list(self._refused)
+
+    def _refuse(self, path: str | Path, why: str) -> None:
+        logger.warning("Not deleting %s for %r: %s", path, self._database, why)
+        self._refused.append(str(path))
+        return None
+
+    def _unlink(self, path: str | Path) -> None:
+        contained = self._contained(path)
+        if contained is not None:
+            contained.unlink(missing_ok=True)
+
+    def _rmtree(self, path: str | Path) -> None:
+        contained = self._contained(path)
+        if contained is not None and contained.exists():
+            shutil.rmtree(contained)
+
+    def destroy(self) -> list[str]:
         """Delete this user's stored data: backing files, and namespaced stores (e.g. Redis).
 
         A store with neither a file path nor its own ``namespace`` is left
         alone: before #136 such stores shared the backend's default keys with
-        every other user, so clearing "its" keys would delete theirs.
+        every other user, so clearing "its" keys would delete theirs. A recorded
+        file path outside the data directory is left alone too (#156); the
+        paths refused are returned (and logged).
         """
+        self._refused = []
         if self._registry is not None:
             # KB — file backend stores {database}.json inside the directory
             kb_props = self._registry.get_source_properties("kb") or {}
             kb_conn = kb_props.get("connection", {})
             if "directory" in kb_conn:
-                user_dir = Path(kb_conn["directory"])
-                (user_dir / f"{self._database}.json").unlink(missing_ok=True)
-                with contextlib.suppress(OSError):
-                    user_dir.rmdir()
+                user_dir = self._contained(kb_conn["directory"])
+                if user_dir is not None:
+                    self._unlink(user_dir / f"{self._database}.json")
+                    with contextlib.suppress(OSError):
+                        user_dir.rmdir()
 
             # Metadata, contacts, and sessions — a file, or a namespaced store
             # whose keys used to be left behind on Redis (#153).
@@ -313,7 +382,7 @@ class UserDataManager:
                 props = self._registry.get_source_properties(src_name) or {}
                 conn = props.get("connection", {})
                 if "path" in conn:
-                    Path(conn["path"]).unlink(missing_ok=True)
+                    self._unlink(conn["path"])
                 elif props.get("namespace"):
                     self._registry.connect_source(src_name).delete(None)
                 elif conn.get("protocol", "").startswith("json/redis"):
@@ -324,20 +393,21 @@ class UserDataManager:
 
         # Session content — vector store + raw transcripts directory, if file-backed
         session_content_dir = self._session_vector_directory()
-        if session_content_dir is not None and session_content_dir.exists():
-            shutil.rmtree(session_content_dir)
+        if session_content_dir is not None:
+            self._rmtree(session_content_dir)
 
         # External documents — sibling vector store directory, if file-backed
         external_documents_dir = self._external_documents_directory()
-        if external_documents_dir is not None and external_documents_dir.exists():
-            shutil.rmtree(external_documents_dir)
+        if external_documents_dir is not None:
+            self._rmtree(external_documents_dir)
 
         # Per-user registry — a file, or a namespaced store
         reg_conn = self._registry_props.get("connection", self._registry_props)
         if "path" in reg_conn:
-            Path(reg_conn["path"]).unlink(missing_ok=True)
+            self._unlink(reg_conn["path"])
         elif self._registry_props.get("namespace"):
             _build_json_source("registry", self._registry_props).delete(None)
+        return list(self._refused)
 
     # ------------------------------------------------------------------ #
     # Internal source access (via DataRegistry.connect_source)            #
@@ -872,14 +942,13 @@ class UserDataManager:
         clearing the "sessions" JSON record alone leaves them behind. No-op
         when the vector backend is in-memory — see :meth:`_session_vector_directory`.
         """
-        directory = self._session_vector_directory()
+        recorded = self._session_vector_directory()
+        directory = self._contained(recorded) if recorded is not None else None
         if directory is None or not directory.exists():
             return
-        transcripts_dir = directory / "transcripts"
-        if transcripts_dir.exists():
-            shutil.rmtree(transcripts_dir)
+        self._rmtree(directory / "transcripts")
         for path in directory.glob("*.json"):
-            path.unlink(missing_ok=True)
+            self._unlink(path)
         self._session_doc_source = None
 
     def _clear_external_documents(self) -> None:
@@ -890,8 +959,8 @@ class UserDataManager:
         reloads them. No-op when the vector backend is in-memory.
         """
         directory = self._external_documents_directory()
-        if directory is not None and directory.exists():
-            shutil.rmtree(directory)
+        if directory is not None:
+            self._rmtree(directory)
         self._external_doc_source = None
         for record in self._registry.list_records(record_type=_DOCUMENT_RECORD, scope="/") or []:
             self._registry.deregister(record)

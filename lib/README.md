@@ -194,8 +194,8 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 | `list_users()` | Return list of database names |
 | `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
 | `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
-| `reset_user(name)` *(async)* | Wipe KB data, ingested documents, metadata, contacts, sessions and imported registry entries, then reseed the schemas |
-| `delete_user(name)` *(async)* | Destroy the user's stored data (backing files, and namespaced stores such as Redis keys) and remove it from the outer registry |
+| `reset_user(name)` *(async)* | Wipe KB data, ingested documents, metadata, contacts, sessions and imported registry entries, then reseed the schemas. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). Returns the paths kept |
+| `delete_user(name)` *(async)* | Destroy the user's stored data (backing files, and namespaced stores such as Redis keys) and remove it from the outer registry. Only files inside the data directory are deleted: a store path recorded outside it, or reached through a symlink out of it, is kept and logged (#156). Returns the paths kept |
 
 **Source properties format** — all source configs use `_class` + `connection`:
 
