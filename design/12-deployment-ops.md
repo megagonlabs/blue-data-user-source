@@ -15,7 +15,7 @@ Production deployments are self-hosted. Operators provision and manage their own
 
 ## 0. As Built in 1.0
 
-**Packages.** Four, each with its own `pyproject.toml`, all at version `0.1.0` until the 1.0 version number is set (#116): `blue-data-user-source` (`lib/`), `blue-data-user-cli` (`blue-userdb`), `blue-data-user-mcp` (`blue-userdb-mcp`) and `blue-data-user-api` (`blue-userdb-api`). They depend on the sibling repositories `blue-data`, `blue-data-kb-source` and `blue-data-doc-source`, which are not on PyPI.
+**Packages.** Four, each with its own `pyproject.toml`, all at version `1.0.0` (#116): `blue-data-user-source` (`lib/`), `blue-data-user-cli` (`blue-userdb`), `blue-data-user-mcp` (`blue-userdb-mcp`) and `blue-data-user-api` (`blue-userdb-api`). They depend on the sibling repositories `blue-data`, `blue-data-kb-source` and `blue-data-doc-source` at 1.x (`>=1.0,<2`), which are not on PyPI.
 
 **Install.** From source: `scripts/install.sh` installs the siblings (cloned beside this repository) and all four packages, editable. Each package also has `scripts/install.sh` and `scripts/build.sh` (sdist and wheel); `lib/scripts/publish.sh` uploads the library with `twine`, but nothing has been published. There is no Docker image or compose file.
 

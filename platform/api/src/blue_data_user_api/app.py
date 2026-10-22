@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from importlib.metadata import version as _version
 from typing import AsyncIterator
 
 import uvicorn
@@ -44,7 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Blue Data User API",
     description="REST API for managing user data sources, querying, metadata, and contacts.",
-    version="0.1.0",
+    version=_version("blue-data-user-api"),  # the installed package's, so it cannot drift (#116)
     lifespan=lifespan,
 )
 
