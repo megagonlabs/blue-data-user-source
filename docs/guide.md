@@ -127,6 +127,7 @@ rows = us.execute_query("jobs suitable for me", database="alice")   # the table;
 | `max_subqueries` | `int` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as the expansion proposes, at most 5). See [Cost](#cost) |
 | `max_kb_turns` | `int` | Most tool-calling turns of the KB's agent per sub-question (default 25); out of turns, it makes one more call to answer with what it found |
 | `model` | `str` | OpenAI model for the reasoning steps and the KB's agent (default gpt-4o) |
+| `on_interaction_start`, `on_interaction_end` | `Callable[[], None]` | Called just before a clarification question is put to the user and once the exchange is over, answered or not; a CLI pauses its live status display in between |
 | `top_k` | `int` | Max chunks taken from each document store per sub-question (default 5) |
 
 `async_execute_query` is the library's own query call and returns `(answer, session_id)`. `execute_query` and `execute_query_nl` are the `DataSource` forms: blue-data's contract has them return `list[dict]` rows, so the answer comes back as rows (the table, or one `{"answer": ...}` row for `"nl"`) and the session id does not. To use a session through them, create it first and pass it as `session`.

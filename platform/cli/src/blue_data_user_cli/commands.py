@@ -118,9 +118,13 @@ def _make_source(
     schema_path: Path | None = None,
     metadata_schema_path: Path | None = None,
     contact_schema_path: Path | None = None,
+    console: bool = True,
 ) -> FileUserSource:
+    """The CLI's source. ``console`` says whether the user is at this terminal to
+    answer clarification questions on it (see ``_interactive``)."""
     data_dir.mkdir(parents=True, exist_ok=True)
     return FileUserSource("user_source", {
+        "console": console,
         "connection": {"path": str(data_dir / "registry.json")},
         "schema": str(schema_path) if schema_path else None,
         "metadata_schema": str(metadata_schema_path) if metadata_schema_path else None,
@@ -1271,7 +1275,9 @@ def data_query(
 ) -> None:
     """Answer a question from the database."""
     db = _get_db(obj, fmt)
-    source = _make_source(obj["data_dir"])
+    # Under a pipe or a script nobody can answer a question on this terminal: the
+    # query then asks over another contact method, or answers without asking (#174).
+    source = _make_source(obj["data_dir"], console=_interactive())
     props: dict[str, Any] = {}
     if top_k is not None:
         props["top_k"] = top_k
@@ -1294,6 +1300,10 @@ def data_query(
             )
             props["on_tool_call"] = on_tool_call
             props["on_tool_result"] = on_tool_result
+            # Paused while the user is asked: its redraws hid the question and
+            # what they typed (#185).
+            props["on_interaction_start"] = status.stop
+            props["on_interaction_end"] = status.start
             props["model"] = _model_for(obj, "REASONING", model)
             # async_execute_query, not the DataSource execute_query: the CLI needs the
             # session id, which the contract's list[dict] rows do not carry (#164).

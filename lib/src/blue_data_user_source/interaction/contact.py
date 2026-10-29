@@ -146,6 +146,21 @@ def _is_within_working_hours(
     return day_ok and start_minutes <= now_minutes <= end_minutes
 
 
+async def _read_console_reply() -> str:
+    """One line typed at this process's console, without its newline.
+
+    An empty line is a blank reply. End of input is no reply at all: under a
+    pipe, a script or /dev/null nobody is there to answer, and recording EOF as
+    an empty "resolved" answer let a query ask again and again (#174). It raises
+    ``InteractionError``, so the interaction is recorded as failed and the
+    clarification ends.
+    """
+    line = await asyncio.to_thread(sys.stdin.readline)
+    if not line:
+        raise InteractionError("No answer: standard input is closed, so nobody at this console can reply.")
+    return line.rstrip("\n")
+
+
 class ContactMethod:
     """Stores metadata for one contact channel and provides an InteractionManager."""
 
@@ -226,7 +241,7 @@ class ContactMethod:
         async def _respond(message: str) -> str:
             sys.stdout.write(f"\n{message}\n> ")
             sys.stdout.flush()
-            return (await asyncio.to_thread(sys.stdin.readline)).rstrip("\n")
+            return await _read_console_reply()
 
         async def _stop() -> None:
             pass
@@ -334,7 +349,7 @@ class ContactMethod:
                 f"Reply: "
             )
             sys.stdout.flush()
-            return (await asyncio.to_thread(sys.stdin.readline)).rstrip("\n")
+            return await _read_console_reply()
 
         async def _stop() -> None:
             pass

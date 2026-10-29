@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
 from blue_data_user_source.types import QueryError
 from click.testing import CliRunner
@@ -692,6 +693,39 @@ def test_data_query_without_bounds_leaves_the_library_defaults(runner: CliRunner
 def test_data_query_max_kb_turns_must_be_positive(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     assert _invoke(runner, data_dir, ["data", "query", "q", "--max-kb-turns", "0"]).exit_code == 2
+
+
+@pytest.mark.parametrize("interactive", [True, False])
+def test_data_query_offers_the_terminal_only_when_someone_is_at_it(
+    runner: CliRunner, data_dir: Path, interactive: bool
+) -> None:
+    """Without a terminal on stdin, questions were asked to nobody and EOF recorded as answers (#174)."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
+    with patch("blue_data_user_cli.commands._make_source", return_value=mock) as make_source, \
+         patch("blue_data_user_cli.commands._interactive", return_value=interactive):
+        assert _invoke(runner, data_dir, ["data", "query", "q"]).exit_code == 0
+    assert make_source.call_args.kwargs["console"] is interactive
+
+
+def test_data_query_pauses_its_spinner_while_the_user_is_asked(runner: CliRunner, data_dir: Path) -> None:
+    """The spinner redrew over the question and what the user typed (#185)."""
+    _select_database(data_dir, "alice")
+    status = MagicMock()
+
+    async def ask(text, database, optional_properties):
+        status.reset_mock()
+        optional_properties["on_interaction_start"]()
+        optional_properties["on_interaction_end"]()
+        return [], "sess-1"
+
+    mock = MagicMock()
+    mock.async_execute_query = AsyncMock(side_effect=ask)
+    with _patched(mock), patch("blue_data_user_cli.commands.console.status") as make_status:
+        make_status.return_value.__enter__.return_value = status
+        assert _invoke(runner, data_dir, ["data", "query", "q"]).exit_code == 0
+    assert [c[0] for c in status.method_calls] == ["stop", "start"]
 
 
 def test_data_query_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:

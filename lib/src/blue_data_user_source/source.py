@@ -1081,7 +1081,9 @@ class UserSource(DataSource):
 
         # Phase 3: assess aggregate quality, resolving via user interaction if needed
         new_items = await reasoner.resolve_via_interaction(
-            query, rewritten, all_data, all_metadata, max_rounds=max_rounds
+            query, rewritten, all_data, all_metadata, max_rounds=max_rounds,
+            on_interaction_start=props.get("on_interaction_start"),
+            on_interaction_end=props.get("on_interaction_end"),
         )
         # Surface the user's responses (one per round) as a separate result
         if new_items:

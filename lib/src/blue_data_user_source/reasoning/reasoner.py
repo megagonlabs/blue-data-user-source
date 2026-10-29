@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -240,7 +241,16 @@ class UserQueryReasoner:
         metadata: dict[str, Any],
         metrics: list[MetricEvaluation],
         topic: str | None = None,
+        on_interaction_start: Callable[[], None] | None = None,
+        on_interaction_end: Callable[[], None] | None = None,
     ) -> tuple[list[Any], dict[str, Any]]:
+        """Ask the user for what the failing *metrics* lack, and add the reply to *data*.
+
+        ``on_interaction_start`` and ``on_interaction_end`` are called just before
+        the question is put to the user and once the exchange is over, answered
+        or not: a CLI stops its live status display in between, so it does not
+        redraw over the question and what the user types (#185).
+        """
         from blue_data_user_source.interaction import ContactManager, SessionManager
         from blue_data_user_source.types import InteractionError, NoContactMethodError, QueryError
 
@@ -304,7 +314,15 @@ class UserQueryReasoner:
         interaction_id = await session_manager.create_interaction(
             session_id, query_id, user_question, channel.protocol, channel.name
         )
-        response = await self._converse(session_manager, session_id, query_id, interaction_id, channel, user_question)
+        if on_interaction_start is not None:
+            on_interaction_start()
+        try:
+            response = await self._converse(
+                session_manager, session_id, query_id, interaction_id, channel, user_question,
+            )
+        finally:
+            if on_interaction_end is not None:
+                on_interaction_end()
         await session_manager.resolve_interaction(session_id, query_id, interaction_id, response)
 
         # A blank reply carries nothing to store or to count as evidence; storing
@@ -364,6 +382,8 @@ class UserQueryReasoner:
         metadata: dict[str, Any],
         max_rounds: int = 3,
         topic: str | None = None,
+        on_interaction_start: Callable[[], None] | None = None,
+        on_interaction_end: Callable[[], None] | None = None,
     ) -> list[Any]:
         """Assess result quality and, if needed, resolve it via user interaction.
 
@@ -376,6 +396,8 @@ class UserQueryReasoner:
         ``assessment_query`` is the rewritten query used for metric evaluation.
         ``topic`` optionally scopes contact-method selection to a project/topic
         availability override (see ``ContactManager.identify_contact_method``).
+        ``on_interaction_start``/``on_interaction_end`` bracket each question to
+        the user; see :meth:`request_user_interaction`.
 
         Returns only the newly collected user responses, in round order (empty if
         no interaction was needed).
@@ -389,7 +411,8 @@ class UserQueryReasoner:
                 break
             try:
                 data, metadata = await self.request_user_interaction(
-                    query, data, metadata, metrics, topic=topic
+                    query, data, metadata, metrics, topic=topic,
+                    on_interaction_start=on_interaction_start, on_interaction_end=on_interaction_end,
                 )
             except InteractionError as exc:
                 # Nobody to ask, the question could not be delivered, or no answer

@@ -73,7 +73,7 @@ blue-userdb data query "What skills do I have?"
 blue-userdb data query "What jobs would suit me?" --format nl
 ```
 
-Databases live under `~/.blue-userdb/` by default. When a check fails, `data query` asks for clarification right in the terminal. The full walkthrough — sessions, contact methods, the Python-library equivalent, and connecting an agent over MCP — is in **[docs/quickstart.md](docs/quickstart.md)**.
+Databases live under `~/.blue-userdb/` by default. When a check fails, `data query` asks for clarification right in the terminal (only when stdin is one: under a pipe or a script it uses another contact method, or answers without asking). The full walkthrough — sessions, contact methods, the Python-library equivalent, and connecting an agent over MCP — is in **[docs/quickstart.md](docs/quickstart.md)**.
 
 ## Packages
 

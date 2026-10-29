@@ -213,6 +213,8 @@ Instance data management. All `data` commands require an active database.
 | `--model MODEL` | OpenAI model for the reasoning and the KB's agent (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else gpt-4o) |
 
 A query makes dozens of OpenAI calls at the defaults; the `--max-*` options bound them. See [Cost](guide.md#cost).
+
+Clarification questions are asked on the terminal only when stdin is one; under a pipe, a script or `</dev/null`, `data query` uses another registered contact method (email, webhook), or answers with what it found. An answer that never comes (end of input) is recorded as a failed interaction, not an empty reply.
 | `--verbose` / `-v` | Show tool-call arguments in the status line |
 | `--log` / `-l` | Also print each tool call and result, each sub-query and each quality-metric score on its own persistent line |
 | `--log-limit N` | Truncation length for verbose/log output (default 80) |
