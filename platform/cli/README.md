@@ -31,10 +31,10 @@ export OPENAI_API_KEY=sk-...
 blue-userdb database create alice
 
 # Register a file as a data source (Type 1)
-blue-userdb data source add resume.txt
+blue-userdb data source add data/resume.txt
 
 # Extract and store specific attributes (Type 2)
-blue-userdb data source add resume.txt \
+blue-userdb data source add data/resume.txt \
   --query "What skills does the user have?" \
   --query "What is the user's most recent job title?"
 
@@ -325,17 +325,17 @@ Manage data sources associated with the active database.
 **Type 1 — register + ingest for later search**
 
 ```bash
-blue-userdb data source add resume.txt
-# Ingested source: resume.txt
+blue-userdb data source add data/resume.txt
+# Ingested source: data/resume.txt
 ```
 
 **Type 2 — also extract and store attributes in the KG**
 
 ```bash
-blue-userdb data source add resume.txt \
+blue-userdb data source add data/resume.txt \
   --query "What skills does the user have?" \
   --query "Does the user prefer remote work?"
-# Ingested source: resume.txt (2 queries extracted to KB)
+# Ingested source: data/resume.txt (2 queries extracted to KB)
 ```
 
 Adding a file that is already a source, as the Type 2 step does here, updates that source instead of adding a second one: its chunks are replaced by the new ingest (so an edited file is picked up), and the extraction is recorded under it. The same file under another `--name` is another source.
@@ -398,14 +398,19 @@ Data is persisted under `~/.blue-userdb/` by default:
         ├── metadata.json      # user metadata
         ├── contacts.json      # user contact methods
         ├── sessions.json      # session / query / interaction records
-        └── sessions/          # per-session interaction transcripts (file vector backend, --doc-backend file)
+        ├── kb_search_index/   # the knowledge graph's BM25 index (--kb-search-mode bm25, the default)
+        ├── kb_vectors/        # its vector index instead (--kb-search-mode semantic)
+        ├── sessions/          # session transcripts (--doc-backend file): vector store, and transcripts/<session id>/*.txt
+        └── external_documents/  # chunks of added files (vector store)
 ```
+
+Each JSON store has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
 
 Use `--data-dir` to store databases elsewhere:
 
 ```bash
 blue-userdb --data-dir /tmp/demo database create alice
-blue-userdb --data-dir /tmp/demo --database alice data source add resume.txt --query "What skills?"
+blue-userdb --data-dir /tmp/demo --database alice data source add data/resume.txt --query "What skills?"
 blue-userdb --data-dir /tmp/demo --database alice data query "jobs suitable for me"
 ```
 

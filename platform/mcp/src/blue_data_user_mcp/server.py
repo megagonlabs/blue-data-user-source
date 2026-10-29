@@ -332,7 +332,7 @@ async def add_source(
 ) -> str:
     """Register a data source for a user and optionally ingest its content.
 
-    Without queries, the source is registered for provenance only (Type 1).
+    Without queries, the file is registered and indexed for search (Type 1).
     With queries, an LLM agent extracts attributes guided by those questions
     and stores the results in the KB (Type 2).
 
@@ -505,11 +505,10 @@ async def add_contact(
 
     Args:
         user:       User name.
-        protocol:   Contact protocol, e.g. 'email', 'webhook'.
+        protocol:   Contact protocol: 'email' or 'webhook'.
         name:       Human-readable label for this contact method.
         details:    Protocol-specific details dict.
                     email   → {"address": "alice@example.com"}
-                    slack   → {"channel": "#alice", "token": "..."}
                     webhook → {"url": "...", "response_base_url": "http://...", "timeout": 300}
         preference: Ordering priority (lower = higher priority, default 0).
     """

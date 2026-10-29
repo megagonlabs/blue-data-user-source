@@ -186,7 +186,7 @@ See [10-data-model.md](../design/10-data-model.md) §6 for the full query/intera
 | `original` | `str \| None` | Source's own date, e.g. publication date |
 | `queries` | `list[str] \| None` | Guiding extraction questions (optional) |
 
-Without `queries`, registers the source for provenance only (Type 1). With `queries`, an LLM agent extracts attributes and stores them in the KB (Type 2).
+Without `queries`, registers the file and indexes it for search (Type 1). With `queries`, an LLM agent extracts attributes and stores them in the KB (Type 2).
 
 #### `remove_source`
 

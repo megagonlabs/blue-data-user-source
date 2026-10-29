@@ -90,6 +90,7 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
+        onboard=False,  # the default, True, then interviews the user on the console
         # doc_source_props is optional — defaults to OpenAI embeddings searched by
         # vector, in memory, for session transcripts and added files. See "Sessions" below.
     )
@@ -134,6 +135,7 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
+        onboard=False,  # the default, True, then interviews the user on the console
     )
 
     # Type 1 — register a file (.txt/.pdf/.docx); always parsed, chunked, and

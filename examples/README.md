@@ -82,6 +82,38 @@ python3 examples/backends/redis_backend_demo.py
 
 ---
 
+## feature-demos/ — one feature each
+
+Each runs from the repository root, needs `OPENAI_API_KEY` unless noted, and keeps its data in a temporary directory.
+
+| Script | Shows | Run |
+|---|---|---|
+| [`query_rewrite_demo.py`](feature-demos/query_rewrite_demo.py) | Query rewriting: "my" becomes the user's name, and schema-grounded sub-questions | `python3 examples/feature-demos/query_rewrite_demo.py` |
+| [`output_formats_demo.py`](feature-demos/output_formats_demo.py) | `output_form` (`json`, `nl`) crossed with `include_expanded` | `python3 examples/feature-demos/output_formats_demo.py` |
+| [`metadata_demo.py`](feature-demos/metadata_demo.py) | Metadata seeding, get/set/delete, per-topic availability (no API key needed) | `python3 examples/feature-demos/metadata_demo.py` |
+| [`contact_resolution_demo.py`](feature-demos/contact_resolution_demo.py) | Choosing among several contact methods | `python3 examples/feature-demos/contact_resolution_demo.py` |
+| [`sessions_demo.py`](feature-demos/sessions_demo.py) | Reuse-or-create sessions across queries | `python3 examples/feature-demos/sessions_demo.py` |
+| [`add_source_provenance_demo.py`](feature-demos/add_source_provenance_demo.py) | Adding a file for search (Type 1) vs. also extracting from it (Type 2) | `python3 examples/feature-demos/add_source_provenance_demo.py` |
+
+---
+
+## integration-demos/ — features working together
+
+| Script | Shows | Run |
+|---|---|---|
+| [`extraction_to_query_demo.py`](integration-demos/extraction_to_query_demo.py) | Extraction filling a user's knowledge graph, then a query over it | `python3 examples/integration-demos/extraction_to_query_demo.py` |
+| [`full_lifecycle_demo.py`](integration-demos/full_lifecycle_demo.py) | Create, seed, extract, query, converse and inspect, in one flow | `python3 examples/integration-demos/full_lifecycle_demo.py` |
+
+---
+
+## scenario-demos/ — a user story end to end
+
+| Script | Shows | Run |
+|---|---|---|
+| [`interactive_clarification_demo.py`](scenario-demos/interactive_clarification_demo.py) | Missing data resolved by asking the user | `python3 examples/scenario-demos/interactive_clarification_demo.py` |
+
+---
+
 ## framework-demos/ — the library inside an agent framework
 
 The LangGraph demos need packages the library does not, installed by its
@@ -99,20 +131,20 @@ python3 examples/framework-demos/langgraph_mcp_demo.py   # also needs the MCP se
 
 | File | Folder | API key | External | Output |
 |---|---|---|---|---|
-| `memory_quickstart.py` | backends | OpenAI | — | [output](backends/memory_quickstart.output.txt) |
-| `file_backend_demo.py` | backends | OpenAI | — | [output](backends/file_backend_demo.output.txt) |
-| `redis_backend_demo.py` | backends | OpenAI | Redis | [output](backends/redis_backend_demo.output.txt) |
-| `query_rewrite_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/query_rewrite_demo.output.txt) |
-| `output_formats_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/output_formats_demo.output.txt) |
-| `metadata_demo.py` | feature-demos | none | — | [output](feature-demos/metadata_demo.output.txt) |
-| `contact_resolution_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/contact_resolution_demo.output.txt) |
-| `sessions_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/sessions_demo.output.txt) |
-| `add_source_provenance_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/add_source_provenance_demo.output.txt) |
-| `langgraph_direct_demo.py` | framework-demos | OpenAI | `lib[examples]` | [output](framework-demos/langgraph_direct_demo.output.txt) |
-| `langgraph_mcp_demo.py` | framework-demos | OpenAI | `lib[examples]`, the MCP server | [output](framework-demos/langgraph_mcp_demo.output.txt) |
-| `extraction_to_query_demo.py` | integration-demos | OpenAI | — | [output](integration-demos/extraction_to_query_demo.output.txt) |
-| `full_lifecycle_demo.py` | integration-demos | OpenAI | — | [output](integration-demos/full_lifecycle_demo.output.txt) |
-| `interactive_clarification_demo.py` | scenario-demos | OpenAI | — | [output](scenario-demos/interactive_clarification_demo.output.txt) |
+| [`memory_quickstart.py`](backends/memory_quickstart.py) | backends | OpenAI | — | [output](backends/memory_quickstart.output.txt) |
+| [`file_backend_demo.py`](backends/file_backend_demo.py) | backends | OpenAI | — | [output](backends/file_backend_demo.output.txt) |
+| [`redis_backend_demo.py`](backends/redis_backend_demo.py) | backends | OpenAI | Redis | [output](backends/redis_backend_demo.output.txt) |
+| [`query_rewrite_demo.py`](feature-demos/query_rewrite_demo.py) | feature-demos | OpenAI | — | [output](feature-demos/query_rewrite_demo.output.txt) |
+| [`output_formats_demo.py`](feature-demos/output_formats_demo.py) | feature-demos | OpenAI | — | [output](feature-demos/output_formats_demo.output.txt) |
+| [`metadata_demo.py`](feature-demos/metadata_demo.py) | feature-demos | none | — | [output](feature-demos/metadata_demo.output.txt) |
+| [`contact_resolution_demo.py`](feature-demos/contact_resolution_demo.py) | feature-demos | OpenAI | — | [output](feature-demos/contact_resolution_demo.output.txt) |
+| [`sessions_demo.py`](feature-demos/sessions_demo.py) | feature-demos | OpenAI | — | [output](feature-demos/sessions_demo.output.txt) |
+| [`add_source_provenance_demo.py`](feature-demos/add_source_provenance_demo.py) | feature-demos | OpenAI | — | [output](feature-demos/add_source_provenance_demo.output.txt) |
+| [`langgraph_direct_demo.py`](framework-demos/langgraph_direct_demo.py) | framework-demos | OpenAI | `lib[examples]` | [output](framework-demos/langgraph_direct_demo.output.txt) |
+| [`langgraph_mcp_demo.py`](framework-demos/langgraph_mcp_demo.py) | framework-demos | OpenAI | `lib[examples]`, the MCP server | [output](framework-demos/langgraph_mcp_demo.output.txt) |
+| [`extraction_to_query_demo.py`](integration-demos/extraction_to_query_demo.py) | integration-demos | OpenAI | — | [output](integration-demos/extraction_to_query_demo.output.txt) |
+| [`full_lifecycle_demo.py`](integration-demos/full_lifecycle_demo.py) | integration-demos | OpenAI | — | [output](integration-demos/full_lifecycle_demo.output.txt) |
+| [`interactive_clarification_demo.py`](scenario-demos/interactive_clarification_demo.py) | scenario-demos | OpenAI | — | [output](scenario-demos/interactive_clarification_demo.output.txt) |
 
 Every script here is live-verified with real, captured output — unlike some of
 kb-source's own OpenAI-gated demos, this session had a usable `OPENAI_API_KEY`

@@ -37,8 +37,13 @@ Data is persisted under `~/.blue-userdb/` by default:
         ├── metadata.json       # user metadata
         ├── contacts.json       # user contact methods
         ├── sessions.json       # session / query / interaction records
-        └── sessions/           # per-session interaction transcripts (file vector backend)
+        ├── kb_search_index/    # the knowledge graph's BM25 index (--kb-search-mode bm25, the default)
+        ├── kb_vectors/         # its vector index instead (--kb-search-mode semantic)
+        ├── sessions/           # session transcripts: vector store, and transcripts/<session id>/*.txt
+        └── external_documents/ # chunks of added files (vector store)
 ```
+
+Each JSON store has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
 
 Override the data directory globally:
 
@@ -73,8 +78,8 @@ Every option falls back to the selected profile (`blue-userdb profile config`); 
 
 ```bash
 # 1. Create a database (auto-selects it)
-$ blue-userdb database create alice
-Created database: alice
+$ blue-userdb database create alice --no-onboard
+Created database: alice (selected)
 
 # 2. Set some metadata
 $ blue-userdb metadata set identity name "Alice Smith"
@@ -96,20 +101,20 @@ $ blue-userdb contact set email dev inbound_provider stdio
 Set email.dev.inbound_provider = stdio
 
 # 4. Register a data source
-$ blue-userdb data source add resume.txt \
+$ blue-userdb data source add data/resume.txt \
     --query "What skills does the user have?" \
     --query "What is the user's most recent job title?"
-Added source: resume.txt (2 queries extracted to KB)
+Ingested source: data/resume.txt (2 queries extracted to KB)
 
 # 5. Query
 $ blue-userdb data query "What jobs are suitable for me?"
- Query                               Results
- What skills does the user have?     Python, SQL, machine learning
- Does the user prefer remote work?   Yes
+# A table of answer rows, whose columns come from the answer itself (for
+# example job_title, organization, skills). --format nl answers in prose;
+# --include-expanded also prints each sub-question and its raw results.
 
 # 6. Sessions
 $ blue-userdb session start
-Created session: 1c1919ff-9881-4429-8c52-ab6abae6ff1a (selected)
+Started session: 1c1919ff-9881-4429-8c52-ab6abae6ff1a (selected)
 $ blue-userdb data query "What about remote roles?"
 $ blue-userdb session show
 $ blue-userdb session end
@@ -240,8 +245,8 @@ blue-userdb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
 `source add` options: `--query QUESTION` (repeatable — presence triggers Type 2), `--name`, `--description`, `--original`.
 
 ```bash
-blue-userdb data source add resume.txt                                  # Type 1
-blue-userdb data source add resume.txt --query "What skills?"            # Type 2
+blue-userdb data source add data/resume.txt                                  # Type 1
+blue-userdb data source add data/resume.txt --query "What skills?"            # Type 2
 ```
 
 Adding a file that is already a source, as the Type 2 step does here, updates that source instead of adding a second one: its chunks are replaced by the new ingest (so an edited file is picked up), and the extraction is recorded under it. The same file under another `--name` is another source.

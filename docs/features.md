@@ -23,11 +23,11 @@ Registering a file always parses, chunks, and embeds it into a shared `external_
 
 ```python
 # Type 1 — register + ingest for later search
-await us.add_source("resume.txt", database="alice")
+await us.add_source("data/resume.txt", database="alice")
 
 # Type 2 — also extract structured attributes into the KG
 await us.add_source(
-    "resume.txt", database="alice",
+    "data/resume.txt", database="alice",
     optional_properties={"queries": ["What skills does the user have?"]},
 )
 ```
@@ -114,7 +114,7 @@ A full command-line interface (`blue-userdb`) over the library — databases, se
 
 ```bash
 blue-userdb database create alice
-blue-userdb data source add resume.txt --query "What skills does the user have?"
+blue-userdb data source add data/resume.txt --query "What skills does the user have?"
 blue-userdb data query "What jobs are suitable for me?"
 ```
 

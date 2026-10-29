@@ -220,7 +220,7 @@ Returns `{"user": "...", "session_id": "...", "ended": true}`.
 | `original` | `str \| None` | Source's own date, e.g. publication date |
 | `queries` | `list[str] \| None` | Guiding extraction questions (optional) |
 
-Without `queries`, registers the source for provenance only (Type 1). With
+Without `queries`, registers the file and indexes it for search (Type 1). With
 `queries`, an LLM agent extracts attributes and stores them in the KB (Type 2).
 
 #### `remove_source`

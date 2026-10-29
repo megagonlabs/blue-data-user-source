@@ -50,12 +50,14 @@ await us.create_user(
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
         "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
     },
+    onboard=False,   # the default, True, then interviews the user on the console
 )
 
 print(us.list_users())          # ["alice"]
 await us.reset_user("alice")    # clear KB data, documents, metadata, contacts, sessions; reseed
+# Then one of:
 us.remove_user("alice")         # remove from outer registry only — backing files kept
-await us.delete_user("alice")   # remove from outer registry AND wipe all backing files
+# await us.delete_user("alice") # or: remove from outer registry AND wipe all backing files
 ```
 
 For an in-memory KB during development, swap `kb_source_props` for `blue_data_kb_source.memory_kb_source.MemoryKBSource`; for Neo4j, `blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource`.
@@ -85,15 +87,15 @@ Registering a file always ingests it into a shared `external_documents` document
 
 ```python
 # Type 1 — register + ingest for later search
-await us.add_source("resume.txt", database="alice")
+await us.add_source("data/resume.txt", database="alice")
 
 # Type 2 — also extract specific attributes via LLM into the KG
 await us.add_source(
-    "resume.txt", database="alice",
+    "data/resume.txt", database="alice",
     optional_properties={"queries": ["What skills does the user have?"]},
 )
 
-await us.remove_source("alice", "resume.txt")   # document leaves search; extracted facts kept
+await us.remove_source("alice", "data/resume.txt")   # document leaves search; extracted facts kept
 ```
 
 Adding a file that is already a source, as the Type 2 step does here, updates that source instead of adding a second one: its chunks are replaced by the new ingest (so an edited file is picked up), and the extraction is recorded under it. The same file under another `name` is another source.

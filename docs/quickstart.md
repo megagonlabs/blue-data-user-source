@@ -41,11 +41,7 @@ Adding a file that is already a source, as the Type 2 step does here, updates th
 blue-userdb data query "What jobs are suitable for me?"
 ```
 
-```
- Query                               Results
- What skills does the user have?     Python, SQL, machine learning
- Does the user prefer remote work?   Yes
-```
+The answer is a table of rows whose columns come from the answer itself (for example `job_title`, `organization`, `skills`). `--format nl` answers in prose, and `--include-expanded` also prints each sub-question with its raw results under "Expanded:".
 
 `execute_query` rewrites the query (resolving "me"/"you" to the user's actual name), expands it into schema-grounded sub-questions, retrieves data for each from the knowledge graph and any registered documents, and assesses the combined result for completeness and freshness — asking a clarification question if quality checks fail.
 

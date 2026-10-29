@@ -1,5 +1,5 @@
 """
-add_source -- provenance-only registration (Type 1) vs. LLM extraction (Type 2).
+add_source -- registration and indexing for search (Type 1) vs. LLM extraction (Type 2).
 
 Every add_source call registers the file as a SOURCE node in the KB and always
 ingests it (parsed, chunked, embedded) into the shared "external_documents"

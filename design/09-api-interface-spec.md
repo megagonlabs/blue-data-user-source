@@ -191,9 +191,10 @@ await us.add_source(
     optional_properties={"queries": ["What skills does the user have?"]}
 )
 
-# Query (sync — wraps asyncio internally). Reuse-or-create: pass "session" to
-# append to an existing session, omit it to auto-create a new one.
-answer, session_id = us.execute_query(
+# Query. Reuse-or-create: pass "session" to append to an existing session, omit
+# it to auto-create a new one. The sync DataSource form, execute_query, returns
+# rows only (#167); the async form also returns the session id.
+answer, session_id = await us.async_execute_query(
     "jobs suitable for me",
     database="alice",
     optional_properties={"session": session_id},

@@ -21,10 +21,12 @@ pip install -e '.[dev]'             # the server, with pytest for its tests
 
 `fastapi`, `uvicorn`, `httpx`, and `pydantic-settings` are pulled in automatically.
 
-Set your OpenAI API key if you plan to use query endpoints:
+Set your OpenAI API key, which queries, extraction and document embeddings use, and the REST API's own key:
 
 ```bash
-# The API key is required (#157): set one, or opt out explicitly for local use
+export OPENAI_API_KEY=sk-...
+
+# The REST API's own key is required (#157): set one, or opt out explicitly for local use
 export BLUE_DATA_USER_API_KEY=secret          # or: export BLUE_DATA_USER_API_AUTH_DISABLED=true
 
 # Defaults: 127.0.0.1:8003, ~/.blue-userdb data dir
@@ -364,8 +366,11 @@ Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.blue-userd
         ├── metadata.json      # user metadata
         ├── contacts.json      # user contact methods
         ├── sessions.json      # session / query / interaction records
-        └── sessions/          # per-session interaction transcripts (file vector backend)
+        ├── sessions/          # session transcripts: vector store, and transcripts/<session id>/*.txt
+        └── external_documents/  # chunks of added files (vector store)
 ```
+
+Each JSON store has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
 
 ---
 

@@ -28,7 +28,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 |---|---|---|
 | `create_database(database, properties=None, overwrite=False)` | `dict` | Sync `DataSource` override; delegates to `create_user` via `asyncio.run()`. Works with no properties: the stores come from `default_user_props`, and any store config given in `properties` replaces that default. `overwrite=True` replaces an existing user. Does not onboard unless `properties["onboard"]` is true |
 | `default_user_props(name)` | `dict` | A new user's store configs: in memory for `MemoryUserSource`, files beside the registry for `FileUserSource` (`registries/<name>.json`, `sources/<name>/`), Redis JSON stores (no KB default) for `RedisUserSource` |
-| `await create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None)` | `None` | Build a new user's `DataRegistry` + all built-in sources from scratch, seed schemas |
+| `await create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None, onboard=True, onboard_metadata=True)` | `None` | Build a new user's `DataRegistry` + all built-in sources from scratch, seed schemas. With `onboard` (the default), then interview the user over their contact method, the console when none is registered; pass `onboard=False` to skip |
 | `list_users()` | `list[str]` | Registered user names |
 | `get_user(name)` | `dict \| None` | The user's registry properties dict, or `None` |
 | `remove_user(name)` | `None` | Remove from the outer registry only — backing files unchanged |
@@ -69,7 +69,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `await add_source(source, database, optional_properties=None)` | `None` | Register a source; `optional_properties["queries"]` drives Type 2 extraction |
 | `await add_text_source(text, database, optional_properties=None)` | `None` | Add text as a source without a file (nothing is read or written on disk); same properties, `location` defaults to `"text:<name>"`. The REST API uses it |
 | `await remove_source(database, source_name)` | `dict` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{id, name, chunks_removed}`; raises `QueryError` if no source, or more than one, matches |
-| `await import_data(source, collection, database="default", entity=None, mode="append", options=None)` | `dict` | Lower-level `KBSource.import_data` passthrough |
+| `import_data(source, database="default", collection="default", entity=None, mode="append", options=None)` | `dict` | Lower-level `KBSource.import_data` passthrough |
 
 `add_source`'s `optional_properties`:
 

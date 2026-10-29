@@ -141,7 +141,6 @@ Directory locations, backend selection, and server configuration are set via env
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `metadata_schema.json` (default: the one packaged with the library) |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `contact_schema.json` (default: the one packaged with the library) |
-| `BLUE_DATA_USER_SOURCE_SESSION` | CLI | Default `--session` when not passed explicitly |
 | `BLUE_DATA_USER_API_KEY` | API | API key, required on every data route (`X-API-Key` or `Authorization: Bearer`); with none set, requests get `401` |
 | `BLUE_DATA_USER_API_AUTH_DISABLED` | API | `true` runs the API without a key (local development only) |
 | `BLUE_DATA_USER_API_HOST` | API | Server bind address (default `127.0.0.1`) |

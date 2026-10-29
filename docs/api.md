@@ -359,8 +359,11 @@ Data is persisted under `BLUE_DATA_USER_SOURCE_DATA_DIR` (default `~/.blue-userd
         ├── metadata.json      # user metadata
         ├── contacts.json      # user contact methods
         ├── sessions.json      # session / query / interaction records
-        └── sessions/          # per-session interaction transcripts (file vector backend)
+        ├── sessions/          # session transcripts: vector store, and transcripts/<session id>/*.txt
+        └── external_documents/  # chunks of added files (vector store)
 ```
+
+Each JSON store has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
 
 ---
 
