@@ -9,6 +9,8 @@ bash platform/cli/scripts/install.sh       # or scripts/install.sh for the MCP s
 export OPENAI_API_KEY=sk-...
 ```
 
+> **Cost.** Each query and each `--query` extraction makes dozens of OpenAI calls. At the default model (gpt-4o), this walkthrough cost about $7 in testing, mostly its four queries ($0.60–$2 each). To spend less, add `--max-subqueries 1 --max-kb-turns 8` to `data query`, and see [Cost](guide.md#cost) for cheaper model settings.
+
 ## 1. Create a database and select it
 
 Databases (one per user) persist under `~/.blue-userdb/` by default (override with `blue-userdb profile config BLUE_DATA_USER_SOURCE_DATA_DIR /path/to/dir`, or by exporting `BLUE_DATA_USER_SOURCE_DATA_DIR`). `create` auto-selects the new database.

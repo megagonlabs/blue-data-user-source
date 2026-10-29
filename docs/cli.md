@@ -207,6 +207,12 @@ Instance data management. All `data` commands require an active database.
 | `--session SESSION_ID` | Session to append this query to — falls back per the resolution order above |
 | `--format table\|json\|nl` | Output format (default `table`) |
 | `--top-k N` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit |
+| `--max-subqueries N` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as needed, at most 5) |
+| `--max-kb-turns N` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
+| `--max-rounds N` | Most rounds of clarification questions (default 3) |
+| `--model MODEL` | OpenAI model for the reasoning and the KB's agent (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else gpt-4o) |
+
+A query makes dozens of OpenAI calls at the defaults; the `--max-*` options bound them. See [Cost](guide.md#cost).
 | `--verbose` / `-v` | Show tool-call arguments in the status line |
 | `--log` / `-l` | Also print each tool call and result, each sub-query and each quality-metric score on its own persistent line |
 | `--log-limit N` | Truncation length for verbose/log output (default 80) |

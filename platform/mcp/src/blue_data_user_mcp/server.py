@@ -204,6 +204,9 @@ async def query(
     output_form: str = "json",
     session: Optional[str] = None,
     include_expanded: bool = False,
+    max_subqueries: Optional[int] = None,
+    max_kb_turns: Optional[int] = None,
+    max_interaction_rounds: Optional[int] = None,
 ) -> str:
     """Answer a natural-language question using the user's knowledge graph.
 
@@ -220,6 +223,15 @@ async def query(
         session:          Optional session id for query context continuity.
         include_expanded: If True, also return the per-sub-question queries and
                           their raw results alongside the synthesized answer.
+        max_subqueries:   Most sub-questions added to the question, each answered
+                          by the KB's agent; 0 answers the question alone
+                          (default: as many as needed, at most 5).
+        max_kb_turns:     Most tool-calling turns of the KB's agent per
+                          sub-question (default 25).
+        max_interaction_rounds: Most rounds of clarification questions to the
+                          user (default 3).
+
+    A query makes dozens of LLM calls at the defaults; these bound them.
     """
     try:
         optional: dict[str, Any] = {"output_form": output_form}
@@ -227,6 +239,10 @@ async def query(
             optional["session"] = session
         if include_expanded:
             optional["include_expanded"] = True
+        for key, value in (("max_subqueries", max_subqueries), ("max_kb_turns", max_kb_turns),
+                           ("max_interaction_rounds", max_interaction_rounds)):
+            if value is not None:
+                optional[key] = value
         result, session_id = await get_source().async_execute_query(
             question, database=user, optional_properties=optional
         )

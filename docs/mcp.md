@@ -150,6 +150,11 @@ No parameters. Returns a list of registered user names.
 | `output_form` | `str` | `"json"` (default — structured rows) or `"nl"` (prose) |
 | `session` | `str \| None` | Session id to append this query to (reused). Omit to auto-create a new single-query session |
 | `include_expanded` | `bool` | If `True`, also return the per-sub-question queries and their raw results alongside the synthesized answer (default `False`) |
+| `max_subqueries` | `int \| None` | Most sub-questions added to the question, each answered by the KB's agent; `0` answers it alone (default: as many as needed, at most 5) |
+| `max_kb_turns` | `int \| None` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
+| `max_interaction_rounds` | `int \| None` | Most rounds of clarification questions (default 3) |
+
+A query makes dozens of OpenAI calls at the defaults; the `max_*` parameters bound them (see [Cost](guide.md#cost)).
 
 Runs a multi-step agent: contextualizes and expands the question (resolving self-references to the user's actual name), retrieves data for each sub-question from the KB and any registered documents, assesses result quality, and optionally requests user clarification via their configured contact method. Returns `{"results": [...], "session_id": "..."}` — pass `session_id` back as `session` on the next call to continue the same conversation.
 

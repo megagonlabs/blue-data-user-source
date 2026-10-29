@@ -607,17 +607,28 @@ class UserDataManager:
         on_tool_result=None,
         session_id: str | None = None,
         top_k: int = DOC_SEARCH_TOP_K,
+        model: str | None = None,
+        max_turns: int | None = None,
     ) -> tuple[list[Any], dict[str, Any]]:
         """Answer *query* against the KB, session_content, and external_documents combined.
 
         ``top_k`` caps the chunks taken from each document store; the KB answers
-        through its own agent and has no result limit.
+        through its own agent and has no result limit. That agent runs on
+        *model* (the KB's default, gpt-4o, when None) for at most *max_turns*
+        tool-calling turns (the KB's default, 25), plus one call to force an
+        answer when it runs out (#178).
         """
+        kb_options: dict[str, Any] = {}
+        if model is not None:
+            kb_options["model"] = model
+        if max_turns is not None:
+            kb_options["max_turns"] = max_turns
         result, metadata = await self._ensure_kb_source().answer(
             self._database, query,
             include_metadata=True,
             on_tool_call=on_tool_call,
             on_tool_result=on_tool_result,
+            **kb_options,
         )
         data = result if isinstance(result, list) else ([{"answer": result}] if result else [])
         metadata = metadata if isinstance(metadata, dict) else {}
@@ -683,6 +694,7 @@ class UserDataManager:
         effort: Literal["low", "medium", "high"] = "medium",
         location: str | None = None,
         text: str | None = None,
+        model: str | None = None,
     ) -> None:
         """Register a file as a source, always ingesting it into the shared
         "external_documents" DocumentDataSource (parsed, chunked, embedded —
@@ -691,7 +703,8 @@ class UserDataManager:
 
         ``effort`` is how many times the extraction pipeline passes over the
         text (low/medium/high = 1/2/3); a single pass leaves much of a
-        moderately dense document unextracted.
+        moderately dense document unextracted. ``model`` runs the extraction
+        (the KB's default, gpt-4o, when None; #178).
 
         Deliberately does NOT create a per-file record in the outer
         DataRegistry — only the shared "external_documents" source is
@@ -750,7 +763,8 @@ class UserDataManager:
             # so it either invents a second person or skips the relations entirely.
             text = f"This document belongs to {owner}, the subject of every fact in it.\n{body}"
             await kb.import_text(
-                self._database, text, queries=queries, source_id=source_id, effort=effort
+                self._database, text, queries=queries, source_id=source_id, effort=effort,
+                **({"model": model} if model is not None else {}),
             )
 
     async def remove_source(self, source_name: str) -> dict[str, Any]:

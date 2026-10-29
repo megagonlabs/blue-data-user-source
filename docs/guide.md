@@ -124,11 +124,35 @@ rows = us.execute_query("jobs suitable for me", database="alice")   # the table;
 | `output_form` | `"json"` \| `"nl"` | `"json"` (default) returns one aggregated table (a list of dicts); `"nl"` returns prose |
 | `include_expanded` | `bool` | Also return the per-sub-question queries/results alongside the synthesized answer |
 | `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default 3) |
+| `max_subqueries` | `int` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as the expansion proposes, at most 5). See [Cost](#cost) |
+| `max_kb_turns` | `int` | Most tool-calling turns of the KB's agent per sub-question (default 25); out of turns, it makes one more call to answer with what it found |
+| `model` | `str` | OpenAI model for the reasoning steps and the KB's agent (default gpt-4o) |
 | `top_k` | `int` | Max chunks taken from each document store per sub-question (default 5) |
 
 `async_execute_query` is the library's own query call and returns `(answer, session_id)`. `execute_query` and `execute_query_nl` are the `DataSource` forms: blue-data's contract has them return `list[dict]` rows, so the answer comes back as rows (the table, or one `{"answer": ...}` row for `"nl"`) and the session id does not. To use a session through them, create it first and pass it as `session`.
 
 ---
+
+### Cost
+
+A query is a pipeline of LLM calls: it rewrites the question, expands it into up to 5 sub-questions, answers each sub-question (and the rewritten question) with the KB's tool-calling agent, scores the result, and writes the answer. The KB's agent makes most of the calls. Extraction (`add_source` with `queries`, `data source add --query`) is a similar agent loop, run `effort` times over the text.
+
+Measured with gpt-4o at list prices ($2.50 per million input tokens, $10 per million output), clarification rounds off:
+
+| Run | Calls | Input tokens | Cost |
+|---|---|---|---|
+| Extract one sentence (`effort` medium) | 27–33 | 68K–84K | $0.19–$0.24 |
+| One query over it, defaults | 42–67 | 70K–145K | $0.19–$0.38 |
+| The same query, `max_subqueries=1, max_kb_turns=8` | 16 | 20K | $0.06 |
+| The same query, `max_subqueries=0, max_kb_turns=6` | 10 | 9K | $0.03 |
+| A query over the quickstart's résumé, defaults | 55–95 | 213K–824K | $0.57–$2.11 |
+
+In that small test, all four queries gave the same answer. To spend less:
+
+- **Bound the query:** `max_subqueries`, `max_kb_turns` and `max_interaction_rounds` (CLI `--max-subqueries`, `--max-kb-turns`, `--max-rounds`; the same names on MCP `query` and REST `POST /{name}/query`). Each clarification round adds a scoring pass and a question to the user.
+- **Use a cheaper model:** `model` on a query, or `optional_properties["model"]` on `add_source`. In the CLI, `BLUE_DATA_USER_SOURCE_LLM_MODEL` (or the per-function `…_REASONING_LLM_MODEL` and `…_EXTRACTION_LLM_MODEL`) in the profile, or `--model`. The KB's agent uses it too.
+- **Extract with fewer passes:** `effort="low"` (`--effort low`) is one pass instead of two.
+- Document embeddings (`text-embedding-3-small`) cost a small fraction of the above.
 
 ## Sessions
 

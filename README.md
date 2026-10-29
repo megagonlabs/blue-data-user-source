@@ -51,6 +51,8 @@ Each platform package has its own `src/`, `tests/` and `scripts/install.sh`.
 export OPENAI_API_KEY=sk-...
 ```
 
+Every query and extraction makes many OpenAI calls: at the default model, gpt-4o, one query costs roughly $0.20–$2 and extracting a short document $0.20–$0.50. `data query --max-subqueries 1 --max-kb-turns 8` cut one query from 67 calls to 16 ($0.38 to $0.06). See [Cost](docs/guide.md#cost) for the bounds and the cheaper model settings.
+
 ## Quick start
 
 ```bash

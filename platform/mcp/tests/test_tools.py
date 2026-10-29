@@ -196,6 +196,19 @@ async def test_query_returns_results():
     assert result == {"results": mock_result, "session_id": "sess-1"}
 
 
+async def test_query_forwards_the_bounds_it_is_given():
+    """The query's LLM calls can be bounded by the agent calling the tool (#178)."""
+    execute = AsyncMock(return_value=([], "sess-1"))
+    with patch.object(config_module.get_source(), "async_execute_query", new=execute):
+        from blue_data_user_mcp.server import query
+        await query(USER, "q", max_subqueries=1, max_kb_turns=5, max_interaction_rounds=0)
+        props = execute.call_args.kwargs["optional_properties"]
+        assert (props["max_subqueries"], props["max_kb_turns"], props["max_interaction_rounds"]) == (1, 5, 0)
+
+        await query(USER, "q")
+        assert "max_subqueries" not in execute.call_args.kwargs["optional_properties"]
+
+
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------

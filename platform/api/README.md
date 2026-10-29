@@ -142,7 +142,7 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -H 'Content-Type: application/json'
 }
 ```
 
-`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused); omit it to auto-create a new single-query session — **reuse-or-create**. `include_expanded` (default `false`) also returns the per-sub-question queries and their raw results alongside the synthesized answer.
+`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused); omit it to auto-create a new single-query session — **reuse-or-create**. `include_expanded` (default `false`) also returns the per-sub-question queries and their raw results alongside the synthesized answer. `max_subqueries`, `max_kb_turns` and `max_interaction_rounds` bound the query's LLM calls; see [docs/api.md](../../docs/api.md) and [Cost](../../docs/guide.md#cost).
 
 **Response:**
 

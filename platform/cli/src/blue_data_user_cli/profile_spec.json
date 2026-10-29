@@ -44,7 +44,7 @@
   },
   "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL": {
     "default": null,
-    "prompt": "OpenAI model for `blue-userdb data extract`",
+    "prompt": "OpenAI model for `data extract` and `data source add --query`",
     "required": false,
     "cast": "str",
     "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL"]

@@ -249,6 +249,7 @@ Execute a natural-language query against the database's knowledge graph.
 
 ```
 blue-userdb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [--top-k N]
+                     [--max-subqueries N] [--max-kb-turns N] [--max-rounds N] [--model MODEL]
                      [--include-expanded] [--verbose] [--log] [--log-limit N]
 ```
 
@@ -257,6 +258,10 @@ blue-userdb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [-
 | `--session SESSION_ID` | Session to append this query to. Falls back to the selected session (`blue-userdb session select`/`start`), then auto-creates one if neither is set — see [`blue-userdb session`](#blue-userdb-session) |
 | `--format` | `table` (default) · `json` · `nl` |
 | `--top-k N` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit |
+| `--max-subqueries N` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as needed, at most 5) |
+| `--max-kb-turns N` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
+| `--max-rounds N` | Most rounds of clarification questions (default 3) |
+| `--model MODEL` | OpenAI model for the reasoning and the KB's agent (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else gpt-4o) |
 | `--include-expanded` | Also print the per-sub-question queries and their raw results, below the main answer |
 | `--verbose`, `-v` | Show tool call arguments in the status line while the query runs |
 | `--log`, `-l` | Log each tool call and result on its own line |

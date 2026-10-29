@@ -121,7 +121,7 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -H 'Content-Type: application/json'
 }
 ```
 
-`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused; `404` if unknown, `409` if it has ended); omit it to auto-create a new single-query session.
+`output_form` is `"json"` (default) or `"nl"` for a prose answer. `session` appends this query to an existing session (reused; `404` if unknown, `409` if it has ended); omit it to auto-create a new single-query session. `max_subqueries` (most sub-questions added, each answered by the KB's agent; `0` answers the query alone), `max_kb_turns` (most turns of that agent per sub-question, default 25) and `max_interaction_rounds` (default 3) bound the query's LLM calls, which number in the dozens at the defaults; see [Cost](guide.md#cost). A negative value, or `max_kb_turns` of `0`, is rejected with `422`.
 
 **Response `200 OK`:**
 

@@ -1243,9 +1243,22 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
     help="Also return the per-sub-question queries and their raw results.",
 )
 @click.option(
+    "--max-subqueries", "max_subqueries", default=None, type=click.IntRange(min=0),
+    help="Most sub-questions added to the query, each answered by the KB's agent; "
+         "0 answers the query alone. [default: as many as needed, at most 5]",
+)
+@click.option(
+    "--max-kb-turns", "max_kb_turns", default=None, type=click.IntRange(min=1),
+    help="Most tool-calling turns of the KB's agent per sub-question. [default: 25]",
+)
+@click.option(
+    "--max-rounds", "max_rounds", default=None, type=click.IntRange(min=0),
+    help="Most rounds of clarification questions to the user. [default: 3]",
+)
+@click.option(
     "--model", default=None,
-    help="OpenAI model for query reasoning. Default: the profile's "
-         "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL.",
+    help="OpenAI model for query reasoning and the KB's answering agent. Default: the "
+         "profile's BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL.",
 )
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result, each sub-query and each quality-metric score on its own line.")
@@ -1253,6 +1266,7 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
 @click.pass_obj
 def data_query(
     obj: dict, text: str, session: str | None, fmt: str, top_k: int | None, include_expanded: bool,
+    max_subqueries: int | None, max_kb_turns: int | None, max_rounds: int | None,
     model: str | None, verbose: bool, log: bool, log_limit: int | None,
 ) -> None:
     """Answer a question from the database."""
@@ -1261,6 +1275,11 @@ def data_query(
     props: dict[str, Any] = {}
     if top_k is not None:
         props["top_k"] = top_k
+    # Bounds on the query's LLM calls (#178); unset, the library's defaults.
+    for key, value in (("max_subqueries", max_subqueries), ("max_kb_turns", max_kb_turns),
+                       ("max_interaction_rounds", max_rounds)):
+        if value is not None:
+            props[key] = value
     resolved_session = _get_session(obj, session)
     if resolved_session:
         props["session"] = resolved_session
@@ -1576,8 +1595,16 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
     help="Extraction passes over the document (low/medium/high = 1/2/3). More passes "
          "catch more of a dense document, at proportionally more LLM calls.",
 )
+@click.option(
+    "--model", default=None,
+    help="OpenAI model for extracting --query facts. Default: the profile's "
+         "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL.",
+)
 @click.pass_obj
-def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None, original: str | None, effort: str) -> None:
+def source_add(
+    obj: dict, file: Path, queries: tuple[str, ...], name: str | None, description: str | None,
+    original: str | None, effort: str, model: str | None,
+) -> None:
     """Register a data source.
 
     Accepts .txt, .pdf and .docx files.
@@ -1598,6 +1625,9 @@ def source_add(obj: dict, file: Path, queries: tuple[str, ...], name: str | None
     if original:
         props["original"] = original
     props["effort"] = effort
+    if queries:
+        # Extraction makes most of an import's LLM calls; the profile can make it cheaper (#178).
+        props["model"] = _model_for(obj, "EXTRACTION", model)
     try:
         asyncio.run(source.add_source(file, database=db, optional_properties=props or None))
     except (UDbError, Exception) as exc:

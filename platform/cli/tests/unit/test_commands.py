@@ -665,6 +665,35 @@ def test_data_query_top_k_must_be_positive(runner: CliRunner, data_dir: Path) ->
     assert result.exit_code == 2
 
 
+def test_data_query_bounds_are_forwarded(runner: CliRunner, data_dir: Path) -> None:
+    """The query's LLM calls can be bounded from the command line (#178)."""
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, [
+            "data", "query", "q", "--max-subqueries", "0", "--max-kb-turns", "6", "--max-rounds", "1",
+        ])
+    assert result.exit_code == 0, result.output
+    props = mock.async_execute_query.call_args.kwargs["optional_properties"]
+    assert (props["max_subqueries"], props["max_kb_turns"], props["max_interaction_rounds"]) == (0, 6, 1)
+
+
+def test_data_query_without_bounds_leaves_the_library_defaults(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    mock = MagicMock()
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
+    with _patched(mock):
+        _invoke(runner, data_dir, ["data", "query", "q"])
+    props = mock.async_execute_query.call_args.kwargs["optional_properties"]
+    assert not {"max_subqueries", "max_kb_turns", "max_interaction_rounds"} & set(props)
+
+
+def test_data_query_max_kb_turns_must_be_positive(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    assert _invoke(runner, data_dir, ["data", "query", "q", "--max-kb-turns", "0"]).exit_code == 2
+
+
 def test_data_query_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
     mock = MagicMock()
@@ -774,6 +803,31 @@ def test_source_add_with_queries_reports_extraction_count(
     assert "2" in result.output and "queries" in result.output
     props = mock.add_source.await_args.kwargs["optional_properties"]
     assert props["queries"] == ["Skills?", "Remote?"]
+
+
+def _source_add_props(runner: CliRunner, data_dir: Path, tmp_path: Path, args: list[str]) -> dict:
+    _select_database(data_dir, "alice")
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Python\nSQL\n")
+    mock = MagicMock()
+    mock.add_source = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["data", "source", "add", str(resume), *args])
+    assert result.exit_code == 0, result.output
+    return mock.add_source.await_args.kwargs["optional_properties"]
+
+
+def test_source_add_extracts_with_the_extraction_model(
+    runner: CliRunner, data_dir: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """The extraction ran on gpt-4o whatever the profile said (#178)."""
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL", "gpt-4o-mini")
+    assert _source_add_props(runner, data_dir, tmp_path, ["--query", "q"])["model"] == "gpt-4o-mini"
+    assert _source_add_props(runner, data_dir, tmp_path, ["--query", "q", "--model", "gpt-4.1"])["model"] == "gpt-4.1"
+
+
+def test_source_add_without_queries_names_no_model(runner: CliRunner, data_dir: Path, tmp_path: Path) -> None:
+    assert "model" not in _source_add_props(runner, data_dir, tmp_path, [])
 
 
 def test_source_add_missing_file_exits_with_code_2(runner: CliRunner, data_dir: Path) -> None:

@@ -77,6 +77,21 @@ def _count_set_leaves(d: dict) -> int:
     return count
 
 
+def _bounded_int(props: dict, key: str, default: int | None, minimum: int) -> int | None:
+    """``props[key]`` as an int of at least *minimum*, else *default* when absent.
+
+    Raises ``QueryError`` otherwise; a bool is refused, since ``True`` would
+    quietly mean 1.
+    """
+    value = props.get(key, default)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        kind = "a positive integer" if minimum == 1 else f"an integer of at least {minimum}"
+        raise QueryError(f"{key} must be {kind}, got {value!r}.")
+    return value
+
+
 def _model_kwarg(model: str | None) -> dict[str, str]:
     """`{"model": …}` when a model was chosen, `{}` otherwise.
 
@@ -820,8 +835,9 @@ class UserSource(DataSource):
         """Register a file as a source in the user's KB and optionally extract via queries.
 
         ``optional_properties``: ``queries``, ``name``, ``description``,
-        ``original``, ``effort``, and ``location`` (the label recorded on the
-        SOURCE node; defaults to the file's path).
+        ``original``, ``effort``, ``model`` (the extraction's LLM; gpt-4o by
+        default), and ``location`` (the label recorded on the SOURCE node;
+        defaults to the file's path).
         """
         await self._get_manager(database).add_source(source, **self._source_kwargs(optional_properties))
 
@@ -852,6 +868,7 @@ class UserSource(DataSource):
             "original": str(props["original"]) if "original" in props else None,
             "effort": str(props.get("effort", "medium")),
             "location": str(props["location"]) if "location" in props else None,
+            "model": str(props["model"]) if props.get("model") else None,
         }
 
     async def remove_source(self, database: str, source_name: str) -> dict[str, Any]:
@@ -998,14 +1015,21 @@ class UserSource(DataSource):
 
         ``top_k`` (default 5) caps the chunks taken from each document store
         (``session_content``, ``external_documents``) per sub-question.
+
+        The query's cost is bounded by (#178): ``max_subqueries`` (default: as
+        many as the expansion proposes, at most 5), the sub-questions added to
+        the rewritten query, each answered by the KB's agent; ``max_kb_turns``
+        (default 25), that agent's tool-calling turns per sub-question; and
+        ``max_interaction_rounds``. ``model`` runs the reasoning and the KB's
+        agent alike.
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
         include_expanded = bool(props.get("include_expanded", False))
-        top_k = props.get("top_k", DOC_SEARCH_TOP_K)
-        # bool is an int, and top_k=True would quietly mean 1.
-        if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
-            raise QueryError(f"top_k must be a positive integer, got {top_k!r}.")
+        top_k = _bounded_int(props, "top_k", DOC_SEARCH_TOP_K, minimum=1)
+        max_subqueries = _bounded_int(props, "max_subqueries", None, minimum=0)
+        max_kb_turns = _bounded_int(props, "max_kb_turns", None, minimum=1)
+        max_rounds = _bounded_int(props, "max_interaction_rounds", 3, minimum=0)
 
         manager = self._get_manager(database)
         session_manager = self._session_manager(database)
@@ -1028,6 +1052,8 @@ class UserSource(DataSource):
         # Phase 1: contextualize then expand (sequential — expand uses the rewritten query)
         rewritten = await reasoner.contextualize_query(query)
         questions = await reasoner.expand_query(rewritten)
+        if max_subqueries is not None:
+            questions = questions[:max_subqueries]
         questions.append(rewritten)
 
         on_tool_call = props.get("on_tool_call")
@@ -1037,7 +1063,7 @@ class UserSource(DataSource):
         raw_results: list[tuple[list, dict]] = list(await asyncio.gather(*[
             manager.execute_query(
                 q, on_tool_call=on_tool_call, on_tool_result=on_tool_result, session_id=session_id,
-                top_k=top_k,
+                top_k=top_k, model=props.get("model"), max_turns=max_kb_turns,
             )
             for q in questions
         ]))
@@ -1054,7 +1080,6 @@ class UserSource(DataSource):
         ]
 
         # Phase 3: assess aggregate quality, resolving via user interaction if needed
-        max_rounds = int(props.get("max_interaction_rounds", 3))
         new_items = await reasoner.resolve_via_interaction(
             query, rewritten, all_data, all_metadata, max_rounds=max_rounds
         )
