@@ -9,8 +9,10 @@ the sample output is hand-written.
 
 ## Quick start
 
+From the repository root:
+
 ```bash
-cd lib && pip install -e .
+bash lib/scripts/install.sh      # the sibling repos, then the library
 export OPENAI_API_KEY=sk-...
 python3 examples/backends/memory_quickstart.py
 ```
@@ -68,7 +70,7 @@ redis-stack-server &   # or: docker run -p 6379:6379 redis/redis-stack
 python3 examples/backends/redis_backend_demo.py
 ```
 
-**Requires:** `OPENAI_API_KEY`, Redis on `localhost:6379` |
+**Requires:** `OPENAI_API_KEY`, Redis on `localhost:6379` (or set `REDIS_HOST` and `REDIS_PORT`) |
 **[Sample output](backends/redis_backend_demo.output.txt)**
 
 > **Freshness and the user's reply.** `FreshnessMetric` (evaluated alongside
@@ -77,6 +79,19 @@ python3 examples/backends/redis_backend_demo.py
 > current (#125). Retrieved evidence that carries no `modified`/`created` timestamp at all
 > still scores `0.0` on its own, which can cost clarification rounds when nothing else is
 > stale (#98).
+
+---
+
+## framework-demos/ — the library inside an agent framework
+
+The LangGraph demos need packages the library does not, installed by its
+`examples` extra:
+
+```bash
+pip install -e 'lib[examples]'   # langgraph, langchain-openai, langchain-mcp-adapters
+python3 examples/framework-demos/langgraph_direct_demo.py
+python3 examples/framework-demos/langgraph_mcp_demo.py   # also needs the MCP server: bash platform/mcp/scripts/install.sh
+```
 
 ---
 
@@ -93,8 +108,8 @@ python3 examples/backends/redis_backend_demo.py
 | `contact_resolution_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/contact_resolution_demo.output.txt) |
 | `sessions_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/sessions_demo.output.txt) |
 | `add_source_provenance_demo.py` | feature-demos | OpenAI | — | [output](feature-demos/add_source_provenance_demo.output.txt) |
-| `langgraph_direct_demo.py` | framework-demos | OpenAI | — | [output](framework-demos/langgraph_direct_demo.output.txt) |
-| `langgraph_mcp_demo.py` | framework-demos | OpenAI | — | [output](framework-demos/langgraph_mcp_demo.output.txt) |
+| `langgraph_direct_demo.py` | framework-demos | OpenAI | `lib[examples]` | [output](framework-demos/langgraph_direct_demo.output.txt) |
+| `langgraph_mcp_demo.py` | framework-demos | OpenAI | `lib[examples]`, the MCP server | [output](framework-demos/langgraph_mcp_demo.output.txt) |
 | `extraction_to_query_demo.py` | integration-demos | OpenAI | — | [output](integration-demos/extraction_to_query_demo.output.txt) |
 | `full_lifecycle_demo.py` | integration-demos | OpenAI | — | [output](integration-demos/full_lifecycle_demo.output.txt) |
 | `interactive_clarification_demo.py` | scenario-demos | OpenAI | — | [output](scenario-demos/interactive_clarification_demo.output.txt) |

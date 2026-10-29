@@ -21,10 +21,12 @@ list, not None, for a missing JSONPath; the library reads dot paths through
 its root document so that difference no longer matters, #99.)
 
 Run from examples/backends/ (needs a reachable Redis with the RedisJSON module,
-e.g. `docker run -p 6379:6379 redis/redis-stack`):
+e.g. `docker run -p 6379:6379 redis/redis-stack`; REDIS_HOST and REDIS_PORT
+override localhost:6379):
     python3 redis_backend_demo.py
 """
 import asyncio
+import os
 
 import redis
 
@@ -33,13 +35,15 @@ from blue_data_user_source.data.manager import CLS_JSON_REDIS, CLS_KB_MEMORY
 
 DIVIDER = "-" * 60
 _DB = 15  # isolated from the shared instance's default database (0)
+_HOST = os.environ.get("REDIS_HOST", "localhost")
+_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 _NAMESPACE = "blue-userdb-examples-redis-backend-demo"
 
 
 def _redis_json_props(namespace: str) -> dict:
     return {
         "_class": CLS_JSON_REDIS,
-        "connection": {"protocol": "json/redis", "host": "localhost", "port": 6379, "db": _DB},
+        "connection": {"protocol": "json/redis", "host": _HOST, "port": _PORT, "db": _DB},
         "namespace": namespace,
     }
 
@@ -56,7 +60,7 @@ async def main():
     print(DIVIDER)
 
     outer = RedisUserSource("blue-userdb", {
-        "connection": {"host": "localhost", "port": 6379, "db": _DB},
+        "connection": {"host": _HOST, "port": _PORT, "db": _DB},
         "registry": _redis_json_props(f"{_NAMESPACE}:outer"),
     })
     await outer.create_user(
@@ -99,7 +103,7 @@ async def main():
     print(DIVIDER)
 
     reopened = RedisUserSource("blue-userdb", {
-        "connection": {"host": "localhost", "port": 6379, "db": _DB},
+        "connection": {"host": _HOST, "port": _PORT, "db": _DB},
         "registry": _redis_json_props(f"{_NAMESPACE}:outer"),
     })
     print("Users visible after reopen:", reopened.list_users())
@@ -114,7 +118,7 @@ async def main():
     # ---------------------------------------------------------------- #
     # 4. Clean up -- flush only the isolated demo database
     # ---------------------------------------------------------------- #
-    redis.Redis(host="localhost", port=6379, db=_DB).flushdb()
+    redis.Redis(host=_HOST, port=_PORT, db=_DB).flushdb()
     print()
     print(f"Flushed Redis db={_DB} (this demo's isolated database)")
     print("Demo complete.")

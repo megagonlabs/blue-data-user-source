@@ -15,7 +15,7 @@ the agent can also create the user and set metadata, entirely through tool
 calls it chooses itself; there is no fixed pipeline at all.
 
 Run:
-    pip install langgraph langchain-openai langchain-mcp-adapters
+    pip install -e 'lib[examples]'      # or: pip install langgraph langchain-openai langchain-mcp-adapters
     pip install -e platform/mcp/
     python3 examples/framework-demos/langgraph_mcp_demo.py
 

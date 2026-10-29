@@ -26,6 +26,12 @@ webhook = [
 email = [
     "aiosmtplib>=3.0",
 ]
+# The LangGraph demos in examples/framework-demos/ (#181).
+examples = [
+    "langgraph",
+    "langchain-openai",
+    "langchain-mcp-adapters",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

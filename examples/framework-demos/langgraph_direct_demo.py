@@ -29,7 +29,7 @@ all happen inside that one call, invisibly to this pipeline:
 Requires OPENAI_API_KEY.
 
 Run:
-    pip install langgraph langchain-openai
+    pip install -e 'lib[examples]'      # or: pip install langgraph langchain-openai
     python3 examples/framework-demos/langgraph_direct_demo.py
 """
 import asyncio
