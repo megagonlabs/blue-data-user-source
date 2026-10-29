@@ -374,6 +374,16 @@ class UserDataManager:
         if contained is not None:
             contained.unlink(missing_ok=True)
 
+    def _unlink_store_file(self, path: str | Path) -> None:
+        """Remove a store's file and the ``<file>.lock`` sidecar its locking leaves (#179).
+
+        The sidecar sits beside the file, so it is removed only when the file is.
+        """
+        contained = self._contained(path)
+        if contained is not None:
+            contained.unlink(missing_ok=True)
+            contained.with_name(f"{contained.name}.lock").unlink(missing_ok=True)
+
     def _rmtree(self, path: str | Path) -> None:
         contained = self._contained(path)
         if contained is not None and contained.exists():
@@ -389,6 +399,7 @@ class UserDataManager:
         paths refused are returned (and logged).
         """
         self._refused = []
+        user_dir: Path | None = None
         if self._registry is not None:
             # KB — file backend stores {database}.json inside the directory
             kb_props = self._registry.get_source_properties("kb") or {}
@@ -396,9 +407,8 @@ class UserDataManager:
             if "directory" in kb_conn:
                 user_dir = self._contained(kb_conn["directory"])
                 if user_dir is not None:
-                    self._unlink(user_dir / f"{self._database}.json")
-                    with contextlib.suppress(OSError):
-                        user_dir.rmdir()
+                    self._unlink_store_file(user_dir / f"{self._database}.json")
+                    self._unlink(user_dir / f".{self._database}.lock")  # the KB's write lock
 
             # Metadata, contacts, and sessions — a file, or a namespaced store
             # whose keys used to be left behind on Redis (#153).
@@ -406,7 +416,7 @@ class UserDataManager:
                 props = self._registry.get_source_properties(src_name) or {}
                 conn = props.get("connection", {})
                 if "path" in conn:
-                    self._unlink(conn["path"])
+                    self._unlink_store_file(conn["path"])
                 elif props.get("namespace"):
                     self._registry.connect_source(src_name).delete(None)
                 elif conn.get("protocol", "").startswith("json/redis"):
@@ -428,9 +438,16 @@ class UserDataManager:
         # Per-user registry — a file, or a namespaced store
         reg_conn = self._registry_props.get("connection", self._registry_props)
         if "path" in reg_conn:
-            self._unlink(reg_conn["path"])
+            self._unlink_store_file(reg_conn["path"])
         elif self._registry_props.get("namespace"):
             _build_json_source("registry", self._registry_props).delete(None)
+
+        # The KB directory, last: in the default layout it also holds the JSON
+        # stores and the vector directories removed above (#179). Left in place
+        # if anything else is still in it.
+        if user_dir is not None:
+            with contextlib.suppress(OSError):
+                user_dir.rmdir()
         return list(self._refused)
 
     # ------------------------------------------------------------------ #

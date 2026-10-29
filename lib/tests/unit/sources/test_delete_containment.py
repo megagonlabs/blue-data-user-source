@@ -48,6 +48,23 @@ def test_a_normal_delete_still_removes_everything(data_dir: Path) -> None:
     assert not list((data_dir / "sources").glob("alice/*.json"))
 
 
+def test_delete_leaves_no_directory_or_lock_file_behind(data_dir: Path, tmp_path: Path) -> None:
+    """The stores' ``*.lock`` sidecars go too, and with them the user's directory (#179)."""
+    resume = tmp_path / "resume.txt"
+    resume.write_text("Ivan has worked as a data engineer since 2019.")
+    us = _source(data_dir)
+    us.create_database("ivan")
+    us.set_metadata("ivan", "identity.name", "Ivan")
+    asyncio.run(us.add_contact_method("ivan", "email", "work", {"address": "i@example.com"}))
+    asyncio.run(us.create_session("ivan"))
+    asyncio.run(us.add_source(str(resume), database="ivan"))
+    assert list(data_dir.rglob("*.lock"))
+
+    assert asyncio.run(us.delete_user("ivan")) == []
+
+    assert [str(p.relative_to(data_dir)) for p in data_dir.rglob("*") if "ivan" in str(p)] == []
+
+
 def test_a_recorded_path_outside_the_data_directory_is_kept(
     data_dir: Path, outside: Path, caplog: pytest.LogCaptureFixture,
 ) -> None:
