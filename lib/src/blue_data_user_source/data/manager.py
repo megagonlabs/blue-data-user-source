@@ -712,6 +712,12 @@ class UserDataManager:
         DocumentDataSource (KB SOURCE-node provenance is unaffected). See #95:
         once documents are properly tracked (#89), per-file discoverability
         (listing / removal) should be revisited.
+
+        Adding a source already registered at the same location (and under the
+        same name, when *name* is given) updates it instead of registering a
+        second one (#176): its document chunks are replaced by the new ingest,
+        and any extraction is recorded under it. Its description and original
+        date stay as first recorded.
         """
         kb = self._ensure_kb_source()
         # With ``text``, the document is that text and *source* is unused: no file
@@ -724,11 +730,19 @@ class UserDataManager:
         # unattributed document ("Results-driven Project Manager with...") to
         # this user's own entity instead of inventing a second person for it.
         owner = self._owner_name()
-        source_id = await kb.add_source(
-            self._database, location, name=name,
-            description=description or f"Belongs to {owner}, the user this knowledge base is about",
-            original=original,
-        )
+        existing = [
+            s for s in await self.list_sources()
+            if s.get("source") == location and (name is None or s.get("name") == name)
+        ]
+        if len(existing) == 1:
+            source_id = existing[0]["id"]
+            self._delete_document(source_id)
+        else:
+            source_id = await kb.add_source(
+                self._database, location, name=name,
+                description=description or f"Belongs to {owner}, the user this knowledge base is about",
+                original=original,
+            )
 
         doc_source = self.ensure_external_documents_source()
         # No "collection" override — falls through to the pipeline's own
@@ -792,21 +806,27 @@ class UserDataManager:
                 f"remove one by id ({ids})."
             )
         source_id = matches[0]["id"]
-
-        chunks_removed: int | None = None
-        record = self._registry.get_record(sanitize_registry_name(source_id), _DOCUMENT_RECORD)
-        if record:
-            props = record.get("properties") or {}
-            self.ensure_external_documents_source().execute_query({
-                "op": "DOCUMENT.DELETE",
-                "document_id": props["document_id"],
-                "chunk_count": props["chunk_count"],
-            })
-            chunks_removed = int(props["chunk_count"])
-            self._registry.deregister(record)
-
+        chunks_removed = self._delete_document(source_id)
         await self._ensure_kb_source().delete_source(self._database, source_id)
         return {"id": source_id, "name": matches[0].get("name"), "chunks_removed": chunks_removed}
+
+    def _delete_document(self, source_id: str) -> int | None:
+        """Delete the "external_documents" chunks recorded for *source_id*.
+
+        Returns how many were deleted, or None when none are recorded (a source
+        added before its document was recorded).
+        """
+        record = self._registry.get_record(sanitize_registry_name(source_id), _DOCUMENT_RECORD)
+        if not record:
+            return None
+        props = record.get("properties") or {}
+        self.ensure_external_documents_source().execute_query({
+            "op": "DOCUMENT.DELETE",
+            "document_id": props["document_id"],
+            "chunk_count": props["chunk_count"],
+        })
+        self._registry.deregister(record)
+        return int(props["chunk_count"])
 
     async def list_data(self) -> list[dict[str, Any]]:
         data = await self._ensure_kb_source().fetch_database_data(self._database, compact=True)

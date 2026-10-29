@@ -140,7 +140,8 @@ async def main() -> None:
     # embedded into the shared "external_documents" DocumentDataSource
     await us.add_source("resume.txt", database="alice")
 
-    # Type 2 — same ingestion, plus extract specific knowledge via LLM into the KG
+    # Type 2 — same ingestion, plus extract specific knowledge via LLM into the KG.
+    # The file is already a source, so this updates it rather than adding a second.
     await us.add_source(
         "resume.txt",
         database="alice",
