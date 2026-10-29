@@ -28,17 +28,22 @@ class PostmarkAdapter(InboundEmailAdapter):
             data = json.loads(body.decode("utf-8", errors="replace"))
         except json.JSONDecodeError as exc:
             raise ValueError(f"Postmark payload is not valid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"Postmark payload is not a JSON object (got {type(data).__name__})")
 
         interaction_id: str | None = None
 
-        # Prefer MailboxHash if it already holds the id directly.
-        to_full = data.get("ToFull") or []
-        for entry in to_full:
-            hash_val = (entry.get("MailboxHash") or "").strip()
+        # Prefer MailboxHash if it already holds the id directly. Entries of the
+        # wrong shape are skipped, falling back to the To header (#184).
+        to_full = data.get("ToFull")
+        for entry in to_full if isinstance(to_full, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            hash_val = _text(entry.get("MailboxHash"))
             if hash_val.startswith("interaction-"):
                 interaction_id = hash_val[len("interaction-"):]
                 break
-            email = entry.get("Email") or ""
+            email = _text(entry.get("Email"))
             if email:
                 try:
                     interaction_id = self._id_from_address(email)
@@ -56,8 +61,13 @@ class PostmarkAdapter(InboundEmailAdapter):
                     "Postmark payload: could not extract interaction id from ToFull or To"
                 )
 
-        reply_text = (data.get("StrippedTextReply") or data.get("TextBody") or "").strip()
+        reply_text = _text(data.get("StrippedTextReply")) or _text(data.get("TextBody"))
         if not reply_text:
             raise ValueError("Postmark payload has no reply text ('StrippedTextReply' / 'TextBody')")
 
         return interaction_id, reply_text
+
+
+def _text(value: object) -> str:
+    """*value* stripped when it is a string, else "": a field of the wrong type is absent."""
+    return value.strip() if isinstance(value, str) else ""

@@ -42,6 +42,21 @@ class InboundEmailAdapter(ABC):
         """
         ...
 
+    def parse(
+        self, body: bytes, content_type: str, headers: dict[str, str]
+    ) -> tuple[str, str]:
+        """:meth:`extract`, with any other parsing error raised as ``ValueError``.
+
+        The inbound webhook is open (#170), so its payload is anyone's: a
+        malformed one must be answered 422, and an adapter that trips over an
+        unexpected shape (``IndexError``, ``AttributeError``…) answered 500
+        (#184). Callers use this; adapters implement :meth:`extract`.
+        """
+        try:
+            return self.extract(body, content_type, headers)
+        except (TypeError, AttributeError, IndexError, KeyError) as exc:
+            raise ValueError(f"Malformed {type(self).__name__} payload: {type(exc).__name__}: {exc}") from exc
+
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
@@ -97,6 +112,8 @@ class InboundEmailAdapter(ABC):
     @staticmethod
     def _id_from_address(address: str) -> str:
         """Extract the interaction id from 'interaction-<id>@domain'."""
+        if not isinstance(address, str):
+            raise ValueError(f"Recipient address {address!r} is not a string")
         local = address.split("@")[0]
         prefix = "interaction-"
         if not local.startswith(prefix):
@@ -108,8 +125,16 @@ class InboundEmailAdapter(ABC):
 
     @staticmethod
     def _first_address(raw: str) -> str:
-        """Return the first email address from a comma-separated To/Recipient header."""
-        return raw.split(",")[0].strip().split()[-1].strip("<>")
+        """Return the first email address from a comma-separated To/Recipient header.
+
+        Raises ValueError for a value that is not a string or names no address (#184).
+        """
+        if not isinstance(raw, str):
+            raise ValueError(f"Recipient {raw!r} is not a string")
+        words = raw.split(",")[0].split()
+        if not words:
+            raise ValueError(f"No recipient address in {raw!r}")
+        return words[-1].strip("<>")
 
 
 # ---------------------------------------------------------------------------

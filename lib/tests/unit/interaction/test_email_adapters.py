@@ -317,3 +317,64 @@ def test_rfc2231_encoded_field_names_are_decoded() -> None:
 
     body = _multipart(encoded("to", _RECIPIENT), encoded("text", _REPLY))
     assert SendgridAdapter().extract(body, _MULTIPART, {}) == (_INTERACTION_ID, _REPLY)
+
+
+# ---------------------------------------------------------------------------
+# Malformed payloads raise ValueError only (#184)
+# ---------------------------------------------------------------------------
+# The inbound webhook is open (#170): its route answers ValueError with 422, and
+# any other exception was a 500.
+
+_JSON, _FORM = "application/json", "application/x-www-form-urlencoded"
+
+
+@pytest.mark.parametrize(("provider", "body", "content_type"), [
+    ("postmark", b"{}", _JSON),                       # no To at all
+    ("postmark", b"[1]", _JSON),                      # an array, not an object
+    ("postmark", b'{"ToFull": ["x"]}', _JSON),        # a ToFull entry that is not an object
+    ("postmark", b'{"ToFull": {"Email": 1}}', _JSON), # ToFull not a list
+    ("postmark", b'{"To": 5}', _JSON),                # a numeric To
+    ("postmark", b'{"To": "   "}', _JSON),            # a blank To
+    ("postmark", f'{{"To": "{_RECIPIENT}", "TextBody": 7}}'.encode(), _JSON),  # a numeric body
+    ("mailgun", b"recipient=%20&stripped-text=x", _FORM),  # a whitespace-only recipient
+    ("sendgrid", b"to=%20&text=x", _FORM),
+])
+def test_a_malformed_payload_raises_value_error(provider: str, body: bytes, content_type: str) -> None:
+    with pytest.raises(ValueError):
+        get_adapter(provider).parse(body, content_type, {})
+
+
+def test_a_well_formed_postmark_payload_still_parses_through_parse() -> None:
+    body = f'{{"ToFull": ["junk", {{"Email": "{_RECIPIENT}"}}], "TextBody": " {_REPLY} "}}'.encode()
+    assert get_adapter("postmark").parse(body, _JSON, {}) == (_INTERACTION_ID, _REPLY)
+
+
+def test_parse_turns_any_other_parsing_error_into_value_error() -> None:
+    class Clumsy(MailgunAdapter):
+        def extract(self, body, content_type, headers):
+            return {}["missing"]
+
+    with pytest.raises(ValueError, match="Malformed Clumsy payload: KeyError"):
+        Clumsy().parse(b"", _FORM, {})
+
+
+@pytest.mark.parametrize("provider", ["mailgun", "postmark", "sendgrid", "smtp_server"])
+def test_random_payloads_raise_nothing_but_value_error(provider: str) -> None:
+    import json
+    import random
+
+    rng = random.Random(184)
+    shapes = [None, 0, 1.5, True, "", " ", "x", [], ["x"], [{}], {}, {"Email": 3}, [{"MailboxHash": 2}]]
+    adapter = get_adapter(provider)
+    for _ in range(300):
+        if rng.random() < 0.5:
+            body, content_type = bytes(rng.randrange(256) for _ in range(rng.randrange(40))), rng.choice(
+                [_JSON, _FORM, "multipart/form-data; boundary=x", ""])
+        else:
+            obj = {k: rng.choice(shapes) for k in rng.sample(
+                ["To", "ToFull", "TextBody", "StrippedTextReply", "recipient", "to", "text"], 3)}
+            body, content_type = json.dumps(obj).encode(), _JSON
+        try:
+            adapter.parse(body, content_type, {})
+        except (ValueError, NotImplementedError):
+            pass

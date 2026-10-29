@@ -78,7 +78,9 @@ async def respond_form(interaction_id: str) -> HTMLResponse:
 )
 async def respond_form_submit(interaction_id: str, request: Request) -> HTMLResponse:
     form = await request.form()
-    text = (form.get("text") or "").strip()
+    # A file part named "text" is an UploadFile, not a reply (#183).
+    value = form.get("text")
+    text = value.strip() if isinstance(value, str) else ""
     if not text:
         return HTMLResponse(
             content=_page("Empty response", "<p>Please enter a response before submitting.</p>"),
@@ -125,7 +127,7 @@ async def email_inbound(request: Request, provider: str = "mailgun") -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     try:
-        interaction_id, reply_text = adapter.extract(body, content_type, headers)
+        interaction_id, reply_text = adapter.parse(body, content_type, headers)
     except (ValueError, NotImplementedError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
