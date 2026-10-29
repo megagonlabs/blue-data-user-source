@@ -76,7 +76,9 @@ class FileUserSource(UserSource):
             "contact_source": json_file(base / "contacts.json"),
             "session_source": json_file(base / "sessions.json"),
             "doc_source": {
-                "embedding_model": "dummy",
+                # Searched by meaning, not by hash (#172).
+                "embedding_model": "openai",
+                "search_mode": "vector",
                 "vector_source": {"backend": "file", "directory": str(base / "sessions")},
             },
         }

@@ -52,12 +52,64 @@ _BACKEND_CLASSES: dict[str, dict[str, str]] = {
     "vector": _VECTOR_BACKENDS,
 }
 
-# Default embedding model + vector backend for per-session interaction-transcript
-# DocumentDataSources when the caller doesn't supply doc_source_props explicitly.
+# The document stores of a user whose record names none: users recorded before
+# doc_source was stored. Not used for new users (see NEW_USER_DOC_SOURCE_PROPS).
 DEFAULT_DOC_SOURCE_PROPS: dict = {
     "embedding_model": "dummy",
     "vector_source": {"backend": "memory"},
 }
+
+# How a user's documents (session transcripts, added files) are searched (#173):
+# doc-source's DOCUMENT.SEARCH modes, and the embeddings this package can build.
+DOC_SEARCH_MODES = ("vector", "hybrid", "bm25")
+DOC_EMBEDDING_MODELS = ("openai", "dummy")
+
+# A new user's document stores when the caller names none (#172): OpenAI
+# embeddings (text-embedding-3-small) searched by vector. "dummy" is a hash with
+# no notion of meaning, so vector search over it returned arbitrary chunks; and
+# doc-source keeps its BM25 corpus only in the ingesting process, so "bm25"
+# finds nothing after a restart (every CLI command is one).
+NEW_USER_DOC_SOURCE_PROPS: dict = {
+    "embedding_model": "openai",
+    "search_mode": "vector",
+    "vector_source": {"backend": "memory"},
+}
+
+
+def resolve_doc_search(
+    doc_source_props: dict, search_mode: str | None = None, embedding_model: str | None = None,
+) -> dict:
+    """A copy of *doc_source_props* with its search mode and embedding set and checked.
+
+    *search_mode* and *embedding_model* replace the recorded values. A record
+    with no mode gets ``vector`` over a real embedding and ``bm25`` over
+    ``dummy``. Raises ``QueryError`` for a value outside ``DOC_SEARCH_MODES`` or
+    ``DOC_EMBEDDING_MODELS``, and for ``vector`` or ``hybrid`` over ``dummy``,
+    which ranks by hash and returns arbitrary chunks (#172).
+    """
+    from blue_data_user_source.types import QueryError
+
+    props = dict(doc_source_props)
+    if embedding_model is not None:
+        props["embedding_model"] = embedding_model
+    spec = props.get("embedding_model") or "dummy"
+    name = spec if isinstance(spec, str) else spec.get("name", "dummy")
+    if name not in DOC_EMBEDDING_MODELS:
+        raise QueryError(
+            f"Unknown document embedding {name!r}; choose one of {', '.join(DOC_EMBEDDING_MODELS)}."
+        )
+    mode = search_mode or props.get("search_mode") or ("bm25" if name == "dummy" else "vector")
+    if mode not in DOC_SEARCH_MODES:
+        raise QueryError(
+            f"Unknown document search mode {mode!r}; choose one of {', '.join(DOC_SEARCH_MODES)}."
+        )
+    if mode != "bm25" and name == "dummy":
+        raise QueryError(
+            f"Document search mode {mode!r} needs a real embedding: the 'dummy' one is a "
+            "hash and ranks chunks arbitrarily. Use embedding 'openai', or mode 'bm25'."
+        )
+    props["search_mode"] = mode
+    return props
 
 # Max chunks retrieved per non-KB source (session_content, external_documents)
 # for each execute_query call.
@@ -591,8 +643,12 @@ class UserDataManager:
         self, doc_source: Any, query: str, source_name: str, metadata: dict[str, Any],
         top_k: int = DOC_SEARCH_TOP_K,
     ) -> list[dict[str, Any]]:
-        """Run DOCUMENT.SEARCH against *doc_source*, tagging each hit with *source_name*."""
-        request = {"op": "DOCUMENT.SEARCH", "query": query, "k": top_k}
+        """Run DOCUMENT.SEARCH against *doc_source*, tagging each hit with *source_name*.
+
+        In the user's search mode (#173); see :func:`resolve_doc_search`.
+        """
+        mode = resolve_doc_search(self._doc_source_props)["search_mode"]
+        request = {"op": "DOCUMENT.SEARCH", "query": query, "k": top_k, "mode": mode}
         chunks = doc_source.execute_query(request)
         entries: list[dict[str, Any]] = []
         for chunk in chunks:

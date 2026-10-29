@@ -53,7 +53,7 @@ def test_delete_leaves_no_directory_or_lock_file_behind(data_dir: Path, tmp_path
     resume = tmp_path / "resume.txt"
     resume.write_text("Ivan has worked as a data engineer since 2019.")
     us = _source(data_dir)
-    us.create_database("ivan")
+    us.create_database("ivan", {"doc_embedding_model": "dummy", "doc_search_mode": "bm25"})  # offline
     us.set_metadata("ivan", "identity.name", "Ivan")
     asyncio.run(us.add_contact_method("ivan", "email", "work", {"address": "i@example.com"}))
     asyncio.run(us.create_session("ivan"))

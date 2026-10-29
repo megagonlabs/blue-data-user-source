@@ -25,7 +25,7 @@ A leading `~` in the registry path, and in any store path or directory passed to
 
 ## Creating a user
 
-Each user gets its own `DataRegistry` — a knowledge graph, and three JSON stores (metadata, contacts, sessions) — built from scratch with `create_user`. All five source-property arguments are required; `doc_source_props` is optional (defaults to a `DummyEmbeddingModel` + in-memory vector store for per-session/per-file document ingestion).
+Each user gets its own `DataRegistry` — a knowledge graph, and three JSON stores (metadata, contacts, sessions) — built from scratch with `create_user`. All five source-property arguments are required; `doc_source_props` is optional: it sets up the stores for session transcripts and added files, and defaults to OpenAI embeddings (`text-embedding-3-small`) searched by vector, in an in-memory vector store. See [Document search](#document-search).
 
 ```python
 await us.create_user(
@@ -59,6 +59,23 @@ await us.delete_user("alice")   # remove from outer registry AND wipe all backin
 ```
 
 For an in-memory KB during development, swap `kb_source_props` for `blue_data_kb_source.memory_kb_source.MemoryKBSource`; for Neo4j, `blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource`.
+
+### Document search
+
+Session transcripts and added files go into document stores, and each query searches them alongside the KB. How they are searched is chosen when the user is created and recorded with the user (`get_user(name)["doc_source"]`):
+
+| `search_mode` | Finds | Needs |
+|---|---|---|
+| `vector` (default) | passages close in meaning to the question | a real embedding: `openai` (`text-embedding-3-small`), so `OPENAI_API_KEY`, and embedding calls when documents are added and on each search |
+| `hybrid` | keyword and meaning matches, fused | the same as `vector` |
+| `bm25` | passages sharing the question's words | no embedding calls, but its index lives only in the process that ingested the documents: after a restart (every CLI command) it finds nothing, and `hybrid` falls back to `vector` |
+
+```python
+us.create_database("alice", {"doc_search_mode": "hybrid"})                              # OpenAI embeddings
+us.create_database("bob", {"doc_embedding_model": "dummy", "doc_search_mode": "bm25"})  # offline, one process
+```
+
+`doc_embedding_model` is `openai` (the default) or `dummy`, a hash with no notion of meaning: `vector` or `hybrid` over `dummy` raises `QueryError`. With `create_user`, put the same choices in `doc_source_props` as `embedding_model` and `search_mode`. Users created before 1.0 record no mode: one with the `dummy` embedding is searched with `bm25`. Changing a user's embedding means re-embedding its documents, so recreate the user instead.
 
 ---
 

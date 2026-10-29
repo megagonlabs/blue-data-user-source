@@ -36,7 +36,7 @@ All stores come from the sibling repositories and are reached through their `Dat
 |-------|-----------------|----------|----------|
 | Knowledge graph | `KBSource` (`blue-data-kb-source`) | Extracted entities, facts and property values, and one SOURCE node per added document | memory, file, Neo4j; optional keyword/semantic search index |
 | JSON | `JSONSource` (`blue-data`) | Outer user registry, metadata, contact methods, session records | memory, file, Redis (RedisJSON) |
-| Documents | `DocumentDataSource` (`blue-data-doc-source`) | `external_documents` (added sources) and `session_content` (clarification transcripts): parse, chunk, embed, search | memory or file vector store; `dummy` embeddings by default |
+| Documents | `DocumentDataSource` (`blue-data-doc-source`) | `external_documents` (added sources) and `session_content` (clarification transcripts): parse, chunk, embed, search | memory or file vector store; OpenAI embeddings searched by vector by default (`dummy` before #172) |
 
 `JSONSource` addresses values by dot path (`get`, `set`, `delete`). Document stores are driven by operation requests (`DOCUMENT.INGEST`, `DOCUMENT.SEARCH`, `DOCUMENT.DELETE`). The KB answers natural-language questions itself (`KBSource.answer`). See [10-data-model.md](10-data-model.md) for what each store holds.
 

@@ -177,7 +177,7 @@ await us.create_user(
     metadata_source_props=...,   # JSONSource configs, as for the registry
     contact_source_props=...,
     session_source_props=...,
-    doc_source_props={"embedding_model": "dummy", "vector_source": {"backend": "file", "directory": "~/.blue-userdb/sources/alice/sessions"}},
+    doc_source_props={"embedding_model": "openai", "search_mode": "vector", "vector_source": {"backend": "file", "directory": "~/.blue-userdb/sources/alice/sessions"}},
     onboard=False,
 )
 

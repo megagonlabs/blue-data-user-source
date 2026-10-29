@@ -26,6 +26,7 @@ from blue_data_user_source.data.manager import (
     CLS_KB_NEO4J,
     CLS_VECTOR_FILE,
     CLS_VECTOR_MEMORY,
+    NEW_USER_DOC_SOURCE_PROPS,
 )
 
 _DEFAULT_DATA_DIR = Path.home() / ".blue-userdb"
@@ -254,16 +255,19 @@ def _user_kb_props(
 
 
 def _user_doc_source_props(data_dir: Path, name: str, doc_backend: str) -> dict:
-    """Config for per-session interaction-transcript DocumentDataSources.
+    """Config for the user's document stores (session transcripts, added files).
 
-    "memory" (default) doesn't persist ingested transcripts across CLI
-    invocations (each command is a fresh process) — use "file" for that.
+    "memory" doesn't persist ingested documents across CLI invocations (each
+    command is a fresh process); "file" (the profile default) does. Embedded
+    with OpenAI and searched by vector, the library's default for a new user
+    (#172).
     """
+    search = {k: NEW_USER_DOC_SOURCE_PROPS[k] for k in ("embedding_model", "search_mode")}
     if doc_backend == "memory":
-        return {"embedding_model": "dummy", "vector_source": {"backend": "memory"}}
+        return {**search, "vector_source": {"backend": "memory"}}
     if doc_backend == "file":
         return {
-            "embedding_model": "dummy",
+            **search,
             "vector_source": {"backend": "file", "directory": str(data_dir / "sources" / name / "sessions")},
         }
     raise ValueError(f"Unknown doc-source backend: {doc_backend!r}")

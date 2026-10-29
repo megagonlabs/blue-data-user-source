@@ -15,10 +15,12 @@ from blue_data_user_source.data.manager import (
     CLS_KB_MEMORY,
     DEFAULT_DOC_SOURCE_PROPS,
     DOC_SEARCH_TOP_K,
+    NEW_USER_DOC_SOURCE_PROPS,
     UserDataManager,
     _build_json_source,
     _enrich_props,
     _expand_user_paths,
+    resolve_doc_search,
 )
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
@@ -278,6 +280,11 @@ class UserSource(DataSource):
         ``session_source`` or ``doc_source`` in *properties* replaces that one
         default. A store with no default that is not given raises ``QueryError``.
 
+        ``doc_search_mode`` (``vector``, ``hybrid`` or ``bm25``) and
+        ``doc_embedding_model`` (``openai`` or ``dummy``) in *properties* choose how
+        the user's documents are searched, applied to the ``doc_source`` given or
+        defaulted (#173); see :meth:`create_user` for the default.
+
         ``overwrite`` deletes an existing user of that name first; without it an
         existing user raises ``UserExistsError``. Unlike :meth:`create_user`, this
         does not onboard unless ``properties["onboard"]`` is true: a synchronous
@@ -290,6 +297,10 @@ class UserSource(DataSource):
                 f"Cannot create {database!r}: {type(self).__name__} has no default for "
                 f"{', '.join(missing)}; pass {'it' if len(missing) == 1 else 'them'} in properties."
             )
+        doc_source = resolve_doc_search(
+            p.get("doc_source") or NEW_USER_DOC_SOURCE_PROPS,
+            search_mode=p.get("doc_search_mode"), embedding_model=p.get("doc_embedding_model"),
+        )
         if overwrite and database in self.list_users():
             run_sync(self.delete_user(database))
         run_sync(self.create_user(
@@ -299,7 +310,7 @@ class UserSource(DataSource):
             metadata_source_props=p["metadata_source"],
             contact_source_props=p["contact_source"],
             session_source_props=p["session_source"],
-            doc_source_props=p.get("doc_source"),
+            doc_source_props=doc_source,
             onboard=bool(p.get("onboard", False)),
             onboard_metadata=bool(p.get("onboard_metadata", True)),
         ))
@@ -690,10 +701,18 @@ class UserSource(DataSource):
         A leading ``~`` in any store's ``path`` or ``directory`` is expanded
         before the stores are built, and the expanded path is what is recorded
         (#171).
+
+        ``doc_source_props`` sets up the user's document stores: an
+        ``embedding_model`` (``openai`` or ``dummy``), a ``search_mode``
+        (``vector``, ``hybrid`` or ``bm25``) and a ``vector_source``. Without it,
+        OpenAI embeddings searched by vector, in memory (#172). The mode is
+        recorded with the user and checked by :func:`resolve_doc_search`, which
+        raises ``QueryError`` for ``vector`` or ``hybrid`` over ``dummy``.
         """
         validate_user_name(name)
         if self.get_user(name) is not None:
             raise UserExistsError(f"Database {name!r} already exists.")
+        doc_source_props = resolve_doc_search(doc_source_props or NEW_USER_DOC_SOURCE_PROPS)
         registry_props, kb_source_props, metadata_source_props, contact_source_props, \
             session_source_props, doc_source_props = _expand_user_paths([
                 registry_props, kb_source_props, metadata_source_props, contact_source_props,
@@ -717,7 +736,7 @@ class UserSource(DataSource):
         self._registry.register_source_database(
             self.name, name, properties={
                 "registry": _enrich_props(registry_props, "json"),
-                "doc_source": doc_source_props or DEFAULT_DOC_SOURCE_PROPS,
+                "doc_source": doc_source_props,
             }
         )
         self._managers[name] = manager

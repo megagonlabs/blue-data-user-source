@@ -79,12 +79,13 @@ If the protocol needs an inbound reply channel like email's (a webhook payload f
 
 ```python
 doc_source_props={
-    "embedding_model": "dummy",   # or "openai"
+    "embedding_model": "openai",  # or "dummy" (a hash: only with search_mode "bm25")
+    "search_mode": "vector",      # or "hybrid" or "bm25"
     "vector_source": {"backend": "memory", "directory": "..."},   # or "file"
 }
 ```
 
-`data/manager.py`'s `_build_embedding_model` is the only place that resolves the `embedding_model` string — currently `"dummy"` (`DummyEmbeddingModel`, no network calls) and `"openai"` (`OpenAIEmbeddingModel`) from `blue-data-doc-source`. A new embedding provider means adding a branch there; a new vector backend is a `blue-data` `VectorSource` implementation passed the same way `blue-data-kb-source` accepts one (see [that repo's extending.md](https://github.com/megagon-internal/blue-data-kb-source/blob/1.0/docs/extending.md#implementing-a-new-vectorsource-backend)) — this library doesn't reconnect these sources through the generic registry `_class`/`connection` path (a live embedding-model object can't round-trip through that), so a new backend choice has to be added to `_build_embedding_model`/the vector-source construction in `data/manager.py` directly, not just registered externally.
+`data/manager.py`'s `_build_embedding_model` is the only place that resolves the `embedding_model` string — currently `"dummy"` (`DummyEmbeddingModel`, no network calls) and `"openai"` (`OpenAIEmbeddingModel`) from `blue-data-doc-source`. A new embedding provider means adding a branch there and its name to `DOC_EMBEDDING_MODELS`, which `resolve_doc_search` checks every user's settings against; a new vector backend is a `blue-data` `VectorSource` implementation passed the same way `blue-data-kb-source` accepts one (see [that repo's extending.md](https://github.com/megagon-internal/blue-data-kb-source/blob/1.0/docs/extending.md#implementing-a-new-vectorsource-backend)) — this library doesn't reconnect these sources through the generic registry `_class`/`connection` path (a live embedding-model object can't round-trip through that), so a new backend choice has to be added to `_build_embedding_model`/the vector-source construction in `data/manager.py` directly, not just registered externally.
 
 ---
 

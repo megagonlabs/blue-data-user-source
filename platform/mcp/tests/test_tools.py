@@ -61,6 +61,8 @@ async def source():
         metadata_source_props=_MEMORY_REGISTRY,
         contact_source_props=_MEMORY_REGISTRY,
         session_source_props=_MEMORY_REGISTRY,
+        # Not the OpenAI default: these tests need no network or API key.
+        doc_source_props={"embedding_model": "dummy", "search_mode": "bm25"},
         # `create_user` onboards by default, which prompts on stdin — see the
         # module docstring: these tests need no input, network, or API key.
         onboard=False,

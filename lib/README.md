@@ -90,8 +90,8 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
-        # doc_source_props is optional — defaults to a dummy-embedding, in-memory
-        # vector backend for per-session interaction transcripts. See "Sessions" below.
+        # doc_source_props is optional — defaults to OpenAI embeddings searched by
+        # vector, in memory, for session transcripts and added files. See "Sessions" below.
     )
 
     print(us.list_users())       # ["alice"]
@@ -190,7 +190,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 
 | Method | Description |
 |---|---|
-| `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None)` *(async)* | Build registry + all built-in sources from scratch and seed schema. `doc_source_props` is optional — defaults to a dummy-embedding, in-memory vector backend (see [Sessions](#sessions)) |
+| `create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None)` *(async)* | Build registry + all built-in sources from scratch and seed schema. `doc_source_props` is optional — defaults to OpenAI embeddings searched by vector, in an in-memory vector backend (see [Sessions](#sessions)) |
 | `list_users()` | Return list of database names |
 | `get_user(name)` | Return the database properties dict (contains `"registry"` key), or `None` |
 | `remove_user(name)` | Remove database from the outer registry; backing files unchanged |
@@ -396,7 +396,7 @@ await us.end_session("alice", session_id)    # further queries against it raise 
 
 Each clarification interaction — question sent, response received, which contact method handled it — is recorded under its query in the session, and the resolved Q/A pair is also ingested as text into a per-session `DocumentDataSource` (from `blue-data-doc-source`) for later semantic recall. The `interaction_id` recorded here is the same id used internally to correlate an async webhook/email reply (see [Contact methods](#contact-methods) above).
 
-By default, per-session interaction transcripts use a `DummyEmbeddingModel` and an in-memory vector backend — fine for tests, but transcripts won't survive a process restart. Pass `doc_source_props` to `create_user` for a persistent backend:
+By default, session transcripts and added files are embedded with OpenAI (`text-embedding-3-small`), searched by vector, and kept in an in-memory vector backend, so they won't survive a process restart. Pass `doc_source_props` to `create_user` for a persistent backend:
 
 When `doc_source_props` points the vector backend at `"file"`, each resolved interaction's raw `Q: ...\nA: ...` transcript is also saved as a `.txt` file — named `{query_id}-{interaction_id}.txt` — under `{directory}/transcripts/{session_id}/`, alongside the vector store. With the (default) in-memory backend, nothing is written to disk.
 
@@ -406,7 +406,8 @@ await us.create_user(
     # ...other props...
     session_source_props={...},
     doc_source_props={
-        "embedding_model": "dummy",  # or "openai"
+        "embedding_model": "openai",  # or "dummy" (offline; only with "bm25")
+        "search_mode": "vector",      # or "hybrid" or "bm25"
         "vector_source": {"backend": "file", "directory": "~/.blue-userdb-lib/sources/alice/sessions"},
     },
 )
@@ -480,7 +481,7 @@ Database files are stored under `~/.blue-userdb/` by default.
 
 ### Unit tests
 
-Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `SessionManager`, `FreshnessMetric`, `CompletenessMetric`, `PrivacyMetric`, and `UserDataPlanner`. `SessionManager` tests exercise a real `DocumentDataSource` (`DummyEmbeddingModel` + in-memory vector backend) — no network calls.
+Fast, fully offline, no API key required. Covers `UserDataManager`, `UserQueryReasoner`, `ContactManager`, `SessionManager`, `FreshnessMetric`, `CompletenessMetric`, `PrivacyMetric`, and `UserDataPlanner`. `SessionManager` tests exercise a real `DocumentDataSource` (`DummyEmbeddingModel` + in-memory vector backend) — no network calls. Tests that create users pass the `dummy` embedding with `bm25` search explicitly, since a new user otherwise embeds with OpenAI.
 
 ```bash
 cd lib
