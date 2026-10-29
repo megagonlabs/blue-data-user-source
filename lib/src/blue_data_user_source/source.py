@@ -18,6 +18,7 @@ from blue_data_user_source.data.manager import (
     UserDataManager,
     _build_json_source,
     _enrich_props,
+    _expand_user_paths,
 )
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
@@ -192,7 +193,7 @@ class UserSource(DataSource):
         ``protocol`` label) is unused here — the registry's own backend is
         configured separately via ``properties["registry"]``.
         """
-        registry_json_props = self.properties.get("registry") or {
+        registry_json_props = _expand_user_paths(self.properties.get("registry")) or {
             "_class": CLS_JSON_MEMORY, "connection": {"protocol": "json/memory"}
         }
         registry_store = _build_json_source(f"{self.name}_registry", registry_json_props)
@@ -685,10 +686,19 @@ class UserSource(DataSource):
         user that is already registered, before anything is written: creating
         it again re-registered the name against new stores, orphaning the
         existing user's data (#141).
+
+        A leading ``~`` in any store's ``path`` or ``directory`` is expanded
+        before the stores are built, and the expanded path is what is recorded
+        (#171).
         """
         validate_user_name(name)
         if self.get_user(name) is not None:
             raise UserExistsError(f"Database {name!r} already exists.")
+        registry_props, kb_source_props, metadata_source_props, contact_source_props, \
+            session_source_props, doc_source_props = _expand_user_paths([
+                registry_props, kb_source_props, metadata_source_props, contact_source_props,
+                session_source_props, doc_source_props,
+            ])
         manager = UserDataManager(
             name, registry_props, doc_source_props=doc_source_props, data_root=self._data_root(),
         )

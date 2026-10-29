@@ -105,6 +105,26 @@ def _enrich_props(props: dict, kind: str) -> dict:
     return {"_class": cls, "connection": props}
 
 
+def _expand_user_paths(props: Any) -> Any:
+    """A copy of *props* with ``~`` expanded in every ``path`` and ``directory`` it holds.
+
+    The file stores (blue-data's ``FileJSONSource``, kb-source's ``FileKBSource``,
+    the document vector store) use a path as given, so ``~/x`` was written to a
+    literal ``./~/x`` while delete expanded it to ``$HOME/x`` and removed another
+    store's files (#171). Store configs are expanded once, before a user's
+    stores are built and recorded, so the path recorded is the path written.
+    """
+    if isinstance(props, dict):
+        return {
+            k: str(Path(v).expanduser()) if k in ("path", "directory") and isinstance(v, str)
+            else _expand_user_paths(v)
+            for k, v in props.items()
+        }
+    if isinstance(props, list):
+        return [_expand_user_paths(v) for v in props]
+    return props
+
+
 def _build_embedding_model(spec: str | dict | None) -> Any:
     """Build an EmbeddingModel from a simple string spec ('dummy' or 'openai').
 
@@ -193,7 +213,7 @@ class UserDataManager:
         self._doc_source_props = doc_source_props or DEFAULT_DOC_SOURCE_PROPS
         # The directory every file this user's stores record must lie under for
         # delete and reset to remove it (#156); None when the source keeps no files.
-        self._data_root = Path(data_root).expanduser() if data_root is not None else None
+        self._data_root = Path(data_root) if data_root is not None else None
         self._refused: list[str] = []
         self._registry: DataRegistry | None = None
         # Optional overrides — set directly by callers (e.g. test mocks)
@@ -313,10 +333,14 @@ class UserDataManager:
         reset remove nothing outside this user's data directory (#156). Each
         component is checked with blue-data's ``contain()``, which resolves
         symlinks, so a link inside the root that points out of it is refused too.
+
+        *path* is read as the store reads it, without expanding ``~``: a record
+        from before #171 that holds ``~/x`` names the ``./~/x`` its store wrote,
+        not ``$HOME/x``, where another store's files may live.
         """
         if self._data_root is None:
             return self._refuse(path, "this source keeps no data directory to contain it in")
-        target = Path(os.path.normpath(Path(path).expanduser().absolute()))
+        target = Path(os.path.normpath(Path(path).absolute()))
         for root in (Path(os.path.normpath(self._data_root.absolute())), self._data_root.resolve()):
             try:
                 parts = target.relative_to(root).parts

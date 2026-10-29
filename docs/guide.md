@@ -13,11 +13,13 @@ import asyncio
 from blue_data_user_source import FileUserSource
 
 async def main():
-    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb/registry.json"}})
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb-lib/registry.json"}})
     ...
 
 asyncio.run(main())
 ```
+
+A leading `~` in the registry path, and in any store path or directory passed to `create_user`, is expanded to your home directory. Give the library a directory of its own: the CLI, MCP and REST servers keep their users under `~/.blue-userdb`, and a user of the same name whose stores point at the same files shares them, so deleting either one deletes both. `delete_user` and `reset_user` remove only files under the registry file's directory; a store path outside it is kept and returned.
 
 ---
 
@@ -30,23 +32,23 @@ await us.create_user(
     "alice",
     registry_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registries/alice.json"},
     },
     kb_source_props={
         "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-        "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
+        "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb-lib/sources/alice"},
     },
     metadata_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/metadata.json"},
     },
     contact_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/contacts.json"},
     },
     session_source_props={
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
     },
 )
 

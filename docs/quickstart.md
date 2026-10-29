@@ -79,21 +79,12 @@ import asyncio
 from blue_data_user_source import FileUserSource
 
 async def main():
-    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb/registry.json"}})
+    # A directory of its own: the CLI, MCP and REST servers keep their users
+    # under ~/.blue-userdb, and an "alice" there would share these files.
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb-lib/registry.json"}})
 
-    await us.create_user(
-        "alice",
-        registry_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                         "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"}},
-        kb_source_props={"_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-                          "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"}},
-        metadata_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                                "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"}},
-        contact_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                               "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"}},
-        session_source_props={"_class": "blue_data.source.json.file_json_source.FileJSONSource",
-                               "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"}},
-    )
+    # The CLI's file layout, under ~/.blue-userdb-lib (see guide.md to choose each store)
+    us.create_database("alice")
 
     await us.add_source("data/resume.txt", database="alice")
 

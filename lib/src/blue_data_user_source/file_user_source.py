@@ -4,7 +4,7 @@ from pathlib import Path
 
 from blue_data.core.utils.path_utils import contain
 
-from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_FILE
+from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_FILE, _expand_user_paths
 from blue_data_user_source.source import UserSource, validate_user_name
 
 
@@ -14,6 +14,8 @@ class FileUserSource(UserSource):
     ``connection.path`` names the registry file (default: ``registry.json``).
     The same path is used for ``properties["registry"]`` so it is captured
     when the source is stored and reconstructed via ``DataSource.instantiate``.
+    A leading ``~`` is expanded here, so the registry file, the data directory
+    and every user's default stores sit under the home directory (#171).
 
     Protocol: ``user/file``
 
@@ -24,6 +26,9 @@ class FileUserSource(UserSource):
 
     def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:
         props = dict(properties or {})
+        for key in ("connection", "registry"):
+            if isinstance(props.get(key), dict):
+                props[key] = _expand_user_paths(props[key])
         if not props.get("registry"):
             conn = props.get("connection") or {}
             path = conn.get("path", "registry.json")
@@ -41,7 +46,7 @@ class FileUserSource(UserSource):
 
     def _data_root(self) -> Path:
         """The registry file's directory: every user's files live under it (#156)."""
-        return Path(self.properties["registry"]["connection"]["path"]).expanduser().parent
+        return Path(self.properties["registry"]["connection"]["path"]).parent
 
     def default_user_props(self, name: str) -> dict[str, dict]:
         """A new user's stores as files beside the registry file.

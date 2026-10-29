@@ -47,7 +47,7 @@ from blue_data_user_source import UserSource
 us = UserSource("user_source", {
     "registry": {
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registry.json"},
+        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registry.json"},
     },
     "schema": "data/schema.json",   # optional — used when creating/resetting databases
 })
@@ -72,23 +72,23 @@ async def main() -> None:
         "alice",
         registry_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registries/alice.json"},
         },
         kb_source_props={
             "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
+            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb-lib/sources/alice"},
         },
         metadata_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/metadata.json"},
         },
         contact_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/contacts.json"},
         },
         session_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
         # doc_source_props is optional — defaults to a dummy-embedding, in-memory
         # vector backend for per-session interaction transcripts. See "Sessions" below.
@@ -116,23 +116,23 @@ async def main() -> None:
         "alice",
         registry_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registries/alice.json"},
         },
         kb_source_props={
             "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
+            "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb-lib/sources/alice"},
         },
         metadata_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/metadata.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/metadata.json"},
         },
         contact_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/contacts.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/contacts.json"},
         },
         session_source_props={
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-            "connection": {"protocol": "json/file", "path": "~/.blue-userdb/sources/alice/sessions.json"},
+            "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
     )
 
@@ -209,7 +209,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 # File-backed JSON (registry, metadata, contacts)
 {
     "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-    "connection": {"protocol": "json/file", "path": "~/.blue-userdb/registries/alice.json"},
+    "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registries/alice.json"},
 }
 
 # In-memory KB
@@ -221,7 +221,7 @@ Constructs a multi-user source. `name` identifies this source in the outer DataR
 # File-backed KB (default for CLI)
 {
     "_class": "blue_data_kb_source.file_kb_source.FileKBSource",
-    "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb/sources/alice"},
+    "connection": {"protocol": "kb/file", "directory": "~/.blue-userdb-lib/sources/alice"},
 }
 
 # Neo4j KB
@@ -407,7 +407,7 @@ await us.create_user(
     session_source_props={...},
     doc_source_props={
         "embedding_model": "dummy",  # or "openai"
-        "vector_source": {"backend": "file", "directory": "~/.blue-userdb/sources/alice/sessions"},
+        "vector_source": {"backend": "file", "directory": "~/.blue-userdb-lib/sources/alice/sessions"},
     },
 )
 ```

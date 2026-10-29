@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from blue_data_user_source import FileUserSource, MemoryUserSource
+from blue_data_user_source import FileUserSource, MemoryUserSource, UserExistsError, UserSource
 from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_MEMORY
 
 _MEM_KB = {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}}
@@ -120,3 +120,91 @@ def test_the_file_layout_is_composed_with_contain(data_dir: Path) -> None:
     props = _source(data_dir).default_user_props("frank")
     assert Path(props["registry"]["connection"]["path"]) == real / "registries" / "frank.json"
     assert Path(props["kb_source"]["connection"]["directory"]) == real / "sources" / "frank"
+
+
+# ── "~/…" store paths (#171) ─────────────────────────────────────────────────
+
+_KB_FILE = "blue_data_kb_source.file_kb_source.FileKBSource"
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    home_dir, cwd = tmp_path / "home", tmp_path / "cwd"
+    home_dir.mkdir()
+    cwd.mkdir()
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.chdir(cwd)
+    return home_dir
+
+
+def _tilde_user(us: FileUserSource, name: str, root: str = "~/.blue-userdb-lib") -> None:
+    """The library walkthrough in guide.md: every store path starts with ``~/``."""
+    base = f"{root}/sources/{name}"
+    asyncio.run(us.create_user(
+        name,
+        registry_props=_json_file(Path(f"{root}/registries/{name}.json")),
+        kb_source_props={"_class": _KB_FILE, "connection": {"protocol": "kb/file", "directory": base}},
+        metadata_source_props=_json_file(Path(f"{base}/metadata.json")),
+        contact_source_props=_json_file(Path(f"{base}/contacts.json")),
+        session_source_props=_json_file(Path(f"{base}/sessions.json")),
+        onboard=False,
+    ))
+
+
+def test_tilde_paths_are_written_and_deleted_under_home(home: Path) -> None:
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb-lib/registry.json"}, "console": False})
+    _tilde_user(us, "alice")
+    us.set_metadata("alice", "identity.name", "Alice")
+
+    user_dir = home / ".blue-userdb-lib" / "sources" / "alice"
+    assert (user_dir / "metadata.json").exists()
+    assert not Path("~").exists()  # nothing written to a literal ./~
+    assert "~" not in str(us.get_user("alice"))  # the expanded path is recorded
+
+    assert asyncio.run(us.delete_user("alice")) == []
+    assert not list(user_dir.glob("*.json"))
+    assert not (home / ".blue-userdb-lib" / "registries" / "alice.json").exists()
+
+
+def test_the_library_walkthrough_leaves_the_clis_user_alone(home: Path) -> None:
+    """The quickstart: the CLI's alice under ~/.blue-userdb, then the library's.
+
+    Deleting the library's alice used to remove the CLI's (#171).
+    """
+    registry = home / ".blue-userdb" / "registry.json"
+    cli = FileUserSource("user_source", {"connection": {"path": str(registry)}, "console": False})
+    cli.create_database("alice")
+    cli.set_metadata("alice", "identity.name", "Alice (CLI)")
+
+    us = FileUserSource("us", {"connection": {"path": "~/.blue-userdb-lib/registry.json"}, "console": False})
+    _tilde_user(us, "alice")
+    assert asyncio.run(us.delete_user("alice")) == []
+
+    fresh = FileUserSource("user_source", {"connection": {"path": str(registry)}, "console": False})
+    assert fresh.get_metadata("alice", "identity.name") == "Alice (CLI)"
+
+
+def test_a_legacy_tilde_record_never_reaches_home(
+    home: Path, data_dir: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A path recorded literally before #171 names the ./~ its store wrote, not $HOME."""
+    victim = home / "metadata.json"
+    victim.write_text("{}")
+    us = _source(data_dir)
+    # Created as an older version did: "~" recorded and written unexpanded.
+    monkeypatch.setattr("blue_data_user_source.source._expand_user_paths", lambda props: props)
+    us.create_database("gina", {"metadata_source": _json_file(Path("~/metadata.json"))})
+    assert Path("~/metadata.json").exists()  # the literal ./~ the store wrote
+
+    refused = asyncio.run(us.delete_user("gina"))
+
+    assert victim.exists()
+    assert refused == ["~/metadata.json"]  # outside the data directory, so kept
+
+
+def test_a_base_user_source_expands_its_registry_path(home: Path) -> None:
+    """lib/README.md's construction: UserSource with a "~/..." registry file."""
+    us = UserSource("user_source", {"registry": _json_file(Path("~/.blue-userdb-lib/registry.json"))})
+    us.create_database("hal")
+    assert (home / ".blue-userdb-lib" / "registry.json").exists()
+    assert not Path("~").exists()
