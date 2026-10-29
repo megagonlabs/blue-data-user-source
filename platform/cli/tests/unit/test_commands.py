@@ -193,6 +193,49 @@ def test_database_create_error_exits_with_code_1(runner: CliRunner, data_dir: Pa
     assert result.exit_code == 1
 
 
+# ── database create: document search (#172, #173) ──────────────────────────────
+
+def _created_doc_source(runner: CliRunner, data_dir: Path, args: list[str]) -> dict:
+    mock = MagicMock()
+    mock.list_users.return_value = []
+    mock.create_user = AsyncMock(return_value=None)
+    mock.onboard_user = AsyncMock(return_value=None)
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "create", "alice", *args])
+    assert result.exit_code == 0, result.output
+    return mock.create_user.await_args.args[6]
+
+
+def test_database_create_defaults_to_openai_embeddings_searched_by_vector(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    doc_source = _created_doc_source(runner, data_dir, [])
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("openai", "vector")
+    assert doc_source["vector_source"]["backend"] == "file"
+
+
+def test_database_create_takes_the_document_search_options(runner: CliRunner, data_dir: Path) -> None:
+    doc_source = _created_doc_source(
+        runner, data_dir, ["--doc-search-mode", "bm25", "--doc-embedding-model", "dummy"],
+    )
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("dummy", "bm25")
+
+
+def test_database_create_document_search_falls_back_to_the_profile(
+    runner: CliRunner, data_dir: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_DOC_SEARCH_MODE", "hybrid")
+    assert _created_doc_source(runner, data_dir, [])["search_mode"] == "hybrid"
+
+
+def test_database_create_refuses_vector_search_over_the_dummy_embedding(
+    runner: CliRunner, data_dir: Path
+) -> None:
+    result = _invoke(runner, data_dir, ["database", "create", "alice", "--doc-embedding-model", "dummy"])
+    assert result.exit_code == 1
+    assert "needs a real embedding" in result.output
+
+
 # ── database create: KB search index config ────────────────────────────────────
 
 def test_database_create_defaults_kb_search_mode_to_bm25(runner: CliRunner, data_dir: Path) -> None:

@@ -8,7 +8,7 @@ Agents acting for a person need what that person knows about themselves: their b
 
 ## What it does
 
-- **Import** documents into a user's store: every file is chunked and indexed for search, and `--query` questions extract typed entities and facts into the user's knowledge graph, each tied to the source it came from.
+- **Import** documents into a user's store: every file is chunked and embedded for search by meaning (OpenAI embeddings by default; keyword or hybrid search can be chosen per user), and `--query` questions extract typed entities and facts into the user's knowledge graph, each tied to the source it came from.
 - **Query** the store in plain language: queries are rewritten ("my" becomes the user's name), expanded into schema-grounded sub-questions, and answered as JSON, a table, or prose.
 - **Assess** every answer for completeness, freshness and privacy before returning it, with the privacy bar set by the user's own consent level.
 - **Interact** with the user when an answer falls short: the system picks the best contact channel (the terminal, email, or a webhook), asks, and folds the reply back into the store.

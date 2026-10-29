@@ -51,6 +51,7 @@ from typing import Any, Optional
 from mcp.server.fastmcp import FastMCP
 
 from blue_data_user_mcp.config import get_source
+from blue_data_user_source.data.manager import NEW_USER_DOC_SOURCE_PROPS, resolve_doc_search
 
 mcp = FastMCP(
     "blue-data-user",
@@ -79,7 +80,11 @@ def _err(e: Exception) -> str:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def create_database(name: str) -> str:
+async def create_database(
+    name: str,
+    doc_search_mode: Optional[str] = None,
+    doc_embedding_model: Optional[str] = None,
+) -> str:
     """Create a new user database with file-backed storage under BLUE_DATA_USER_SOURCE_DATA_DIR.
 
     All storage paths (registry, KB, metadata, contacts) are derived
@@ -88,6 +93,12 @@ async def create_database(name: str) -> str:
 
     Args:
         name: User name, e.g. 'alice'.
+        doc_search_mode: How the user's documents (session transcripts, added
+            files) are searched: 'vector' (by meaning; the default), 'hybrid'
+            (meaning and keywords) or 'bm25' (keywords; its index lasts only
+            for the server process that added the documents).
+        doc_embedding_model: 'openai' (the default; needs OPENAI_API_KEY) or
+            'dummy' (a hash, no API calls; only with doc_search_mode 'bm25').
     """
     try:
         source = get_source()
@@ -97,6 +108,12 @@ async def create_database(name: str) -> str:
             # the CLI's `database create`.
             raise ValueError(f"Database '{name}' already exists.")
         props = source.default_user_props(name)
+        # Named values only, checked against an allowlist: never a class or a
+        # connection, which would let a caller choose code to import (#134).
+        doc_source = resolve_doc_search(
+            props.get("doc_source") or NEW_USER_DOC_SOURCE_PROPS,
+            search_mode=doc_search_mode, embedding_model=doc_embedding_model,
+        )
         await source.create_user(
             name,
             registry_props=props["registry"],
@@ -104,7 +121,7 @@ async def create_database(name: str) -> str:
             metadata_source_props=props["metadata_source"],
             contact_source_props=props["contact_source"],
             session_source_props=props["session_source"],
-            doc_source_props=props.get("doc_source"),
+            doc_source_props=doc_source,
             # `create_user` onboards by default, which prompts on the console.
             # A server has none: the prompts would go nowhere and the call would
             # block or read EOF. Onboarding belongs to the CLI.

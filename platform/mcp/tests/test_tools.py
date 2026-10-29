@@ -112,6 +112,25 @@ async def test_create_database_new_user():
     assert result["name"] == "bob"
 
 
+async def test_create_database_defaults_to_openai_embeddings_searched_by_vector():
+    await create_database("bob")
+    doc_source = config_module.get_source().get_user("bob")["doc_source"]
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("openai", "vector")
+
+
+async def test_create_database_takes_the_document_search_choice():
+    result = json.loads(await create_database("bob", doc_search_mode="bm25", doc_embedding_model="dummy"))
+    assert result["created"] is True
+    doc_source = config_module.get_source().get_user("bob")["doc_source"]
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("dummy", "bm25")
+
+
+async def test_create_database_rejects_vector_search_over_the_dummy_embedding():
+    result = json.loads(await create_database("bob", doc_search_mode="hybrid", doc_embedding_model="dummy"))
+    assert "needs a real embedding" in result["error"]
+    assert "bob" not in json.loads(await list_databases())
+
+
 async def test_create_database_already_exists_returns_error():
     result = json.loads(await create_database(USER))
     assert "error" in result

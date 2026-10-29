@@ -106,7 +106,21 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" http://localhost:8003/databases
 | `DELETE` | `/databases/{name}` | Delete a user and all their data |
 | `POST` | `/databases/{name}/reset` | Clear a user's KB data, ingested documents, metadata, contacts and sessions, and reseed the schemas; the user stays registered. Files outside the data directory are never deleted; any such paths are listed under `not_deleted` (a `DELETE` only logs them) |
 
-`POST /databases/{name}` takes no body (an empty `{}` is accepted): every store is a file under `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`, and any other key is rejected with `422`. `name` must be 1–64 letters, digits, `_` or `-`, starting with a letter, digit or `_`. Other backends (Redis, Neo4j) are configured through the library or the CLI, not over REST.
+`POST /databases/{name}` takes an optional body choosing how the user's documents are searched, and nothing else: every store is a file under `BLUE_DATA_USER_SOURCE_DATA_DIR/sources/{name}/`, and any other key is rejected with `422`.
+
+| Field | Values | Default |
+|---|---|---|
+| `doc_search_mode` | `vector` (by meaning), `hybrid` (meaning and keywords), `bm25` (keywords; its index lasts only for the server process that added the documents) | `vector` |
+| `doc_embedding_model` | `openai` (`text-embedding-3-small`, needs `OPENAI_API_KEY`), `dummy` (a hash, no API calls; only with `bm25`) | `openai` |
+
+`vector` or `hybrid` with `dummy` is rejected with `422`. `GET /databases/{name}` reports the choice under `doc_source`.
+
+```bash
+curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"doc_search_mode": "hybrid"}' -X POST http://localhost:8003/databases/alice
+```
+
+`name` must be 1–64 letters, digits, `_` or `-`, starting with a letter, digit or `_`. Other backends (Redis, Neo4j) are configured through the library or the CLI, not over REST.
 
 ### Query
 

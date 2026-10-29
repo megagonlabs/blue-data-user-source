@@ -83,7 +83,19 @@
   },
   "BLUE_DATA_USER_SOURCE_DOC_BACKEND": {
     "default": "file",
-    "prompt": "Vector backend for per-session interaction transcripts",
+    "prompt": "Vector backend for a new database's documents (session transcripts, added files)",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_DOC_SEARCH_MODE": {
+    "default": "vector",
+    "prompt": "Document search for a new database (vector, hybrid or bm25)",
+    "required": false,
+    "cast": "str"
+  },
+  "BLUE_DATA_USER_SOURCE_DOC_EMBEDDING_MODEL": {
+    "default": "openai",
+    "prompt": "Document embedding for a new database (openai, or dummy with bm25)",
     "required": false,
     "cast": "str"
   },

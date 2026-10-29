@@ -26,6 +26,8 @@ from blue_data_user_source.data.manager import (
     CLS_KB_NEO4J,
     CLS_VECTOR_FILE,
     CLS_VECTOR_MEMORY,
+    DOC_EMBEDDING_MODELS,
+    DOC_SEARCH_MODES,
     NEW_USER_DOC_SOURCE_PROPS,
 )
 
@@ -254,15 +256,24 @@ def _user_kb_props(
     raise ValueError(f"Unknown KB backend: {kb_backend!r}")
 
 
-def _user_doc_source_props(data_dir: Path, name: str, doc_backend: str) -> dict:
+def _user_doc_source_props(
+    data_dir: Path,
+    name: str,
+    doc_backend: str,
+    doc_search_mode: str | None = None,
+    doc_embedding_model: str | None = None,
+) -> dict:
     """Config for the user's document stores (session transcripts, added files).
 
     "memory" doesn't persist ingested documents across CLI invocations (each
-    command is a fresh process); "file" (the profile default) does. Embedded
-    with OpenAI and searched by vector, the library's default for a new user
-    (#172).
+    command is a fresh process); "file" (the profile default) does. The search
+    mode and embedding default to the library's for a new user, OpenAI
+    embeddings searched by vector (#172, #173).
     """
-    search = {k: NEW_USER_DOC_SOURCE_PROPS[k] for k in ("embedding_model", "search_mode")}
+    search = {
+        "embedding_model": doc_embedding_model or NEW_USER_DOC_SOURCE_PROPS["embedding_model"],
+        "search_mode": doc_search_mode or NEW_USER_DOC_SOURCE_PROPS["search_mode"],
+    }
     if doc_backend == "memory":
         return {**search, "vector_source": {"backend": "memory"}}
     if doc_backend == "file":
@@ -573,7 +584,26 @@ def database_list(obj: dict, fmt: str) -> None:
     "--doc-backend",
     default=None,
     type=click.Choice(["memory", "file"]),
-    help="Vector backend for per-session interaction-transcript storage.",
+    help="Vector backend for the user's documents (session transcripts, added files).",
+)
+@click.option(
+    "--doc-search-mode",
+    default=None,
+    type=click.Choice(list(DOC_SEARCH_MODES)),
+    help=(
+        "How the user's documents are searched: 'vector' (by meaning; the default), "
+        "'hybrid' (meaning and keywords) or 'bm25' (keywords; its index lasts only "
+        "for the process that added the documents, so it finds nothing in later commands)."
+    ),
+)
+@click.option(
+    "--doc-embedding-model",
+    default=None,
+    type=click.Choice(list(DOC_EMBEDDING_MODELS)),
+    help=(
+        "Embedding for the user's documents: 'openai' (text-embedding-3-small; the "
+        "default) or 'dummy' (a hash, no API calls; only with --doc-search-mode bm25)."
+    ),
 )
 @click.option(
     "--onboard/--no-onboard",
@@ -599,6 +629,8 @@ def database_create(
     kb_vector_backend: str | None,
     kb_embedding_model: str | None,
     doc_backend: str | None,
+    doc_search_mode: str | None,
+    doc_embedding_model: str | None,
     onboard: bool,
     metadata_onboard: bool,
 ) -> None:
@@ -610,6 +642,8 @@ def database_create(
     kb_vector_backend = _db_default(obj, "KB_VECTOR_BACKEND", kb_vector_backend)
     kb_embedding_model = _db_default(obj, "KB_EMBEDDING_MODEL", kb_embedding_model)
     doc_backend = _db_default(obj, "DOC_BACKEND", doc_backend)
+    doc_search_mode = _db_default(obj, "DOC_SEARCH_MODE", doc_search_mode)
+    doc_embedding_model = _db_default(obj, "DOC_EMBEDDING_MODEL", doc_embedding_model)
     neo4j_host = _db_default(obj, "NEO4J_HOST", neo4j_host)
     neo4j_port = _db_default(obj, "NEO4J_PORT", neo4j_port)
     neo4j_user = _db_default(obj, "NEO4J_USER", neo4j_user)
@@ -656,7 +690,10 @@ def database_create(
             defaults["metadata_source"],
             defaults["contact_source"],
             defaults["session_source"],
-            _user_doc_source_props(data_dir, name, doc_backend),
+            _user_doc_source_props(
+                data_dir, name, doc_backend,
+                doc_search_mode=doc_search_mode, doc_embedding_model=doc_embedding_model,
+            ),
             # Onboarded below, once the database exists and is selected, so a
             # failed interview (e.g. the LLM is unreachable) cannot leave a
             # database that was created but reported as an error.

@@ -59,6 +59,31 @@ def test_create_does_not_onboard(client, source):
     assert kwargs["onboard_metadata"] is False
 
 
+def test_create_defaults_to_openai_embeddings_searched_by_vector(client, source):
+    assert client.post("/databases/alice").status_code == 201
+    doc_source = source.create_user.await_args.kwargs["doc_source_props"]
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("openai", "vector")
+
+
+def test_create_takes_the_document_search_choice(client, source, tmp_path):
+    """Named values only (#173); the store layout stays the server's."""
+    body = {"doc_search_mode": "bm25", "doc_embedding_model": "dummy"}
+    assert client.post("/databases/alice", json=body).status_code == 201
+    doc_source = source.create_user.await_args.kwargs["doc_source_props"]
+    assert (doc_source["embedding_model"], doc_source["search_mode"]) == ("dummy", "bm25")
+    assert Path(doc_source["vector_source"]["directory"]) == tmp_path / "sources" / "alice" / "sessions"
+
+
+@pytest.mark.parametrize("body", [
+    {"doc_search_mode": "vector", "doc_embedding_model": "dummy"},   # a hash ranks arbitrarily
+    {"doc_search_mode": "fuzzy"},
+    {"doc_embedding_model": "my.module.Embedder"},                   # a name, never a class
+])
+def test_create_rejects_a_bad_document_search_choice(client, source, body):
+    assert client.post("/databases/alice", json=body).status_code == 422
+    source.create_user.assert_not_awaited()
+
+
 @pytest.mark.parametrize("key", ["registry", "kb_source", "metadata_source", "contact_source",
                                  "session_source", "doc_source"])
 def test_create_rejects_store_overrides(client, source, key):

@@ -110,6 +110,10 @@ Tool groups: Users (write/read), Query, Sessions, Data (write/read), Metadata (w
 | Parameter | Type | Description |
 |---|---|---|
 | `name` | `str` | User name, e.g. `"alice"` |
+| `doc_search_mode` | `str` (optional) | How the user's documents are searched: `"vector"` (by meaning; default), `"hybrid"` (meaning and keywords) or `"bm25"` (keywords; its index lasts only for the server process that added the documents) |
+| `doc_embedding_model` | `str` (optional) | `"openai"` (default; `text-embedding-3-small`, needs `OPENAI_API_KEY`) or `"dummy"` (a hash, no API calls; only with `"bm25"`) |
+
+Only these named values are accepted, never a class or a connection (#134); `"vector"` or `"hybrid"` with `"dummy"` returns an error. `get_database` reports the choice under `doc_source`.
 
 Creates a new user with file-backed storage under `BLUE_DATA_USER_SOURCE_DATA_DIR`. All paths (registry, KB, metadata, contacts, sessions) are derived from the user name automatically, including a file-backed vector store for per-session/per-file document ingestion. Returns `{"name": "...", "created": true}`.
 
