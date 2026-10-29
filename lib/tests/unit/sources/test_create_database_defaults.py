@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from blue_data.source.json.memory_json_source import MemoryJSONSource
 
 from blue_data_user_source import (
     FileUserSource,
@@ -16,7 +17,7 @@ from blue_data_user_source import (
     RedisUserSource,
     UserExistsError,
 )
-from blue_data_user_source.data.manager import CLS_KB_MEMORY
+from blue_data_user_source.data.manager import CLS_JSON_REDIS, CLS_KB_MEMORY
 
 
 def _file_source(root: Path) -> FileUserSource:
@@ -77,9 +78,17 @@ def test_registry_style_call_with_overwrite_keyword() -> None:
     assert us.list_users() == ["erin"]
 
 
-def test_a_store_without_a_default_is_named() -> None:
+def test_a_store_without_a_default_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The source's own registry lives in an in-memory store instead of Redis, so the
+    # test stays offline (#180): the check runs before any of the user's stores is built.
+    def memory_store(name: str, props: dict):
+        return MemoryJSONSource(name, properties={"connection": {"protocol": "json/memory"}})
+
+    monkeypatch.setattr("blue_data_user_source.source._build_json_source", memory_store)
+    us = RedisUserSource("u")
+    assert us.default_user_props("frank")["metadata_source"]["_class"] == CLS_JSON_REDIS
     with pytest.raises(QueryError, match="RedisUserSource has no default for kb_source"):
-        RedisUserSource("u").create_database("frank")
+        us.create_database("frank")
 
 
 def test_a_bad_name_is_rejected_before_any_path_is_built(tmp_path: Path) -> None:
