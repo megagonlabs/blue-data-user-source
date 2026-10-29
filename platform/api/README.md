@@ -6,14 +6,17 @@ See [docs/api.md](../../docs/api.md) for the complete endpoint reference. This R
 
 ## Installation
 
-The library is not yet published to PyPI. Install both packages from source:
+The library and its sibling repos (`blue-data`, `blue-data-kb-source`, `blue-data-doc-source`) are not on PyPI; check the siblings out beside this repo. Then, from this directory:
 
 ```bash
-# 1. Install the library (with optional extras for contact methods)
-cd lib && pip install -e '.[webhook,email]' && cd ..
+bash scripts/install.sh
+```
 
-# 2. Install the API server
-cd platform/api && pip install -e .
+which runs these two steps:
+
+```bash
+bash ../../lib/scripts/install.sh   # the sibling repos, then the library with its webhook and email extras
+pip install -e '.[dev]'             # the server, with pytest for its tests
 ```
 
 `fastapi`, `uvicorn`, `httpx`, and `pydantic-settings` are pulled in automatically.

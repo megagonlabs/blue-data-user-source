@@ -13,11 +13,11 @@ cd platform/mcp
 bash scripts/install.sh
 ```
 
-Or manually:
+The script installs the library first with `lib/scripts/install.sh`, which installs the sibling repos (`blue-data`, `blue-data-kb-source`, `blue-data-doc-source`) from checkouts beside this repo: none of them is on PyPI. Or step by step, from `platform/mcp`:
 
 ```bash
-pip install -e ../../lib
-pip install -e .
+bash ../../lib/scripts/install.sh   # the sibling repos, then the library
+pip install -e '.[dev]'             # the server, with pytest for its tests
 ```
 
 ---

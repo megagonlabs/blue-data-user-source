@@ -21,6 +21,9 @@ dependencies = [
     "pydantic-settings>=2.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
 [project.scripts]
 blue-userdb-api = "blue_data_user_api.app:main"
 

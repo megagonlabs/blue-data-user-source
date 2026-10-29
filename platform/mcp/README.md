@@ -14,14 +14,18 @@ See [docs/mcp.md](../../docs/mcp.md) for the complete tool reference. This READM
 
 ## Installation
 
+The library and its sibling repos (`blue-data`, `blue-data-kb-source`, `blue-data-doc-source`) are not on PyPI; check the siblings out beside this repo. Then:
+
 ```bash
 cd platform/mcp
+bash scripts/install.sh
+```
 
-# Install the core library first
-pip install -e ../../lib
+which runs these two steps:
 
-# Install the MCP server
-pip install -e .
+```bash
+bash ../../lib/scripts/install.sh   # the sibling repos, then the library
+pip install -e '.[dev]'             # the server, with pytest for its tests
 ```
 
 ---

@@ -10,6 +10,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bash "$ROOT/lib/scripts/install.sh"
 
 echo "Installing blue-data-user-cli, blue-data-user-mcp, blue-data-user-api..."
-python3 -m pip install -q -e "$ROOT/platform/cli" -e "$ROOT/platform/mcp[dev]" -e "$ROOT/platform/api"
+python3 -m pip install -q -e "$ROOT/platform/cli" -e "$ROOT/platform/mcp[dev]" -e "$ROOT/platform/api[dev]"
 
 echo "Done. Commands: blue-userdb, blue-userdb-mcp, blue-userdb-api"

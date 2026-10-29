@@ -11,11 +11,11 @@ cd platform/api
 bash scripts/install.sh
 ```
 
-Or manually, with optional contact-method extras on the library:
+The script installs the library first with `lib/scripts/install.sh`, which installs the sibling repos (`blue-data`, `blue-data-kb-source`, `blue-data-doc-source`) from checkouts beside this repo: none of them is on PyPI. Or step by step, from `platform/api`:
 
 ```bash
-pip install -e '../../lib[webhook,email]'
-pip install -e .
+bash ../../lib/scripts/install.sh   # the sibling repos, then the library with its webhook and email extras
+pip install -e '.[dev]'             # the server, with pytest for its tests
 ```
 
 `fastapi`, `uvicorn`, `httpx`, and `pydantic-settings` are pulled in automatically.
