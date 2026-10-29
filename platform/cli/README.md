@@ -108,8 +108,8 @@ $ blue-userdb profile config                  # configures staging, now that it 
 |---|---|---|---|
 | `OPENAI_API_KEY` | secret | — | ✓ |
 | `ANTHROPIC_API_KEY` | secret | — | |
-| `BLUE_DATA_LLM_PROVIDER` | str | `openai` | |
-| `BLUE_DATA_LLM_MODEL` | str | `gpt-4o` | ✓ |
+| `BLUE_DATA_LLM_PROVIDER` | str | — (blank) | |
+| `BLUE_DATA_LLM_MODEL` | str | — (the provider's default) | |
 | `BLUE_DATA_CLI_FORMAT` | str | `table` | |
 | `BLUE_DATA_CLI_LOG_LIMIT` | int | `80` | |
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | directory | `~/.blue-userdb` | ✓ |
@@ -118,7 +118,7 @@ $ blue-userdb profile config                  # configures staging, now that it 
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | file | — | |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | file | *packaged* | |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | file | *packaged* | |
-| `BLUE_DATA_USER_SOURCE_LLM_MODEL` | str | *inherits* | |
+| `BLUE_DATA_USER_SOURCE_LLM_MODEL` | str | *see below* | |
 | `BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL` | str | *inherits* | |
 | `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL` | str | *inherits* | |
 | `BLUE_DATA_USER_SOURCE_KB_BACKEND` | str | `file` | |
@@ -131,7 +131,7 @@ $ blue-userdb profile config                  # configures staging, now that it 
 | `BLUE_DATA_USER_SOURCE_NEO4J_USER` | str | `neo4j` | |
 | `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | secret | — | |
 
-Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL`, then to `BLUE_DATA_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
+blue-userdb sends its models to the OpenAI API (`OPENAI_API_KEY`): query reasoning, onboarding and NL synthesis, and `data extract`. Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model — then to the family's `BLUE_DATA_LLM_MODEL`, but only when `BLUE_DATA_LLM_PROVIDER` is `openai` or blank, and last to `gpt-4o`. Under another provider the family model names that provider's model (for example `claude-opus-4-8` under `anthropic`), so it is not sent to OpenAI. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
 
 `BLUE_DATA_USER_SOURCE_HOME` (default `~/.blue-userdb`) is deliberately *not* a profile parameter: it is the directory the profiles themselves live in, so it can only be set in the environment.
 

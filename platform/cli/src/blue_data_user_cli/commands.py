@@ -451,15 +451,22 @@ cli.add_command(profile_group)
 
 
 def _model_for(obj: dict, function: str, option: str | None) -> str:
-    """The model a command should use.
+    """The OpenAI model a command should use.
 
     `--model` wins; otherwise the profile's parameter for this function, which
-    itself falls back through BLUE_DATA_USER_SOURCE_LLM_MODEL to
-    BLUE_DATA_LLM_MODEL.
+    itself falls back to BLUE_DATA_USER_SOURCE_LLM_MODEL. Then the family's
+    BLUE_DATA_LLM_MODEL, but only when BLUE_DATA_LLM_PROVIDER is openai or
+    blank: since blue-data 1.0 that model belongs to the family provider, and
+    the reasoner and the KB's extraction call OpenAI only, so a Claude model
+    name sent there fails every call (#175). Last, DEFAULT_MODEL.
     """
     if option:
         return option
-    return obj["config"].get(f"BLUE_DATA_USER_SOURCE_{function}_LLM_MODEL") or DEFAULT_MODEL
+    config = obj["config"]
+    model = config.get(f"BLUE_DATA_USER_SOURCE_{function}_LLM_MODEL")
+    if not model and (config.get("BLUE_DATA_LLM_PROVIDER") or "").lower() in ("", "openai"):
+        model = config.get("BLUE_DATA_LLM_MODEL")
+    return model or DEFAULT_MODEL
 
 
 def _db_default(obj: dict, param: str, option):
@@ -668,7 +675,9 @@ def database_create(
         )
         return
     try:
-        asyncio.run(source.onboard_user(name, include_metadata=metadata_onboard))
+        asyncio.run(source.onboard_user(
+            name, include_metadata=metadata_onboard, model=_model_for(obj, "REASONING", None),
+        ))
     except UDbError as exc:
         err.print(
             f"[yellow]Warning:[/yellow] onboarding did not run: {exc}\n"
@@ -692,7 +701,9 @@ def database_onboard(obj: dict, metadata_onboard: bool) -> None:
     db = _get_db(obj)
     source = _seeding_source(obj)
     try:
-        asyncio.run(source.onboard_user(db, include_metadata=metadata_onboard))
+        asyncio.run(source.onboard_user(
+            db, include_metadata=metadata_onboard, model=_model_for(obj, "REASONING", None),
+        ))
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)

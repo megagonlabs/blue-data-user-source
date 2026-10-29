@@ -38,24 +38,23 @@
 
   "BLUE_DATA_USER_SOURCE_LLM_MODEL": {
     "default": null,
-    "prompt": "LLM model for all blue-userdb commands (overrides BLUE_DATA_LLM_MODEL)",
+    "prompt": "OpenAI model for all blue-userdb commands (overrides BLUE_DATA_LLM_MODEL)",
     "required": false,
-    "cast": "str",
-    "inherits": ["BLUE_DATA_LLM_MODEL"]
+    "cast": "str"
   },
   "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL": {
     "default": null,
-    "prompt": "LLM model for `blue-userdb data extract`",
+    "prompt": "OpenAI model for `blue-userdb data extract`",
     "required": false,
     "cast": "str",
-    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL"]
+    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL"]
   },
   "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL": {
     "default": null,
-    "prompt": "LLM model for query reasoning, onboarding and NL synthesis",
+    "prompt": "OpenAI model for query reasoning, onboarding and NL synthesis",
     "required": false,
     "cast": "str",
-    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL"]
+    "inherits": ["BLUE_DATA_USER_SOURCE_LLM_MODEL"]
   },
 
   "BLUE_DATA_USER_SOURCE_KB_BACKEND": {

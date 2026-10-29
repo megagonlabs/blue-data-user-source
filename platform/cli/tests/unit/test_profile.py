@@ -36,20 +36,23 @@ def test_spec_merges_family_parameters_with_this_cli_s_own():
     assert "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL" in spec
 
 
-def test_first_run_asks_only_four_questions():
+def test_first_run_asks_only_three_questions():
+    """blue-data 1.0 made BLUE_DATA_LLM_MODEL optional (blank = the provider's default)."""
     assert [p.name for p in cli_spec().required()] == [
         "OPENAI_API_KEY",
-        "BLUE_DATA_LLM_MODEL",
         "BLUE_DATA_USER_SOURCE_DATA_DIR",
         "BLUE_DATA_USER_SOURCE_DATABASE",
     ]
 
 
-def test_both_llm_models_inherit_toward_the_family_default():
+def test_both_llm_models_inherit_the_udb_wide_one_only():
+    """Not the family model: it may name another provider's model (#175); see
+    _model_for for when it is used."""
     spec = cli_spec()
+    assert spec["BLUE_DATA_USER_SOURCE_LLM_MODEL"].inherits == ()
     for fn in ("EXTRACTION", "REASONING"):
         param = spec[f"BLUE_DATA_USER_SOURCE_{fn}_LLM_MODEL"]
-        assert param.inherits == ("BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL")
+        assert param.inherits == ("BLUE_DATA_USER_SOURCE_LLM_MODEL",)
 
 
 def test_database_creation_defaults_are_declared():
@@ -75,7 +78,7 @@ def test_the_first_command_creates_the_default_profile(runner, data_dir):
 
 def test_the_created_profile_is_empty_so_values_track_spec_defaults(runner, data_dir):
     out = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])
-    assert out["values"]["BLUE_DATA_LLM_MODEL"] == {"value": "gpt-4o", "source": "default"}
+    assert out["values"]["BLUE_DATA_LLM_MODEL"] == {"value": "(unset)", "source": "unset"}
 
 
 def test_a_removed_default_profile_is_not_resurrected(runner, data_dir):
@@ -340,3 +343,37 @@ def test_the_database_option_outranks_everything(runner, data_dir, monkeypatch):
     (data_dir / ".selected.database").write_text("bob")
     monkeypatch.setenv("BLUE_DATA_USER_SOURCE_DATABASE", "carol")
     assert _db_used(runner, data_dir, ["--database", "dave"]) == "dave"
+
+
+# ------------------------------------------------------------------ #
+# the model sent to OpenAI (#175)                                     #
+# ------------------------------------------------------------------ #
+
+def _model(data_dir: Path, function: str = "REASONING", option: str | None = None) -> str:
+    from blue_data_user_cli.commands import _model_for
+    from blue_data_user_cli.profile import resolver_for
+    return _model_for({"config": resolver_for(str(data_dir))}, function, option)
+
+
+def test_the_family_model_is_used_under_openai_or_no_provider(data_dir, monkeypatch):
+    monkeypatch.setenv("BLUE_DATA_LLM_MODEL", "gpt-5")
+    for provider in ("", "openai", "OpenAI"):
+        monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", provider)
+        assert _model(data_dir) == "gpt-5"
+        assert _model(data_dir, "EXTRACTION") == "gpt-5"
+
+
+def test_another_providers_family_model_is_not_sent_to_openai(data_dir, monkeypatch):
+    from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
+    monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("BLUE_DATA_LLM_MODEL", "claude-opus-4-8")
+    assert _model(data_dir) == DEFAULT_MODEL
+    assert _model(data_dir, "EXTRACTION") == DEFAULT_MODEL
+
+
+def test_this_packages_model_and_the_option_win_over_any_provider(data_dir, monkeypatch):
+    monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("BLUE_DATA_LLM_MODEL", "claude-opus-4-8")
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_LLM_MODEL", "gpt-4.1")
+    assert _model(data_dir) == "gpt-4.1"
+    assert _model(data_dir, option="gpt-5") == "gpt-5"
