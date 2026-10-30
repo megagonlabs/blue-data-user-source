@@ -9,7 +9,7 @@
 | Concern | Choice |
 |---------|--------|
 | Language | Python |
-| Supported versions | 3.10–3.14 (`requires-python = ">=3.10,<3.15"`) |
+| Supported versions | 3.12 and 3.13 (`requires-python = ">=3.12,<3.14"`), the range of the whole DI 1.0 family |
 | Package manager | pip |
 | Project config | `pyproject.toml` (one per package: `lib/`, `platform/cli/`, `platform/mcp/`, `platform/api/`) |
 

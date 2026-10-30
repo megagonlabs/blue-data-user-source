@@ -20,7 +20,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 `properties["registry"]` is a `JSONSource` config (`_class` + `connection`) for the outer registry's backing store; each subclass fills this in automatically from `properties["connection"]` if omitted (e.g. `FileUserSource` derives it from `connection.path`).
 
-`properties["console"]` (default `True`) says whether the user is at this process's console. Servers pass `False` — the REST and MCP servers do — so clarification and onboarding never ask on stdin/stdout: console methods (`stdio`, and `email` with `inbound_provider: "stdio"`) are never selected, and when no other method can reach the user, a query returns what it retrieved without asking and onboarding is skipped. It describes the running process, so it is not stored in the registry; read it back as `UserSource.console`.
+`properties["console"]` (default: whether stdin and stdout are both terminals) says whether the user is at this process's console. Servers pass `False` — the REST and MCP servers do — so clarification and onboarding never ask on stdin/stdout: console methods (`stdio`, and `email` with `inbound_provider: "stdio"`) are never selected, and when no other method can reach the user, a query returns what it retrieved without asking and onboarding is skipped. It describes the running process, so it is not stored in the registry: a source the registry rebuilds gets the default, so hosted by a server whose stdin/stdout are pipes (such as an MCP stdio transport) it stays off the console. Read it back as `UserSource.console`.
 
 ### Database (user) management
 

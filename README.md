@@ -43,7 +43,7 @@ Each platform package has its own `src/`, `tests/` and `scripts/install.sh`.
 
 ## Requirements
 
-- Python 3.10–3.14
+- Python 3.12 or 3.13
 - The sibling repositories [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source) and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source), cloned beside this one (`../blue-data`, `../blue-data-kb-source`, `../blue-data-doc-source`); they provide the storage, knowledge-graph and document layers, and are not on PyPI
 - An OpenAI API key for the LLM features: extraction, query rewriting and expansion, quality assessment, and answers in prose
 

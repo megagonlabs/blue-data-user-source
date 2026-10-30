@@ -11,7 +11,7 @@ authors = [
 maintainers = [
     {name = "Eser Kandogan", email = "eser@megagon.ai"},
 ]
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "blue-data-user-source>=1.0,<2",
     "blue-data[server]>=1.0,<2",

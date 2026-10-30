@@ -126,8 +126,14 @@ def test_console_is_not_stored_in_the_registry() -> None:
     assert "console" not in us._registry.get_source_record("no-console")["properties"]
 
 
-def test_console_defaults_to_true() -> None:
-    assert MemoryUserSource("with-console").console is True
+@pytest.mark.parametrize("tty", [True, False])
+def test_console_defaults_to_a_terminal(monkeypatch: pytest.MonkeyPatch, tty: bool) -> None:
+    """Unset, ``console`` is whether stdin and stdout are terminals (#186)."""
+    for name in ("stdin", "stdout"):
+        stream = io.StringIO()
+        stream.isatty = lambda: tty  # type: ignore[method-assign]
+        monkeypatch.setattr(sys, name, stream)
+    assert MemoryUserSource("with-console").console is tty
 
 
 # ── the stdio handler ─────────────────────────────────────────────────────────

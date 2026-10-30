@@ -162,7 +162,7 @@ UserSource(name: str, props: dict | None = None)
 | `schema` | `str` | Path to the KB `schema.json`; used when creating or resetting databases |
 | `metadata_schema` | `str` | Path to the metadata schema (default `data/metadata_schema.json`) |
 | `contact_schema` | `str` | Path to the contact schema (default `data/contact_schema.json`) |
-| `console` | `bool` | Whether the user is at this process's console (default `True`); servers pass `False`, so clarification never asks on stdin/stdout |
+| `console` | `bool` | Whether the user is at this process's console (default: whether stdin and stdout are both terminals); servers pass `False`, so clarification never asks on stdin/stdout |
 
 Every store config is a `blue-data` source record: `{"_class": "<module.Class>", "connection": {...}}`.
 

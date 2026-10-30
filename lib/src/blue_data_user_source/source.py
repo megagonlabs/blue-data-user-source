@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +93,18 @@ def _bounded_int(props: dict, key: str, default: int | None, minimum: int) -> in
     return value
 
 
+def _console_attached() -> bool:
+    """True when stdin and stdout are both terminals: a user can be at this console.
+
+    Under a server they are pipes or sockets (an MCP stdio transport owns them as
+    the protocol stream), so a source nobody configured stays off the console (#186).
+    """
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (AttributeError, ValueError):  # a stream that is None or closed
+        return False
+
+
 def _model_kwarg(model: str | None) -> dict[str, str]:
     """`{"model": …}` when a model was chosen, `{}` otherwise.
 
@@ -139,10 +152,12 @@ class UserSource(DataSource):
       (default: ``data/metadata_schema.json``). Stored as a source property.
     - ``contact_schema`` — path to the contact schema JSON
       (default: ``data/contact_schema.json``). Stored as a source property.
-    - ``console`` — whether the user is at this process's console (default: True).
-      Servers pass False: clarification and onboarding then never ask on stdin/stdout,
-      and are skipped when no other contact method can reach the user. Describes the
-      running process, so it is not stored in the registry.
+    - ``console`` — whether the user is at this process's console (default: whether
+      stdin and stdout are both terminals). Servers pass False: clarification and
+      onboarding then never ask on stdin/stdout, and are skipped when no other contact
+      method can reach the user. Describes the running process, so it is not stored in
+      the registry; a source the registry rebuilds gets the default, which keeps it off
+      a server's stdio protocol stream (#186).
 
     Usage::
 
@@ -175,6 +190,15 @@ class UserSource(DataSource):
         results = us.execute_query("what timezone is alice in?", database="alice")
         us.set_metadata("alice", "preferences.verbosity", "brief")
     """
+
+    # blue-data's read-only guard (#188): DataRegistry.execute_query runs a dict or
+    # JSON op without optional_properties["commit"] only when the op is in _READ_OPS,
+    # and refuses one in _WRITE_OPS or in neither. Every op a source serves belongs to
+    # exactly one set. UserSource serves no dict or JSON ops: execute_query answers
+    # every query as natural language. So both sets are empty, and an op sent to it
+    # is refused on read-only paths.
+    _READ_OPS: frozenset = frozenset()
+    _WRITE_OPS: frozenset = frozenset()
 
     # ------------------------------------------------------------------ #
     # DataSource: connection properties / connect API                      #
@@ -253,7 +277,9 @@ class UserSource(DataSource):
     @property
     def console(self) -> bool:
         """Whether the user is at this process's console; see the ``console`` prop."""
-        return bool(self.properties.get("console", True))
+        if "console" in self.properties:
+            return bool(self.properties["console"])
+        return _console_attached()
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #

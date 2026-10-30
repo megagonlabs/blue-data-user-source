@@ -8,7 +8,7 @@ See [docs/](../docs/README.md) for the full documentation set — [guide.md](../
 
 ## Requirements
 
-- Python 3.10–3.14
+- Python 3.12 or 3.13
 - OpenAI API key (used by the reasoning and extraction layers)
 
 ## Installation
