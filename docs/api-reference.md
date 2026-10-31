@@ -298,7 +298,7 @@ All inherit from `UDbError`.
 | `QueryError` | A query cannot be processed, or no database/data manager is available |
 | `ImportError` | A source import fails |
 | `InteractionError` | User interaction fails (channel unavailable, timeout, etc.) |
-| `LLMError` | The language model cannot be reached (authentication, network, rate limit, timeout, unknown model — any OpenAI SDK error), the `openai` package is missing, or a JSON-mode reply is not a JSON object. Raised rather than returning an empty result; the REST API maps it to `502` |
+| `LLMError` | The language model cannot be reached (authentication, network, rate limit, timeout, unknown model — any LiteLLM or provider error), the provider's API key is not set (`MissingKeyError`, naming the variable), LiteLLM is missing, or a JSON-mode reply is not a JSON object. Raised rather than returning an empty result; the REST API maps it to `502` |
 | `UserNotFoundError` / `UserExistsError` | `QueryError` subclasses: the named user does not exist / already exists |
 | `SessionNotFoundError` / `SessionEndedError` | The named session does not exist / has ended (both are `QueryError` and `InteractionError`) |
 | `ContactNotFoundError` | `InteractionError` subclass: the named contact method does not exist |

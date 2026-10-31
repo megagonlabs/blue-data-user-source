@@ -13,6 +13,7 @@ from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 from blue_data_kb_source.kb_source import KBSource
 
+from blue_data_user_source import llm
 from blue_data_user_source.data.paths import get_path
 
 logger = logging.getLogger(__name__)
@@ -614,13 +615,12 @@ class UserDataManager:
 
         ``top_k`` caps the chunks taken from each document store; the KB answers
         through its own agent and has no result limit. That agent runs on
-        *model* (the KB's default, gpt-4o, when None) for at most *max_turns*
+        *model* (when None, the configured reasoning model, else the
+        BLUE_DATA_LLM_PROVIDER provider's default; #190) for at most *max_turns*
         tool-calling turns (the KB's default, 25), plus one call to force an
         answer when it runs out (#178).
         """
-        kb_options: dict[str, Any] = {}
-        if model is not None:
-            kb_options["model"] = model
+        kb_options: dict[str, Any] = {"model": model or llm.configured_model("REASONING")}
         if max_turns is not None:
             kb_options["max_turns"] = max_turns
         result, metadata = await self._ensure_kb_source().answer(
@@ -704,7 +704,8 @@ class UserDataManager:
         ``effort`` is how many times the extraction pipeline passes over the
         text (low/medium/high = 1/2/3); a single pass leaves much of a
         moderately dense document unextracted. ``model`` runs the extraction
-        (the KB's default, gpt-4o, when None; #178).
+        (#178); when None, the configured extraction model, else the
+        BLUE_DATA_LLM_PROVIDER provider's default (#190).
 
         Deliberately does NOT create a per-file record in the outer
         DataRegistry — only the shared "external_documents" source is
@@ -778,7 +779,7 @@ class UserDataManager:
             text = f"This document belongs to {owner}, the subject of every fact in it.\n{body}"
             await kb.import_text(
                 self._database, text, queries=queries, source_id=source_id, effort=effort,
-                **({"model": model} if model is not None else {}),
+                model=model or llm.configured_model("EXTRACTION"),
             )
 
     async def remove_source(self, source_name: str) -> dict[str, Any]:

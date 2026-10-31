@@ -2,15 +2,16 @@
 
 `_llm_complete` used to return {} or "" for every failure, and each caller
 turned that into a believable "nothing found": an outage looked like a user
-with no data.
+with no data. The calls go through LiteLLM (#190), so the errors are
+LiteLLM's; `litellm.acompletion` is the stubbed call point.
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
-import openai
+import litellm
 import pytest
 
 from blue_data_user_source import LLMError, MemoryUserSource
@@ -21,10 +22,17 @@ from blue_data_user_source.reasoning.reasoner import _llm_complete
 _REQUEST = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
 
 
-def _client(create: AsyncMock) -> MagicMock:
-    client = MagicMock()
-    client.chat.completions.create = create
-    return client
+@pytest.fixture(autouse=True)
+def _openai(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default provider and model, with a key set so calls reach the stub."""
+    for name in ("BLUE_DATA_LLM_PROVIDER", "BLUE_DATA_LLM_MODEL", "BLUE_DATA_USER_SOURCE_LLM_MODEL",
+                 "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+
+def _completion(stub: AsyncMock):
+    return patch("litellm.acompletion", stub)
 
 
 def _reply(content: str) -> SimpleNamespace:
@@ -32,45 +40,47 @@ def _reply(content: str) -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("error", [
-    openai.APIConnectionError(request=_REQUEST),
-    openai.APITimeoutError(request=_REQUEST),
-    openai.AuthenticationError("bad key", response=httpx.Response(401, request=_REQUEST), body=None),
-    openai.RateLimitError("slow down", response=httpx.Response(429, request=_REQUEST), body=None),
-    openai.NotFoundError("no such model", response=httpx.Response(404, request=_REQUEST), body=None),
+    litellm.APIConnectionError("refused", llm_provider="openai", model="gpt-4o", request=_REQUEST),
+    litellm.Timeout("too slow", model="gpt-4o", llm_provider="openai"),
+    litellm.AuthenticationError("bad key", llm_provider="openai", model="gpt-4o"),
+    litellm.RateLimitError("slow down", llm_provider="openai", model="gpt-4o"),
+    litellm.NotFoundError("no such model", model="gpt-4o", llm_provider="openai"),
 ])
 @pytest.mark.parametrize("json_mode", [False, True])
-async def test_sdk_errors_raise_llm_error(error, json_mode) -> None:
+async def test_provider_errors_raise_llm_error(error, json_mode) -> None:
     props = {"response_format": "json_object"} if json_mode else None
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(side_effect=error))):
-        with pytest.raises(LLMError, match="LLM call to 'gpt-4o' failed") as info:
+    with _completion(AsyncMock(side_effect=error)):
+        with pytest.raises(LLMError, match=r"LLM call to 'gpt-4o' \(openai\) failed") as info:
             await _llm_complete("q", properties=props)
     assert info.value.__cause__ is error
 
 
 async def test_missing_credentials_raise_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    with pytest.raises(LLMError, match="LLM call"):
+    stub = AsyncMock()
+    with _completion(stub), pytest.raises(LLMError, match="OPENAI_API_KEY is not set"):
         await _llm_complete("q")
+    stub.assert_not_awaited()  # checked before the call, not reported by the provider
 
 
 @pytest.mark.parametrize("content", ["not json", "[1, 2]", ""])
 async def test_unusable_json_replies_raise_llm_error(content) -> None:
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(return_value=_reply(content)))):
+    with _completion(AsyncMock(return_value=_reply(content))):
         with pytest.raises(LLMError, match="JSON"):
             await _llm_complete("q", properties={"response_format": "json_object"})
 
 
 async def test_good_replies_come_back_unchanged() -> None:
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(return_value=_reply('```json\n{"a": 1}\n```')))):
+    with _completion(AsyncMock(return_value=_reply('```json\n{"a": 1}\n```'))):
         assert await _llm_complete("q", properties={"response_format": "json_object"}) == {"a": 1}
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(return_value=_reply("hello")))):
+    with _completion(AsyncMock(return_value=_reply("hello"))):
         assert await _llm_complete("q") == "hello"
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(return_value=_reply(None)))):
+    with _completion(AsyncMock(return_value=_reply(None))):
         assert await _llm_complete("q") == ""  # an empty text reply is a reply, not a failure
 
 
 async def test_bugs_in_our_own_code_are_not_disguised() -> None:
-    with patch("openai.AsyncOpenAI", return_value=_client(AsyncMock(side_effect=TypeError("bad kwarg")))):
+    with _completion(AsyncMock(side_effect=TypeError("bad kwarg"))):
         with pytest.raises(TypeError, match="bad kwarg"):
             await _llm_complete("q")
 
@@ -82,8 +92,10 @@ async def test_a_query_fails_loudly_when_the_llm_is_down() -> None:
         metadata_source_props={"backend": "memory"}, contact_source_props={"backend": "memory"},
         session_source_props={"backend": "memory"}, onboard=False,
     )
-    down = _client(AsyncMock(side_effect=openai.APIConnectionError(request=_REQUEST)))
-    with patch("openai.AsyncOpenAI", return_value=down):
+    down = AsyncMock(side_effect=litellm.APIConnectionError(
+        "refused", llm_provider="openai", model="gpt-4o",
+    ))
+    with _completion(down):
         with pytest.raises(LLMError, match="failed"):  # was: ([], session_id), as if alice had no data
             await us._run_query("what are my skills?", database="alice")
 

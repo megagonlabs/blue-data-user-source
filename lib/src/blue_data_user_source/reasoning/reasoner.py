@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from blue_data_user_source import llm
 from blue_data_user_source.reasoning.metric import (
     CompletenessMetric,
     FreshnessMetric,
@@ -56,36 +57,55 @@ def _strip_json_fences(text: str) -> str:
     return text.strip()
 
 
-DEFAULT_MODEL = "gpt-4o"
+def _parse_json_object(content: str) -> Any:
+    """The JSON value in *content*: the whole text, else the first object in it.
+
+    OpenAI's JSON mode returns bare JSON; other providers have no JSON mode for
+    a reply without a schema (LiteLLM drops ``response_format`` for Anthropic),
+    so the prompt's "return JSON" is all there is, and the model may wrap the
+    object in fences or a sentence (#190).
+    """
+    text = _strip_json_fences(content)
+    try:
+        return json.loads(text)
+    except ValueError:  # json.JSONDecodeError is a ValueError
+        start = text.find("{")
+        if start < 0:
+            raise
+        return json.JSONDecoder().raw_decode(text[start:])[0]
 
 
 async def _llm_complete(
     prompt: str,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
     properties: dict | None = None,
 ) -> str | dict:
     """Call the LLM and return a string or parsed dict.
 
-    Pass ``properties={"response_format": "json_object"}`` to request a JSON
-    object response.  The OpenAI ``response_format`` parameter is set
-    accordingly and the returned value is a parsed ``dict`` rather than a
-    string.  For plain-text calls the return value is ``str``.
+    The call goes through LiteLLM to the BLUE_DATA_LLM_PROVIDER provider (see
+    :mod:`blue_data_user_source.llm`); *model* None means the configured
+    reasoning model (BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL,
+    BLUE_DATA_USER_SOURCE_LLM_MODEL, BLUE_DATA_LLM_MODEL, then the provider's
+    default).
 
-    Raises ``LLMError`` when the model cannot be reached (any OpenAI SDK error:
-    authentication, network, rate limit, timeout, unknown model), when the
-    ``openai`` package is missing, or when a JSON-mode reply is not a JSON
-    object. It never stands in an empty value for a failure: callers turned
-    that into "no results", so an outage looked like a user with no data
-    (#117). Errors from our own code are not caught here.
+    Pass ``properties={"response_format": "json_object"}`` to request a JSON
+    object response.  The ``response_format`` parameter is set accordingly and
+    the returned value is a parsed ``dict`` rather than a string.  For
+    plain-text calls the return value is ``str``.
+
+    Raises ``LLMError`` when the model cannot be reached (any LiteLLM or
+    provider error: authentication, network, rate limit, timeout, unknown
+    model), when the provider's API key is not set, when LiteLLM is missing, or
+    when a JSON-mode reply is not a JSON object. It never stands in an empty
+    value for a failure: callers turned that into "no results", so an outage
+    looked like a user with no data (#117). Errors from our own code are not
+    caught here.
     """
     from blue_data_user_source.types import LLMError
 
     props = properties or {}
     want_json = props.get("response_format") == "json_object"
-    try:
-        import openai
-    except ImportError as exc:
-        raise LLMError("The 'openai' package is required for LLM calls; install it.") from exc
+    model = model or llm.configured_model("REASONING")
 
     kwargs: dict = {
         "model": model,
@@ -94,15 +114,17 @@ async def _llm_complete(
     if want_json:
         kwargs["response_format"] = {"type": "json_object"}
     try:
-        resp = await openai.AsyncOpenAI().chat.completions.create(**kwargs)
-    except openai.OpenAIError as exc:
-        raise LLMError(f"LLM call to {model!r} failed: {exc}") from exc
+        resp = await llm.AsyncClient().chat.completions.create(**kwargs)
+    except Exception as exc:
+        if isinstance(exc, LLMError) or not llm.is_upstream_error(exc):
+            raise
+        raise LLMError(f"LLM call to {model!r} ({llm.provider()}) failed: {exc}") from exc
     content = resp.choices[0].message.content or ""
     if not want_json:
         return content
     try:
-        parsed = json.loads(_strip_json_fences(content))
-    except ValueError as exc:  # json.JSONDecodeError is a ValueError
+        parsed = _parse_json_object(content)
+    except ValueError as exc:
         raise LLMError(f"LLM {model!r} returned invalid JSON: {content[:200]!r}") from exc
     if not isinstance(parsed, dict):
         raise LLMError(f"LLM {model!r} returned JSON that is not an object: {content[:200]!r}")
@@ -134,13 +156,14 @@ class UserQueryReasoner:
         manager: UserDataManager | None = None,
         session_id: str | None = None,
         query_id: str | None = None,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
     ) -> None:
         self._source = source
         self._manager = manager
         self._session_id = session_id
         self._query_id = query_id
-        self._model = model
+        # None: the configured reasoning model, else the provider's default (#190).
+        self._model = model or llm.configured_model("REASONING")
         self._metrics: list[UserDataMetric] = list(self._DEFAULT_METRICS)
         if manager is not None:
             self._metrics.append(PrivacyMetric(manager=manager))

@@ -19,12 +19,10 @@
 
 | Concern | Choice |
 |---------|--------|
-| Client | OpenAI Python SDK (`openai.AsyncOpenAI`) |
-| Default model | `gpt-4o` |
+| Client | LiteLLM (`litellm.acompletion`), pinned to `BLUE_DATA_LLM_PROVIDER` (blank = `openai`) |
+| Default model | the provider's: `gpt-4o` (openai), `claude-opus-4-8` (anthropic) |
 
-UDb's own LLM calls — query rewriting and expansion, metric assessment, contact selection, clarification questions, onboarding and answer synthesis — all go through one helper, `reasoning.reasoner._llm_complete`, which calls `AsyncOpenAI().chat.completions.create` and raises `LLMError` on any SDK failure (authentication, network, rate limit, timeout, unknown model). The model is chosen per query (`optional_properties["model"]`) or, in the CLI, by the profile setting `BLUE_DATA_USER_SOURCE_LLM_MODEL`. Extraction runs inside `blue-data-kb-source`, which makes its own OpenAI calls (its `[openai]` extra).
-
-There is no provider abstraction: swapping providers means changing `_llm_complete` and kb-source's extraction client.
+UDb's own LLM calls — query rewriting and expansion, metric assessment, contact selection, clarification questions, onboarding and answer synthesis — all go through one helper, `reasoning.reasoner._llm_complete`, which calls `llm.AsyncClient().chat.completions.create` (LiteLLM, OpenAI's call and response shape) and raises `LLMError` on any LiteLLM or provider failure (authentication, network, rate limit, timeout, unknown model) or a missing key. The model is chosen per query (`optional_properties["model"]`), else by `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL` / `…_EXTRACTION_LLM_MODEL`, `BLUE_DATA_USER_SOURCE_LLM_MODEL`, `BLUE_DATA_LLM_MODEL`, then the provider's default; the CLI resolves the same chain from its profile. The KB's agents (answering, extraction) run inside `blue-data-kb-source`, which makes its own LiteLLM calls (its `[llm]` extra) to the same provider; user-source passes them the model it resolved, so both follow one rule. JSON mode (`response_format: json_object`) is OpenAI's; LiteLLM drops it for Anthropic, so a JSON reply is also read out of fences or surrounding prose. See ADR-028.
 
 ---
 
@@ -92,10 +90,11 @@ Installed from source, cloned beside this repository; not on PyPI.
 | Package | Source | Role |
 |---------|--------|------|
 | `blue-data` | internal | Base classes, JSON storage, registry, profiles |
-| `blue-data-kb-source` (`[openai,search]` extras) | internal | Knowledge graph, extraction, KB search |
+| `blue-data-kb-source` (`[llm,search]` extras) | internal | Knowledge graph, extraction, KB search |
 | `blue-data-doc-source` | internal | Document stores |
 | `rank-bm25` | PyPI | Keyword ranking for the KB search index |
-| `openai` | PyPI | LLM client (via kb-source's `[openai]` extra) |
+| `litellm` (`>=1.102,<1.106`) | PyPI | LLM client, to the `BLUE_DATA_LLM_PROVIDER` provider |
+| `openai` | PyPI | Document embeddings (via LiteLLM and doc-source) |
 | `httpx` | PyPI | Webhook transport (library `[webhook]` extra); REST API test client |
 | `aiosmtplib` | PyPI | Email transport (library `[email]` extra) |
 | `fastapi`, `uvicorn`, `pydantic-settings` | PyPI | REST API |

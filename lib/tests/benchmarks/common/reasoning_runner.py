@@ -9,13 +9,12 @@ Covers six benchmark types that call ``_llm_complete`` internally:
   - ``appropriateness``   — the question-rewrite step in
                             ``UserQueryReasoner.request_user_interaction``
 
-All types patch ``openai.AsyncOpenAI`` with ``InstrumentedOpenAI`` so VCR
-cassettes are replayed transparently.
+All types record their LLM calls with ``capture.instrumented``; VCR replays
+the cassettes under LiteLLM's OpenAI route transparently.
 """
 
 from __future__ import annotations
 
-import functools
 import io
 import sys
 from dataclasses import dataclass, field
@@ -23,7 +22,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from .capture import InstrumentedOpenAI, LLMCallRecord
+from .capture import LLMCallRecord, instrumented
 from .cases import ReasoningCase
 
 _SRC = Path(__file__).parents[3] / "src" / "blue_data_user_source" / "data"
@@ -112,9 +111,7 @@ async def run_reasoning_case(case: ReasoningCase, model: str = "gpt-4o-mini") ->
     if case.benchmark_type in _DETERMINISTIC_TYPES:
         output = await _dispatch(case)
     else:
-        import openai
-        instrumented = functools.partial(InstrumentedOpenAI, real_client_cls=openai.AsyncOpenAI, sink=llm_calls)
-        with patch("openai.AsyncOpenAI", instrumented):
+        with instrumented(llm_calls):
             output = await _dispatch(case)
 
     return ReasoningRunResult(

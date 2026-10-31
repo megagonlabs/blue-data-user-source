@@ -1,17 +1,23 @@
 """LLM call capture for user-source benchmarks.
 
-Wraps ``openai.AsyncOpenAI`` so that every ``chat.completions.create`` call
-is recorded with latency and token counts.  Patch ``openai.AsyncOpenAI`` with
-``functools.partial(InstrumentedOpenAI, real_client_cls=openai.AsyncOpenAI, sink=calls)``
-*before* constructing the real client — both ``_llm_complete`` and
-``KBSource.answer`` go through this same site.
+Wraps the LLM clients so that every ``chat.completions.create`` call is
+recorded with latency and token counts. The calls go through LiteLLM (#190):
+``_llm_complete`` through ``blue_data_user_source.llm.AsyncClient``, and the KB's
+agents (``KBSource.answer``, extraction) through ``blue_data_kb_source.llm.AsyncClient``.
+``instrumented(calls)`` patches both.
 """
 
 from __future__ import annotations
 
+import contextlib
+import functools
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import patch
+
+_CLIENTS = ("blue_data_user_source.llm", "blue_data_kb_source.llm")
 
 
 @dataclass
@@ -60,3 +66,20 @@ class _InstrumentedCompletions:
             messages=list(kwargs.get("messages") or []),
         ))
         return response
+
+
+@contextlib.contextmanager
+def instrumented(sink: list[LLMCallRecord]) -> Iterator[None]:
+    """Record every LLM call, user-source's and the KB's, into *sink*.
+
+    Each real client class is looked up before its patch is applied: looked up
+    from inside ``__init__`` it would resolve to the wrapper and recurse.
+    """
+    import importlib
+
+    with contextlib.ExitStack() as stack:
+        for name in _CLIENTS:
+            real = importlib.import_module(name).AsyncClient
+            wrapper = functools.partial(InstrumentedOpenAI, real_client_cls=real, sink=sink)
+            stack.enter_context(patch(f"{name}.AsyncClient", wrapper))
+        yield

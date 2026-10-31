@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
 from blue_data_user_source.types import QueryError
 from click.testing import CliRunner
 
@@ -110,7 +109,7 @@ def test_database_create_onboards_by_default(_interactive, runner: CliRunner, da
     assert result.exit_code == 0
     assert "alice" in result.output
     assert mock.create_user.await_args.kwargs["onboard"] is False  # onboarded as its own step
-    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True, model=DEFAULT_MODEL)
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True, model="gpt-4o")
 
 
 @patch("blue_data_user_cli.commands._interactive", return_value=True)
@@ -158,7 +157,7 @@ def test_database_create_no_metadata_onboard_flag(_interactive,
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "create", "alice", "--no-metadata-onboard"])
     assert result.exit_code == 0
-    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False, model=DEFAULT_MODEL)
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False, model="gpt-4o")
 
 
 def test_database_create_already_exists_exits_with_code_1(
@@ -320,7 +319,7 @@ def test_database_onboard_calls_onboard_user(runner: CliRunner, data_dir: Path) 
         result = _invoke(runner, data_dir, ["database", "onboard"])
     assert result.exit_code == 0
     assert "alice" in result.output
-    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True, model=DEFAULT_MODEL)
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=True, model="gpt-4o")
 
 
 def test_database_onboard_no_metadata_onboard_flag(runner: CliRunner, data_dir: Path) -> None:
@@ -330,7 +329,7 @@ def test_database_onboard_no_metadata_onboard_flag(runner: CliRunner, data_dir: 
     with _patched(mock):
         result = _invoke(runner, data_dir, ["database", "onboard", "--no-metadata-onboard"])
     assert result.exit_code == 0
-    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False, model=DEFAULT_MODEL)
+    mock.onboard_user.assert_awaited_once_with("alice", include_metadata=False, model="gpt-4o")
 
 
 def test_database_onboard_error_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:

@@ -175,7 +175,7 @@ Returns registry properties for the user (storage paths, class, schema paths).
 | `max_kb_turns` | `int \| None` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
 | `max_interaction_rounds` | `int \| None` | Most rounds of clarification questions (default 3) |
 
-A query makes dozens of OpenAI calls at the defaults; the `max_*` parameters bound them (see [Cost](../../docs/guide.md#cost)).
+A query makes dozens of LLM calls at the defaults; the `max_*` parameters bound them (see [Cost](../../docs/guide.md#cost)).
 
 Runs a multi-step agent: contextualises and expands the question, queries the
 KB in parallel across sub-questions, assesses result quality, and optionally

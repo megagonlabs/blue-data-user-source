@@ -45,14 +45,13 @@ def test_first_run_asks_only_three_questions():
     ]
 
 
-def test_both_llm_models_inherit_the_udb_wide_one_only():
-    """Not the family model: it may name another provider's model (#175); see
-    _model_for for when it is used."""
+def test_both_llm_models_inherit_toward_the_family_model():
+    """The calls go to the family provider (#190), so its model applies again."""
     spec = cli_spec()
-    assert spec["BLUE_DATA_USER_SOURCE_LLM_MODEL"].inherits == ()
+    assert spec["BLUE_DATA_USER_SOURCE_LLM_MODEL"].inherits == ("BLUE_DATA_LLM_MODEL",)
     for fn in ("EXTRACTION", "REASONING"):
         param = spec[f"BLUE_DATA_USER_SOURCE_{fn}_LLM_MODEL"]
-        assert param.inherits == ("BLUE_DATA_USER_SOURCE_LLM_MODEL",)
+        assert param.inherits == ("BLUE_DATA_USER_SOURCE_LLM_MODEL", "BLUE_DATA_LLM_MODEL")
 
 
 def test_database_creation_defaults_are_declared():
@@ -76,9 +75,12 @@ def test_the_first_command_creates_the_default_profile(runner, data_dir):
     assert out == {"selected": "default", "profiles": ["default"]}
 
 
-def test_the_created_profile_is_empty_so_values_track_spec_defaults(runner, data_dir):
+def test_the_created_profile_is_empty_so_values_track_spec_defaults(runner, data_dir, monkeypatch):
+    monkeypatch.delenv("BLUE_DATA_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("BLUE_DATA_LLM_MODEL", raising=False)
     out = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])
-    assert out["values"]["BLUE_DATA_LLM_MODEL"] == {"value": "(unset)", "source": "unset"}
+    # Unset, so the commands use the provider's default, and inspect says which (#190).
+    assert out["values"]["BLUE_DATA_LLM_MODEL"] == {"value": "gpt-4o", "source": "openai default"}
 
 
 def test_a_removed_default_profile_is_not_resurrected(runner, data_dir):
@@ -346,7 +348,7 @@ def test_the_database_option_outranks_everything(runner, data_dir, monkeypatch):
 
 
 # ------------------------------------------------------------------ #
-# the model sent to OpenAI (#175)                                     #
+# the model, a model of the BLUE_DATA_LLM_PROVIDER provider (#190)   #
 # ------------------------------------------------------------------ #
 
 def _model(data_dir: Path, function: str = "REASONING", option: str | None = None) -> str:
@@ -355,20 +357,28 @@ def _model(data_dir: Path, function: str = "REASONING", option: str | None = Non
     return _model_for({"config": resolver_for(str(data_dir))}, function, option)
 
 
-def test_the_family_model_is_used_under_openai_or_no_provider(data_dir, monkeypatch):
-    monkeypatch.setenv("BLUE_DATA_LLM_MODEL", "gpt-5")
-    for provider in ("", "openai", "OpenAI"):
+def test_the_family_model_is_used_under_any_provider(data_dir, monkeypatch):
+    for provider, model in (("", "gpt-5"), ("openai", "gpt-5"), ("anthropic", "claude-sonnet-4-8")):
         monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", provider)
-        assert _model(data_dir) == "gpt-5"
-        assert _model(data_dir, "EXTRACTION") == "gpt-5"
+        monkeypatch.setenv("BLUE_DATA_LLM_MODEL", model)
+        assert _model(data_dir) == model
+        assert _model(data_dir, "EXTRACTION") == model
 
 
-def test_another_providers_family_model_is_not_sent_to_openai(data_dir, monkeypatch):
-    from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
+def test_unset_the_providers_default_is_used(data_dir, monkeypatch):
+    monkeypatch.delenv("BLUE_DATA_LLM_MODEL", raising=False)
+    for provider, model in (("", "gpt-4o"), ("OpenAI", "gpt-4o"), ("anthropic", "claude-opus-4-8")):
+        monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", provider)
+        assert _model(data_dir) == model
+        assert _model(data_dir, "EXTRACTION") == model
+
+
+def test_profile_inspect_shows_the_providers_default_for_an_unset_model(runner, data_dir, monkeypatch):
+    monkeypatch.delenv("BLUE_DATA_LLM_MODEL", raising=False)
     monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", "anthropic")
-    monkeypatch.setenv("BLUE_DATA_LLM_MODEL", "claude-opus-4-8")
-    assert _model(data_dir) == DEFAULT_MODEL
-    assert _model(data_dir, "EXTRACTION") == DEFAULT_MODEL
+    values = _json(runner, data_dir, ["profile", "inspect", "--format", "json"])["values"]
+    for name in ("BLUE_DATA_LLM_MODEL", "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL"):
+        assert values[name] == {"value": "claude-opus-4-8", "source": "anthropic default"}
 
 
 def test_this_packages_model_and_the_option_win_over_any_provider(data_dir, monkeypatch):

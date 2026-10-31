@@ -27,9 +27,9 @@ bash platform/cli/scripts/install.sh       # the above + the blue-userdb CLI
 
 ```bash
 # Sibling dependencies (local checkouts, not yet published). The KB needs its
-# openai extra for every query and extraction, and search for BM25 KB search.
+# llm extra (LiteLLM) for every query and extraction, and search for BM25 KB search.
 pip install -e ../blue-data/lib
-pip install -e "../blue-data-kb-source/lib[openai,search]"
+pip install -e "../blue-data-kb-source/lib[llm,search]"
 pip install -e ../blue-data-doc-source/lib
 
 # This library
@@ -66,7 +66,7 @@ cd platform/api && bash scripts/build.sh
 
 - Python 3.12 or 3.13
 - [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source), and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
-- An OpenAI API key (`OPENAI_API_KEY`) for any LLM feature: query rewriting/expansion, LLM-based extraction (`add_source` with `queries`), result assessment prompts, and natural-language answer synthesis. Sessions, metadata, and contact-method CRUD are plain Python with no network calls.
+- An API key for any LLM feature: query rewriting/expansion, LLM-based extraction (`add_source` with `queries`), result assessment prompts, and natural-language answer synthesis. Sessions, metadata, and contact-method CRUD are plain Python with no network calls. The LLM calls go to the provider named by `BLUE_DATA_LLM_PROVIDER` (blank, the default, means `openai`; `anthropic` is the other one with a default model), through LiteLLM, with that provider's key: `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Document embeddings stay on OpenAI, so a new database's default `openai` embedding needs `OPENAI_API_KEY` under any provider (or use `dummy` with `bm25`).
 
 None of the four packages are published to PyPI yet — always install from the local checkout as shown above.
 
@@ -133,7 +133,11 @@ Directory locations, backend selection, and server configuration are set via env
 
 | Variable | Used by | Purpose |
 |---|---|---|
-| `OPENAI_API_KEY` | lib, CLI, MCP, API | Required for any LLM operation (querying, extraction) |
+| `BLUE_DATA_LLM_PROVIDER` | lib, CLI, MCP, API | The provider every LLM call goes to, through LiteLLM: blank (the default) means `openai`; `anthropic` for Claude (#190) |
+| `BLUE_DATA_LLM_MODEL` | lib, CLI, MCP, API | The family model, a model of that provider. Unset: the provider's default, `gpt-4o` for `openai`, `claude-opus-4-8` for `anthropic` |
+| `BLUE_DATA_USER_SOURCE_LLM_MODEL`, `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, `BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL` | lib, CLI, MCP, API | This package's model, and per function (query reasoning and the KB's answering agent; `add_source` extraction). Each falls back to the next, then to `BLUE_DATA_LLM_MODEL`. A query's `model`, or the CLI's `--model`, wins |
+| `OPENAI_API_KEY` | lib, CLI, MCP, API | The `openai` provider's key, required for its LLM calls; also for `openai` document embeddings under any provider |
+| `ANTHROPIC_API_KEY` | lib, CLI, MCP, API | The `anthropic` provider's key |
 | `BLUE_DATA_USER_SOURCE_HOME` | CLI | Where the CLI keeps `.profiles` and `.selected.profile` (default `~/.blue-userdb`). Environment-only — it is where profiles are read from, so it cannot come from one |
 | `BLUE_DATA_USER_SOURCE_DATABASE` | CLI | Default `--database` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_SESSION` | CLI | Default `--session` when not passed explicitly |

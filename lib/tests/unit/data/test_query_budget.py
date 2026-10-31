@@ -3,7 +3,9 @@
 Each sub-question is answered by the KB's agent, which makes most of a query's
 calls: ``max_subqueries`` caps the sub-questions, ``max_kb_turns`` the agent's
 turns for each, and ``model`` now runs the agent too (it was always gpt-4o).
-The LLM and the KB's agent are stubbed: these tests count what would be sent.
+Without one, the agent gets the reasoner's model, resolved by the same rule
+(#190). The LLM and the KB's agent are stubbed: these tests count what would
+be sent.
 """
 from __future__ import annotations
 
@@ -16,6 +18,14 @@ from blue_data_user_source import MemoryUserSource, QueryError
 from blue_data_user_source.data.manager import UserDataManager
 
 _SUBQUESTIONS = [f"What is Alice's facet {i}?" for i in range(5)]
+
+
+@pytest.fixture(autouse=True)
+def _default_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("BLUE_DATA_LLM_PROVIDER", "BLUE_DATA_LLM_MODEL", "BLUE_DATA_USER_SOURCE_LLM_MODEL",
+                 "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL",
+                 "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
 
 
 async def _fake_llm(prompt: str, *args: Any, properties: dict | None = None, **kwargs: Any) -> Any:
@@ -58,8 +68,21 @@ def _questions(kb_answer: AsyncMock) -> list[str]:
 async def test_by_default_every_proposed_subquestion_is_answered(source, kb_answer) -> None:
     await _ask(source)
     assert len(_questions(kb_answer)) == len(_SUBQUESTIONS) + 1  # plus the rewritten query
-    assert all("max_turns" not in c.kwargs and "model" not in c.kwargs
-               for c in kb_answer.await_args_list)  # the KB's own defaults
+    assert all("max_turns" not in c.kwargs for c in kb_answer.await_args_list)  # the KB's default
+    # The reasoner's model, not the KB's own configuration (#190).
+    assert {c.kwargs["model"] for c in kb_answer.await_args_list} == {"gpt-4o"}
+
+
+async def test_the_configured_reasoning_model_reaches_the_kb_agent(
+    source, kb_answer, monkeypatch,
+) -> None:
+    monkeypatch.setenv("BLUE_DATA_LLM_PROVIDER", "anthropic")
+    await _ask(source)
+    assert {c.kwargs["model"] for c in kb_answer.await_args_list} == {"claude-opus-4-8"}
+    monkeypatch.setenv("BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL", "claude-haiku-4-8")
+    kb_answer.reset_mock()
+    await _ask(source)
+    assert {c.kwargs["model"] for c in kb_answer.await_args_list} == {"claude-haiku-4-8"}
 
 
 @pytest.mark.parametrize("cap", [0, 2])
@@ -100,4 +123,4 @@ async def test_the_extraction_runs_on_the_model_given(source) -> None:
         assert import_text.await_args.kwargs["model"] == "gpt-4o-mini"
         await source.add_text_source("Alice likes jazz.", database="alice",
                                      optional_properties={"queries": ["q"]})
-        assert "model" not in import_text.await_args.kwargs
+        assert import_text.await_args.kwargs["model"] == "gpt-4o"  # the provider's default (#190)

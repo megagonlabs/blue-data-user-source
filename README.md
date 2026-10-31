@@ -45,10 +45,12 @@ Each platform package has its own `src/`, `tests/` and `scripts/install.sh`.
 
 - Python 3.12 or 3.13
 - The sibling repositories [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source) and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source), cloned beside this one (`../blue-data`, `../blue-data-kb-source`, `../blue-data-doc-source`); they provide the storage, knowledge-graph and document layers, and are not on PyPI
-- An OpenAI API key for the LLM features: extraction, query rewriting and expansion, quality assessment, and answers in prose
+- An API key for the LLM features (extraction, query rewriting and expansion, quality assessment, and answers in prose): OpenAI by default, or Anthropic with `BLUE_DATA_LLM_PROVIDER=anthropic`
 
 ```bash
 export OPENAI_API_KEY=sk-...
+# or, for Claude: export BLUE_DATA_LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-...
+#   (document embeddings still use OPENAI_API_KEY; see docs/installation.md)
 ```
 
 Every query and extraction makes many OpenAI calls: at the default model, gpt-4o, one query costs roughly $0.20–$2 and extracting a short document $0.20–$0.50. `data query --max-subqueries 1 --max-kb-turns 8` cut one query from 67 calls to 16 ($0.38 to $0.06). See [Cost](docs/guide.md#cost) for the bounds and the cheaper model settings.
@@ -152,11 +154,12 @@ For OSS components having different portions released under different licenses, 
 | 6 | langchain-mcp-adapters | No | LangChain, Inc. | [link](https://github.com/langchain-ai/langchain-mcp-adapters) | MIT License |
 | 7 | langchain-openai | No | LangChain, Inc. | [link](https://github.com/langchain-ai/langchain) | MIT License |
 | 8 | langgraph | No | LangChain, Inc. | [link](https://github.com/langchain-ai/langgraph) | MIT License |
-| 9 | MCP | No | Anthropic, PBC | [link](https://github.com/modelcontextprotocol/python-sdk) | MIT License |
-| 10 | openai | No | OpenAI | [link](https://github.com/openai/openai-python) | Apache Software License |
-| 11 | pydantic | No | Pydantic Services Inc. and individual contributors | [link](https://github.com/pydantic/pydantic) | MIT License |
-| 12 | pydantic-settings | No | Samuel Colvin and other contributors | [link](https://github.com/pydantic/pydantic-settings) | MIT License |
-| 13 | rank-bm25 | No | Dorian Brown | [link](https://github.com/dorianbrown/rank_bm25) | Apache Software License |
-| 14 | redis | No | Redis, inc. | [link](https://github.com/redis/redis-py) | MIT License |
-| 15 | rich | No | Will McGugan | [link](https://github.com/Textualize/rich) | MIT License |
-| 16 | uvicorn | No | Encode OSS Ltd. | [link](https://github.com/encode/uvicorn) | BSD License |
+| 9 | litellm | No | Berri AI | [link](https://github.com/BerriAI/litellm) | MIT License |
+| 10 | MCP | No | Anthropic, PBC | [link](https://github.com/modelcontextprotocol/python-sdk) | MIT License |
+| 11 | openai | No | OpenAI | [link](https://github.com/openai/openai-python) | Apache Software License |
+| 12 | pydantic | No | Pydantic Services Inc. and individual contributors | [link](https://github.com/pydantic/pydantic) | MIT License |
+| 13 | pydantic-settings | No | Samuel Colvin and other contributors | [link](https://github.com/pydantic/pydantic-settings) | MIT License |
+| 14 | rank-bm25 | No | Dorian Brown | [link](https://github.com/dorianbrown/rank_bm25) | Apache Software License |
+| 15 | redis | No | Redis, inc. | [link](https://github.com/redis/redis-py) | MIT License |
+| 16 | rich | No | Will McGugan | [link](https://github.com/Textualize/rich) | MIT License |
+| 17 | uvicorn | No | Encode OSS Ltd. | [link](https://github.com/encode/uvicorn) | BSD License |

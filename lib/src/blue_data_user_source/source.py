@@ -10,6 +10,7 @@ from typing import Any
 from blue_data.registry.data_registry import DataRegistry
 from blue_data.source.source import DataSource
 
+from blue_data_user_source import llm
 from blue_data_user_source._sync import run_sync
 from blue_data_user_source.data.manager import (
     CLS_JSON_MEMORY,
@@ -108,8 +109,8 @@ def _console_attached() -> bool:
 def _model_kwarg(model: str | None) -> dict[str, str]:
     """`{"model": …}` when a model was chosen, `{}` otherwise.
 
-    Keeps `UserQueryReasoner`'s own default as the single place the fallback
-    lives, rather than repeating "gpt-4o" at every construction site.
+    Keeps `UserQueryReasoner`'s own default (the configured reasoning model, else
+    the provider's default; #190) as the single place the fallback lives.
     """
     return {"model": model} if model else {}
 
@@ -467,7 +468,11 @@ class UserSource(DataSource):
         blue-data-kb-source). Answering runs this source's own reasoning pipeline,
         rewriting, expansion, quality assessment and clarification, which a plain
         ``llm_fn(prompt) -> text`` cannot drive. The model is
-        ``optional_properties["model"]``, else ``gpt-4o``.
+        ``optional_properties["model"]``, else the configured reasoning model
+        (``BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL``,
+        ``BLUE_DATA_USER_SOURCE_LLM_MODEL``, ``BLUE_DATA_LLM_MODEL``), else the
+        default of the ``BLUE_DATA_LLM_PROVIDER`` provider (``gpt-4o`` for
+        ``openai``, the default, ``claude-opus-4-8`` for ``anthropic``).
         """
         return self.execute_query(query, database, collection, optional_properties)
 
@@ -861,9 +866,10 @@ class UserSource(DataSource):
         """Register a file as a source in the user's KB and optionally extract via queries.
 
         ``optional_properties``: ``queries``, ``name``, ``description``,
-        ``original``, ``effort``, ``model`` (the extraction's LLM; gpt-4o by
-        default), and ``location`` (the label recorded on the SOURCE node;
-        defaults to the file's path).
+        ``original``, ``effort``, ``model`` (the extraction's LLM; by default the
+        configured extraction model, else the provider's default), and
+        ``location`` (the label recorded on the SOURCE node; defaults to the
+        file's path).
         """
         await self._get_manager(database).add_source(source, **self._source_kwargs(optional_properties))
 
@@ -1047,7 +1053,8 @@ class UserSource(DataSource):
         the rewritten query, each answered by the KB's agent; ``max_kb_turns``
         (default 25), that agent's tool-calling turns per sub-question; and
         ``max_interaction_rounds``. ``model`` runs the reasoning and the KB's
-        agent alike.
+        agent alike; by default, the configured reasoning model, else the
+        ``BLUE_DATA_LLM_PROVIDER`` provider's default (#190).
         """
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
@@ -1056,6 +1063,8 @@ class UserSource(DataSource):
         max_subqueries = _bounded_int(props, "max_subqueries", None, minimum=0)
         max_kb_turns = _bounded_int(props, "max_kb_turns", None, minimum=1)
         max_rounds = _bounded_int(props, "max_interaction_rounds", 3, minimum=0)
+        # One model for the reasoner and the KB's agent, resolved by one rule (#190).
+        model = str(props["model"]) if props.get("model") else llm.configured_model("REASONING")
 
         manager = self._get_manager(database)
         session_manager = self._session_manager(database)
@@ -1071,8 +1080,7 @@ class UserSource(DataSource):
         query_id = await session_manager.create_query(session_id, query, output_form)
 
         reasoner = UserQueryReasoner(
-            source=self, manager=manager, session_id=session_id, query_id=query_id,
-            **_model_kwarg(props.get("model")),
+            source=self, manager=manager, session_id=session_id, query_id=query_id, model=model,
         )
 
         # Phase 1: contextualize then expand (sequential — expand uses the rewritten query)
@@ -1089,7 +1097,7 @@ class UserSource(DataSource):
         raw_results: list[tuple[list, dict]] = list(await asyncio.gather(*[
             manager.execute_query(
                 q, on_tool_call=on_tool_call, on_tool_result=on_tool_result, session_id=session_id,
-                top_k=top_k, model=props.get("model"), max_turns=max_kb_turns,
+                top_k=top_k, model=model, max_turns=max_kb_turns,
             )
             for q in questions
         ]))

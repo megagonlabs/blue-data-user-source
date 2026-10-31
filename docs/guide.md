@@ -104,7 +104,7 @@ Adding a file that is already a source, as the Type 2 step does here, updates th
 
 ## Querying in natural language
 
-`execute_query` rewrites the query, expands it into sub-questions, retrieves data for each, and assesses the combined result — asking for clarification via a contact method when quality checks fail. Requires `OPENAI_API_KEY` for the rewriting/expansion/assessment prompts.
+`execute_query` rewrites the query, expands it into sub-questions, retrieves data for each, and assesses the combined result — asking for clarification via a contact method when quality checks fail. Requires the LLM provider's key for the rewriting/expansion/assessment prompts (`OPENAI_API_KEY` by default; see [installation](installation.md#environment-variables)).
 
 ```python
 answer, session_id = await us.async_execute_query("jobs suitable for me", database="alice")
@@ -130,7 +130,7 @@ rows = us.execute_query("jobs suitable for me", database="alice")   # the table;
 | `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default 3) |
 | `max_subqueries` | `int` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as the expansion proposes, at most 5). See [Cost](#cost) |
 | `max_kb_turns` | `int` | Most tool-calling turns of the KB's agent per sub-question (default 25); out of turns, it makes one more call to answer with what it found |
-| `model` | `str` | OpenAI model for the reasoning steps and the KB's agent (default gpt-4o) |
+| `model` | `str` | Model for the reasoning steps and the KB's agent, of the `BLUE_DATA_LLM_PROVIDER` provider (default: `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, `BLUE_DATA_USER_SOURCE_LLM_MODEL` or `BLUE_DATA_LLM_MODEL`, else the provider's default: gpt-4o for openai, claude-opus-4-8 for anthropic) |
 | `on_interaction_start`, `on_interaction_end` | `Callable[[], None]` | Called just before a clarification question is put to the user and once the exchange is over, answered or not; a CLI pauses its live status display in between |
 | `top_k` | `int` | Max chunks taken from each document store per sub-question (default 5) |
 

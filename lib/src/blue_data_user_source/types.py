@@ -34,8 +34,9 @@ class LLMError(UDbError):
     """Raised when the language model cannot be reached or returns an unusable reply.
 
     Covers authentication, network, rate-limit, timeout and unknown-model errors
-    from the OpenAI SDK, a missing ``openai`` package, and a JSON-mode reply that
-    is not a JSON object. Callers must not turn it into an empty result: an
+    from LiteLLM or the provider, the provider's API key not being set
+    (``llm.MissingKeyError``), a missing ``litellm`` package, and a JSON-mode
+    reply that is not a JSON object. Callers must not turn it into an empty result: an
     outage would then look like a user with no data (#117).
     """
 

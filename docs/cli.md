@@ -14,7 +14,7 @@ cd platform/cli
 pip install -e .
 ```
 
-`click`, `rich`, and `arrow` are pulled in automatically. Set your OpenAI API key for extraction or query commands:
+`click`, `rich`, and `arrow` are pulled in automatically. Set your LLM provider's API key for extraction or query commands (OpenAI by default; for Claude, `BLUE_DATA_LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`):
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -215,9 +215,9 @@ Instance data management. All `data` commands require an active database.
 | `--max-subqueries N` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as needed, at most 5) |
 | `--max-kb-turns N` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
 | `--max-rounds N` | Most rounds of clarification questions (default 3) |
-| `--model MODEL` | OpenAI model for the reasoning and the KB's agent (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else gpt-4o) |
+| `--model MODEL` | Model for the reasoning and the KB's agent, of the `BLUE_DATA_LLM_PROVIDER` provider (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else the provider's default, gpt-4o for openai) |
 
-A query makes dozens of OpenAI calls at the defaults; the `--max-*` options bound them. See [Cost](guide.md#cost).
+A query makes dozens of LLM calls at the defaults; the `--max-*` options bound them. See [Cost](guide.md#cost).
 
 Clarification questions are asked on the terminal only when stdin is one; under a pipe, a script or `</dev/null`, `data query` uses another registered contact method (email, webhook), or answers with what it found. An answer that never comes (end of input) is recorded as a failed interaction, not an empty reply.
 | `--verbose` / `-v` | Show tool-call arguments in the status line |
@@ -226,7 +226,7 @@ Clarification questions are asked on the terminal only when stdin is one; under 
 
 `data search` options: `--type entity|fact` (repeatable), `--mode keyword|semantic`, `--top-k N`, `--format table|json`.
 
-`data extract` options: `--query QUESTION` (repeatable), `--source NAME`, `--model MODEL` (default `gpt-4o`), plus `--verbose`/`-v`, `--log`/`-l`, `--log-limit`.
+`data extract` options: `--query QUESTION` (repeatable), `--source NAME`, `--model MODEL` (default: the profile's `BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL`, else the provider's default), plus `--verbose`/`-v`, `--log`/`-l`, `--log-limit`.
 
 ```bash
 blue-userdb --database alice data query "What jobs are suitable for me?" --format nl

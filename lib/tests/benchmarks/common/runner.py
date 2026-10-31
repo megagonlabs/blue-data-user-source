@@ -2,19 +2,17 @@
 
 Both runners build a fresh ``UserDataManager`` with all-memory backends,
 seed data, run the case, and return a ``RunResult``.  LLM calls are
-intercepted by patching ``openai.AsyncOpenAI`` with ``InstrumentedOpenAI``
-so cassette replays work without touching the network.
+recorded with ``capture.instrumented``, and cassette replays work without
+touching the network.
 """
 
 from __future__ import annotations
 
-import functools
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
-from .capture import InstrumentedOpenAI, LLMCallRecord
+from .capture import LLMCallRecord, instrumented
 from .cases import ExtractionCase, QueryCase
 
 _SRC = Path(__file__).parents[3] / "src" / "blue_data_user_source" / "data"
@@ -67,11 +65,9 @@ class ExtractionRunResult:
 
 async def run_extraction_case(case: ExtractionCase, model: str = "gpt-4o-mini") -> ExtractionRunResult:
     """Store each input text, then run each query and collect answers."""
-    import openai
     llm_calls: list[LLMCallRecord] = []
-    instrumented = functools.partial(InstrumentedOpenAI, real_client_cls=openai.AsyncOpenAI, sink=llm_calls)
 
-    with patch("openai.AsyncOpenAI", instrumented):
+    with instrumented(llm_calls):
         manager = await _build_manager()
         if case.user_name:
             manager.set_metadata("identity.name", case.user_name)
@@ -142,11 +138,9 @@ async def _query_like_user_source(manager: Any, query: str, model: str) -> tuple
 
 async def run_query_case(case: QueryCase, model: str = "gpt-4o-mini") -> QueryRunResult:
     """Seed KB with case texts, execute the NL query, return raw results."""
-    import openai
     llm_calls: list[LLMCallRecord] = []
-    instrumented = functools.partial(InstrumentedOpenAI, real_client_cls=openai.AsyncOpenAI, sink=llm_calls)
 
-    with patch("openai.AsyncOpenAI", instrumented):
+    with instrumented(llm_calls):
         manager = await _build_manager()
         if case.user_name:
             manager.set_metadata("identity.name", case.user_name)

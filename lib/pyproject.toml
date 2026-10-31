@@ -14,9 +14,13 @@ maintainers = [
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "blue-data>=1.0,<2",
-    "blue-data-kb-source>=1.0,<2",
+    # The KB's `llm` extra: its agents (answering, extraction) call the LLM too.
+    "blue-data-kb-source[llm]>=1.0,<2",
     "blue-data-doc-source>=1.0,<2",
     "rank-bm25>=0.2",
+    # Every LLM call goes through LiteLLM to BLUE_DATA_LLM_PROVIDER's provider (#190).
+    # The range is blue-data-kb-source's: 1.106 needs mcp 2.x, and the family pins mcp<2.
+    "litellm>=1.102,<1.106",
 ]
 
 [project.optional-dependencies]

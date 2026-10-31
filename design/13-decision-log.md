@@ -375,3 +375,22 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - Library callers that unpacked `answer, session_id = us.execute_query(...)` switch to `await us.async_execute_query(...)`, or to the rows.
 - The CLI's `data query` now calls `async_execute_query`.
 - Inside a running loop, the bridge runs the coroutine on another thread with its own fresh loop. Each synchronous call already got a fresh loop from `asyncio.run`, so loop-bound state behaves as before; only the thread differs.
+
+
+---
+
+## ADR-028 — LLM Calls Go Through LiteLLM to the Family Provider
+
+**Date:** 2026-10-31
+**Status:** Accepted (supersedes #175's rule that the family model applies only under `openai`)
+
+**Decision:** Every LLM call of user-source goes through LiteLLM to the provider named by `BLUE_DATA_LLM_PROVIDER`, blank meaning `openai`, passed as LiteLLM's `custom_llm_provider` (#190). `blue_data_user_source.llm` holds the client (`AsyncClient`, OpenAI's call shape), the provider's default model (`gpt-4o` / `claude-opus-4-8`), and the key check (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) made before the first call. A model resolves the same way in the library, the CLI, the MCP server and the REST API: the call's `model`, the function's `BLUE_DATA_USER_SOURCE_{REASONING,EXTRACTION}_LLM_MODEL`, `BLUE_DATA_USER_SOURCE_LLM_MODEL`, `BLUE_DATA_LLM_MODEL`, then the provider's default. User-source passes the resolved model to the KB's agents, rather than leaving them to the KB's own configuration.
+
+**Rationale:** blue-data 1.0 made the family model belong to the family provider, and blue-data-ops, the planner, llm-source and blue-data-kb-source (its ADR-038) reach every provider through LiteLLM. User-source built `openai.AsyncOpenAI()` unconditionally, so a deployment set up for Claude could not run it; #175 only stopped the Claude model from being sent to OpenAI. Pinning the provider keeps a model string from choosing its own route. Blank means `openai`, as in ops and kb, so existing OpenAI setups keep working; blue-data's spec calls blank "deterministic-only", which no part of user-source can be.
+
+**Consequences:**
+- `litellm>=1.102,<1.106` is a dependency of the library (kb-source's range: 1.106 needs mcp 2.x), and kb-source is installed with its `[llm]` extra.
+- Document embeddings stay on the OpenAI SDK, so the default `openai` document embedding still needs `OPENAI_API_KEY` under any provider.
+- JSON mode is OpenAI's: LiteLLM drops a schemaless `response_format` for Anthropic, so `_llm_complete` reads a JSON object out of fences or surrounding prose too.
+- The CLI's model parameters inherit `BLUE_DATA_LLM_MODEL` again, and `profile inspect` shows the provider's default for an unset model.
+- The benchmark harness records calls by patching both packages' `llm.AsyncClient`.

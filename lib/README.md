@@ -9,7 +9,7 @@ See [docs/](../docs/README.md) for the full documentation set — [guide.md](../
 ## Requirements
 
 - Python 3.12 or 3.13
-- OpenAI API key (used by the reasoning and extraction layers)
+- An LLM API key, used by the reasoning and extraction layers: `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` with `BLUE_DATA_LLM_PROVIDER=anthropic`. The calls go through LiteLLM to that provider; see [installation](../docs/installation.md#environment-variables)
 
 ## Installation
 
@@ -170,7 +170,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Set `OPENAI_API_KEY` before running:
+Set the provider's key before running (`OPENAI_API_KEY` by default):
 
 ```bash
 export OPENAI_API_KEY=sk-...

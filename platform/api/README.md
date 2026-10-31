@@ -21,7 +21,7 @@ pip install -e '.[dev]'             # the server, with pytest for its tests
 
 `fastapi`, `uvicorn`, `httpx`, and `pydantic-settings` are pulled in automatically.
 
-Set your OpenAI API key, which queries, extraction and document embeddings use, and the REST API's own key:
+Set your OpenAI API key, which queries, extraction and document embeddings use, and the REST API's own key. (For Claude, also set `BLUE_DATA_LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`: the LLM calls then go to Anthropic, and the OpenAI key is needed only for `openai` document embeddings.)
 
 ```bash
 export OPENAI_API_KEY=sk-...

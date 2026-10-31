@@ -16,7 +16,7 @@ from rich.table import Table
 
 from blue_data_user_source import FileUserSource, UDbError
 from blue_data_user_source.interaction.contact import redact_contacts, redact_details
-from blue_data_user_source.reasoning.reasoner import DEFAULT_MODEL
+from blue_data_user_source import llm
 
 from blue_data_user_cli.profile import profile_group, profile_store, resolver_for
 from blue_data_user_source.data.manager import (
@@ -438,7 +438,7 @@ def cli(
     profile_store(home).initialize()
 
     # Apply the profile before anything else runs: resolved values are written
-    # into the environment, which is where the library, the OpenAI SDK and any
+    # into the environment, which is where the library, LiteLLM and any
     # remaining `envvar=` options already read their configuration from.
     resolver = resolver_for(home, profile_name)
     resolver.export()
@@ -470,22 +470,17 @@ cli.add_command(profile_group)
 
 
 def _model_for(obj: dict, function: str, option: str | None) -> str:
-    """The OpenAI model a command should use.
+    """The model a command should use, a model of the BLUE_DATA_LLM_PROVIDER provider.
 
     `--model` wins; otherwise the profile's parameter for this function, which
-    itself falls back to BLUE_DATA_USER_SOURCE_LLM_MODEL. Then the family's
-    BLUE_DATA_LLM_MODEL, but only when BLUE_DATA_LLM_PROVIDER is openai or
-    blank: since blue-data 1.0 that model belongs to the family provider, and
-    the reasoner and the KB's extraction call OpenAI only, so a Claude model
-    name sent there fails every call (#175). Last, DEFAULT_MODEL.
+    itself falls back through BLUE_DATA_USER_SOURCE_LLM_MODEL to the family's
+    BLUE_DATA_LLM_MODEL, then the provider's default (gpt-4o for openai, the
+    default, claude-opus-4-8 for anthropic). The calls go to that provider
+    (#190), so the family model is valid for them under any provider.
     """
     if option:
         return option
-    config = obj["config"]
-    model = config.get(f"BLUE_DATA_USER_SOURCE_{function}_LLM_MODEL")
-    if not model and (config.get("BLUE_DATA_LLM_PROVIDER") or "").lower() in ("", "openai"):
-        model = config.get("BLUE_DATA_LLM_MODEL")
-    return model or DEFAULT_MODEL
+    return obj["config"].get(f"BLUE_DATA_USER_SOURCE_{function}_LLM_MODEL") or llm.default_model()
 
 
 def _db_default(obj: dict, param: str, option):
@@ -1261,8 +1256,9 @@ def data_list(obj: dict, show_provenance: bool, show_detailed: bool, fmt: str) -
 )
 @click.option(
     "--model", default=None,
-    help="OpenAI model for query reasoning and the KB's answering agent. Default: the "
-         "profile's BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL.",
+    help="LLM model for query reasoning and the KB's answering agent, of the "
+         "BLUE_DATA_LLM_PROVIDER provider. Default: the profile's "
+         "BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL, else the provider's default.",
 )
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result, each sub-query and each quality-metric score on its own line.")
@@ -1471,7 +1467,7 @@ def data_export(obj: dict, show_provenance: bool, output) -> None:
 @click.argument("text")
 @click.option("--query", "queries", multiple=True, help="Guiding question (repeatable).")
 @click.option("--source", "source_name", default=None, help="Source name for provenance.")
-@click.option("--model", default=None, help="OpenAI model. Default: the profile's model for this command.")
+@click.option("--model", default=None, help="LLM model, of the BLUE_DATA_LLM_PROVIDER provider. Default: the profile's model for this command.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show tool call arguments in the status line.")
 @click.option("--log", "-l", is_flag=True, default=False, help="Log each tool call and result on its own line.")
 @click.option("--log-limit", "log_limit", default=None, type=int, help="Truncation limit for logged values. Default: the profile's BLUE_DATA_CLI_LOG_LIMIT.")
@@ -1488,8 +1484,8 @@ def data_extract(
 ) -> None:
     """Extract entities and facts from text.
 
-    Requires the openai extra: pip install 'blue-data-kb-source[openai]'
-    and OPENAI_API_KEY in the environment.
+    Requires the API key of the BLUE_DATA_LLM_PROVIDER provider
+    (OPENAI_API_KEY by default, ANTHROPIC_API_KEY for anthropic).
     """
     db = _get_db(obj)
     source = _make_source(obj["data_dir"])
@@ -1607,8 +1603,9 @@ def source_list(obj: dict, show_detailed: bool, fmt: str) -> None:
 )
 @click.option(
     "--model", default=None,
-    help="OpenAI model for extracting --query facts. Default: the profile's "
-         "BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL.",
+    help="LLM model for extracting --query facts, of the BLUE_DATA_LLM_PROVIDER "
+         "provider. Default: the profile's BLUE_DATA_USER_SOURCE_EXTRACTION_LLM_MODEL, "
+         "else the provider's default.",
 )
 @click.pass_obj
 def source_add(

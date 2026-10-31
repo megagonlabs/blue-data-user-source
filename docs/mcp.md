@@ -37,7 +37,7 @@ BLUE_DATA_USER_SOURCE_SCHEMA_PATH=/path/to/schema.json \
     blue-userdb-mcp
 ```
 
-`OPENAI_API_KEY` is required for the `query` tool's rewriting/expansion/assessment prompts and for `add_source` calls that pass `queries`.
+The LLM provider's key is required for the `query` tool's rewriting/expansion/assessment prompts and for `add_source` calls that pass `queries`: `OPENAI_API_KEY` by default, or `ANTHROPIC_API_KEY` with `BLUE_DATA_LLM_PROVIDER=anthropic`. The models resolve from the environment as in the library (see [installation](installation.md#environment-variables)).
 
 Note: this server does **not** read the `blue-userdb` CLI's `~/.blue-userdb/registry.json` if `BLUE_DATA_USER_SOURCE_DATA_DIR` is changed from the default — it owns one independently-configured `FileUserSource` for the process lifetime. Pointing both the CLI and this server at the same `BLUE_DATA_USER_SOURCE_DATA_DIR` (the default `~/.blue-userdb`) gives practical continuity.
 
@@ -154,7 +154,7 @@ No parameters. Returns a list of registered user names.
 | `max_kb_turns` | `int \| None` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
 | `max_interaction_rounds` | `int \| None` | Most rounds of clarification questions (default 3) |
 
-A query makes dozens of OpenAI calls at the defaults; the `max_*` parameters bound them (see [Cost](guide.md#cost)).
+A query makes dozens of LLM calls at the defaults; the `max_*` parameters bound them (see [Cost](guide.md#cost)).
 
 Runs a multi-step agent: contextualizes and expands the question (resolving self-references to the user's actual name), retrieves data for each sub-question from the KB and any registered documents, assesses result quality, and optionally requests user clarification via their configured contact method. Returns `{"results": [...], "session_id": "..."}` — pass `session_id` back as `session` on the next call to continue the same conversation.
 

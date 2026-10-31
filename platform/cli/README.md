@@ -18,7 +18,7 @@ cd platform/cli && pip install -e .
 
 `click` and `rich` are pulled in automatically as CLI dependencies.
 
-Set your OpenAI API key if you plan to use extraction or query commands:
+Set your LLM provider's API key if you plan to use extraction or query commands (OpenAI by default; for Claude, set `BLUE_DATA_LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`):
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -133,7 +133,7 @@ $ blue-userdb profile config                  # configures staging, now that it 
 | `BLUE_DATA_USER_SOURCE_NEO4J_USER` | str | `neo4j` | |
 | `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | secret | — | |
 
-blue-userdb sends its models to the OpenAI API (`OPENAI_API_KEY`): query reasoning, onboarding and NL synthesis, and `data extract`. Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model — then to the family's `BLUE_DATA_LLM_MODEL`, but only when `BLUE_DATA_LLM_PROVIDER` is `openai` or blank, and last to `gpt-4o`. Under another provider the family model names that provider's model (for example `claude-opus-4-8` under `anthropic`), so it is not sent to OpenAI. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
+blue-userdb's LLM calls (query reasoning and the KB's answering agent, onboarding and NL synthesis, `data extract` and `data source add --query`) go through LiteLLM to the `BLUE_DATA_LLM_PROVIDER` provider: blank means `openai` (`OPENAI_API_KEY`), and `anthropic` uses `ANTHROPIC_API_KEY`. Each per-function model falls back to `BLUE_DATA_USER_SOURCE_LLM_MODEL` — so setting one value covers every command, and a single function can still be pinned to a different model — then to the family's `BLUE_DATA_LLM_MODEL`, and last to the provider's default: `gpt-4o` for `openai`, `claude-opus-4-8` for `anthropic`. `profile inspect` shows that default, with the source `openai default` or `anthropic default`, for a model left unset. Document embeddings stay on OpenAI: a database created with the default `openai` embedding needs `OPENAI_API_KEY` under any provider. The `KB_*`, `DOC_*` and `NEO4J_*` parameters supply the defaults for `blue-userdb database create`, which has no `config set` to change them afterwards.
 
 `BLUE_DATA_USER_SOURCE_HOME` (default `~/.blue-userdb`) is deliberately *not* a profile parameter: it is the directory the profiles themselves live in, so it can only be set in the environment.
 
@@ -261,7 +261,7 @@ blue-userdb data query TEXT [--session SESSION_ID] [--format (table|json|nl)] [-
 | `--max-subqueries N` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone (default: as many as needed, at most 5) |
 | `--max-kb-turns N` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
 | `--max-rounds N` | Most rounds of clarification questions (default 3). Asked on the terminal only when stdin is one; otherwise over another contact method, or not at all |
-| `--model MODEL` | OpenAI model for the reasoning and the KB's agent (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else gpt-4o) |
+| `--model MODEL` | Model for the reasoning and the KB's agent, of the `BLUE_DATA_LLM_PROVIDER` provider (default: the profile's `BLUE_DATA_USER_SOURCE_REASONING_LLM_MODEL`, else the provider's default) |
 | `--include-expanded` | Also print the per-sub-question queries and their raw results, below the main answer |
 | `--verbose`, `-v` | Show tool call arguments in the status line while the query runs |
 | `--log`, `-l` | Log each tool call and result on its own line |
@@ -300,7 +300,7 @@ blue-userdb data export [--show-provenance] [--output FILE]
 
 Extract entities, facts, and property values from free text using an LLM.
 
-Requires `pip install 'blue-data-kb-source[openai]'` and `OPENAI_API_KEY`.
+Requires the `BLUE_DATA_LLM_PROVIDER` provider's API key (`OPENAI_API_KEY` by default).
 
 ```
 blue-userdb data extract TEXT [--query QUESTION]... [--source NAME] [--model MODEL]
