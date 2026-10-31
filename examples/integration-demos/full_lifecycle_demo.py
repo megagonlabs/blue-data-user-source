@@ -42,7 +42,9 @@ async def main() -> None:
     print("1. Create a user (all-in-memory: registry, KB, metadata, contacts, sessions)")
     print(DIVIDER)
 
-    us = MemoryUserSource("full-lifecycle-demo")
+    # console=True: Carol's email contact uses the stdio inbound provider, which
+    # asks on this script's terminal (a source asks there only when told so; #191).
+    us = MemoryUserSource("full-lifecycle-demo", {"console": True})
     await us.create_user(
         "carol",
         registry_props=_MEM_JSON,

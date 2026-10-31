@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -94,18 +93,6 @@ def _bounded_int(props: dict, key: str, default: int | None, minimum: int) -> in
     return value
 
 
-def _console_attached() -> bool:
-    """True when stdin and stdout are both terminals: a user can be at this console.
-
-    Under a server they are pipes or sockets (an MCP stdio transport owns them as
-    the protocol stream), so a source nobody configured stays off the console (#186).
-    """
-    try:
-        return sys.stdin.isatty() and sys.stdout.isatty()
-    except (AttributeError, ValueError):  # a stream that is None or closed
-        return False
-
-
 def _model_kwarg(model: str | None) -> dict[str, str]:
     """`{"model": …}` when a model was chosen, `{}` otherwise.
 
@@ -153,12 +140,14 @@ class UserSource(DataSource):
       (default: ``data/metadata_schema.json``). Stored as a source property.
     - ``contact_schema`` — path to the contact schema JSON
       (default: ``data/contact_schema.json``). Stored as a source property.
-    - ``console`` — whether the user is at this process's console (default: whether
-      stdin and stdout are both terminals). Servers pass False: clarification and
-      onboarding then never ask on stdin/stdout, and are skipped when no other contact
-      method can reach the user. Describes the running process, so it is not stored in
-      the registry; a source the registry rebuilds gets the default, which keeps it off
-      a server's stdio protocol stream (#186).
+    - ``console`` — whether the user is at this process's console (default False).
+      Only the program that owns the terminal knows a person is at it, so it passes
+      True (the CLI does, when its stdin is a terminal). Otherwise clarification and
+      onboarding never ask on stdin/stdout, and are skipped when no other contact
+      method can reach the user. It describes the running process, so it is held
+      apart from ``properties`` and never reaches a registry record: a source a
+      registry rebuilds has no console, even in a server started at a terminal
+      (#186, #191).
 
     Usage::
 
@@ -248,7 +237,14 @@ class UserSource(DataSource):
         self._managers = {}
 
     def __init__(self, name: str = "user_source", properties: dict | None = None) -> None:
-        super().__init__(name, properties)
+        # Out of self.properties, which blue-data's DataRegistry.register_source stores
+        # as the source's record (#191). Properties carrying "_class" are such a record
+        # being rebuilt; one stored before this fix may still hold console=True, which
+        # described the process that registered it, not this one.
+        props = dict(properties or {})
+        console = props.pop("console", None)
+        self._console = bool(console) and "_class" not in props
+        super().__init__(name, props)
         # self._registry and self._managers are built by _connect(), invoked
         # automatically above via DataSource.__init__ -> _start() -> _start_connection().
 
@@ -263,7 +259,7 @@ class UserSource(DataSource):
                 scope="/",
                 description=f"{name} user data source",
                 properties={
-                    **{k: v for k, v in self.properties.items() if k != "console"},
+                    **self.properties,
                     "_class": f"{cls.__module__}.{cls.__qualname__}",
                     "schema": self.properties.get("schema") or _DEFAULT_SCHEMA_PATH,
                     "metadata_schema": self.properties.get("metadata_schema") or _DEFAULT_METADATA_SCHEMA_PATH,
@@ -278,9 +274,7 @@ class UserSource(DataSource):
     @property
     def console(self) -> bool:
         """Whether the user is at this process's console; see the ``console`` prop."""
-        if "console" in self.properties:
-            return bool(self.properties["console"])
-        return _console_attached()
+        return self._console
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #

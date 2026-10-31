@@ -75,7 +75,9 @@ async def main() -> None:
     print("Step 1 -- create Alice's user database with a partial profile")
     print(STEP)
 
-    us = MemoryUserSource("clarification-demo")
+    # console=True: this script owns the terminal, so the user may be asked on it
+    # (a source asks on the console only when told so; #191).
+    us = MemoryUserSource("clarification-demo", {"console": True})
     await us.create_user(
         "alice",
         registry_props=_MEM_JSON,

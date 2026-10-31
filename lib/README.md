@@ -90,7 +90,7 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
-        onboard=False,  # the default, True, then interviews the user on the console
+        onboard=False,  # the default, True, interviews the user (on the console with console=True)
         # doc_source_props is optional — defaults to OpenAI embeddings searched by
         # vector, in memory, for session transcripts and added files. See "Sessions" below.
     )
@@ -135,7 +135,7 @@ async def main() -> None:
             "_class": "blue_data.source.json.file_json_source.FileJSONSource",
             "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
         },
-        onboard=False,  # the default, True, then interviews the user on the console
+        onboard=False,  # the default, True, interviews the user (on the console with console=True)
     )
 
     # Type 1 — register a file (.txt/.pdf/.docx); always parsed, chunked, and
@@ -312,7 +312,7 @@ await us.remove_contact_method("alice", "email", "work")
 
 | Protocol | Trigger | Notes |
 |---|---|---|
-| `stdio` | Prompts stdout / reads stdin | Default when no contact methods are registered, if the process has a console (`console` prop; servers set it to `False`) |
+| `stdio` | Prompts stdout / reads stdin | Default when no contact methods are registered, if the source was given `console=True` (the `console` prop defaults to `False`; the CLI sets it at a terminal) |
 | `email` | Sends SMTP email; awaits inbound reply | Requires `[email]` extra; see detail keys below |
 | `webhook` | POSTs JSON to a URL; awaits REST response | Requires `[webhook]` extra |
 

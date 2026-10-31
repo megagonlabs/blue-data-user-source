@@ -1,10 +1,12 @@
-"""A UserSource nobody configured stays off a console it does not have (#186).
+"""A UserSource asks at this process's console only when its owner says so (#186, #191).
 
-``console`` is not stored in blue-data's registry, so a source the registry
-rebuilds takes the default. Hosted by a server whose stdin/stdout are pipes
-(``blue-data-registry-mcp`` over stdio) a default of True wrote the clarification
-prompt into the JSON-RPC stream. The default is now whether stdin and stdout are
-both terminals.
+A registry host rebuilds a source from blue-data's record of it. Defaulting to
+True wrote the clarification prompt into an MCP stdio server's JSON-RPC stream
+(#186); defaulting to "stdin and stdout are terminals" (#189) still put a
+blue-data-api started at a terminal on a ``> `` prompt, its REST request never
+returning; and a source registered with ``console=True`` had it stored in the
+record, so every host rebuilt it with the console. ``console`` now defaults to
+False and is held apart from ``properties``, so no record carries it.
 """
 from __future__ import annotations
 
@@ -28,59 +30,64 @@ class _Stream(io.StringIO):
         return self._tty
 
 
-def _streams(monkeypatch: pytest.MonkeyPatch, stdin_tty: bool, stdout_tty: bool) -> None:
-    monkeypatch.setattr(sys, "stdin", _Stream(stdin_tty))
-    monkeypatch.setattr(sys, "stdout", _Stream(stdout_tty))
-
-
-def _rebuilt(tmp_path: Path) -> FileUserSource:
-    """The source as a registry host gets it: registered, then rebuilt from its record."""
-    store = tmp_path / "store.json"
-    def registry() -> DataRegistry:
-        return DataRegistry(store=FileJSONSource(properties={"connection": {"path": str(store)}}))
-
-    path = str(tmp_path / "users" / "registry.json")
-    registry().register_source(FileUserSource("users", {"connection": {"path": path}}))
-    return registry().connect_source("users")
-
-
-def test_rebuilt_source_under_pipes_has_no_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _streams(monkeypatch, stdin_tty=False, stdout_tty=False)
-    source = _rebuilt(tmp_path)
-    assert isinstance(source, FileUserSource)
-    assert source.console is False
-
-
-def test_rebuilt_source_at_a_terminal_has_the_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _streams(monkeypatch, stdin_tty=True, stdout_tty=True)
-    assert _rebuilt(tmp_path).console is True
-
-
-@pytest.mark.parametrize(("stdin_tty", "stdout_tty"), [(True, False), (False, True)])
-def test_one_stream_redirected_is_no_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stdin_tty: bool, stdout_tty: bool
-) -> None:
-    _streams(monkeypatch, stdin_tty, stdout_tty)
-    source = FileUserSource("u", {"connection": {"path": str(tmp_path / "registry.json")}})
-    assert source.console is False
-
-
-def test_closed_stdin_is_no_console(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "stdin", None)
+@pytest.fixture
+def terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """stdin and stdout are terminals, as for a server started in the foreground."""
+    monkeypatch.setattr(sys, "stdin", _Stream(True))
     monkeypatch.setattr(sys, "stdout", _Stream(True))
-    source = FileUserSource("u", {"connection": {"path": str(tmp_path / "registry.json")}})
-    assert source.console is False
+
+
+def _registry(tmp_path: Path) -> DataRegistry:
+    store = FileJSONSource(properties={"connection": {"path": str(tmp_path / "store.json")}})
+    return DataRegistry(store=store)
+
+
+def _source(tmp_path: Path, **props) -> FileUserSource:
+    return FileUserSource("users", {"connection": {"path": str(tmp_path / "users.json")}, **props})
+
+
+def _rebuilt(tmp_path: Path, **props) -> FileUserSource:
+    """The source as a registry host gets it: registered, then rebuilt from its record."""
+    _registry(tmp_path).register_source(_source(tmp_path, **props))
+    source = _registry(tmp_path).connect_source("users")
+    assert isinstance(source, FileUserSource)
+    return source
+
+
+def test_a_source_nobody_configured_has_no_console_even_at_a_terminal(tmp_path, terminal) -> None:
+    assert _source(tmp_path).console is False
+
+
+def test_a_rebuilt_source_has_no_console_even_at_a_terminal(tmp_path, terminal) -> None:
+    """(a): blue-data-api in the foreground of a terminal."""
+    assert _rebuilt(tmp_path).console is False
+
+
+def test_console_true_is_not_stored_in_the_registry_record(tmp_path) -> None:
+    """(b): registered with console=True, e.g. from an interactive script."""
+    source = _source(tmp_path, console=True)
+    assert source.console is True
+    assert "console" not in source.properties
+    _registry(tmp_path).register_source(source)
+    [record] = [r for r in _registry(tmp_path).get_sources() if r.get("name") == "users"]
+    assert "console" not in record.get("properties", {})
+    assert _rebuilt(tmp_path, console=True).console is False
+
+
+def test_a_record_stored_with_console_before_the_fix_is_rebuilt_without(tmp_path) -> None:
+    registry = _registry(tmp_path)
+    source = _source(tmp_path)
+    registry.register_source(source)
+    registry.set_source_property("users", "console", True)  # as blue-data stored it before #191
+    assert _registry(tmp_path).connect_source("users").console is False
 
 
 @pytest.mark.parametrize("console", [True, False])
-def test_an_explicit_console_prop_wins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, console: bool
-) -> None:
-    _streams(monkeypatch, stdin_tty=not console, stdout_tty=not console)
-    path = str(tmp_path / "registry.json")
-    source = FileUserSource("u", {"connection": {"path": path}, "console": console})
-    assert source.console is console
+def test_an_explicit_console_prop_is_kept(tmp_path, console: bool) -> None:
+    assert _source(tmp_path, console=console).console is console
+
+
+def test_the_callers_properties_are_not_changed(tmp_path) -> None:
+    props = {"connection": {"path": str(tmp_path / "users.json")}, "console": True}
+    FileUserSource("users", props)
+    assert props["console"] is True

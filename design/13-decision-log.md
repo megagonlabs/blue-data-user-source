@@ -394,3 +394,20 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - JSON mode is OpenAI's: LiteLLM drops a schemaless `response_format` for Anthropic, so `_llm_complete` reads a JSON object out of fences or surrounding prose too.
 - The CLI's model parameters inherit `BLUE_DATA_LLM_MODEL` again, and `profile inspect` shows the provider's default for an unset model.
 - The benchmark harness records calls by patching both packages' `llm.AsyncClient`.
+
+
+---
+
+## ADR-029 — `console` Defaults to False and Is Never Part of `properties`
+
+**Date:** 2026-10-31
+**Status:** Accepted (supersedes #189's terminal-based default)
+
+**Decision:** `UserSource`'s `console` property defaults to `False`. A caller that owns the terminal and wants the user asked on it passes `console=True`: the CLI does when its stdin is a terminal. The constructor takes `console` out of the properties it is given and holds it as `UserSource.console`, so it is never in `self.properties`, which blue-data's `DataRegistry.register_source` stores as the source's record. A properties dict that carries `_class` is such a record being rebuilt, and a `console` in it, left by an older version, is ignored (#191).
+
+**Rationale:** #189 took "stdin and stdout are terminals" as "a user is at this console". That is false for a server started in the foreground of a terminal: a `blue-data-api` hosting a rebuilt source printed a clarification prompt on the server's terminal, and the REST request waited for it. And `console=True` given by an interactive script was stored in blue-data's registry, so every host rebuilt the source with it, including `blue-data-registry-mcp` on stdio (#186 again). Only the program that owns the terminal can know a person is at it; a library cannot tell from the streams.
+
+**Consequences:**
+- Library scripts that relied on being asked at the terminal pass `console=True` (the examples that do now do).
+- A registry host never asks on the console, whatever its streams, and needs no change. blue-data's side (megagon-internal/blue-data#250) is no longer needed for user-source, though a per-process property hook there would still help other sources.
+

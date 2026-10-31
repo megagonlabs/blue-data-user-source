@@ -50,7 +50,7 @@ await us.create_user(
         "_class": "blue_data.source.json.file_json_source.FileJSONSource",
         "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/sources/alice/sessions.json"},
     },
-    onboard=False,   # the default, True, then interviews the user on the console
+    onboard=False,   # the default, True, interviews the user (on the console with console=True)
 )
 
 print(us.list_users())          # ["alice"]
@@ -206,7 +206,7 @@ await us.update_contact_method("alice", "email", "work", preference=0)
 await us.remove_contact_method("alice", "email", "work")
 ```
 
-Supported protocols: `stdio` (default when nothing is registered and the process has a console — never on the REST or MCP servers), `email` (requires the `email` extra), `webhook` (requires the `webhook` extra) — plus schema-only entries (`sms`, `messaging`, `enterprise`, `notification`, `session`) that can be recorded via the CLI/MCP but have no transport in this release, so they are never used to contact the user — contact selection skips them. `inbound_provider: "stdio"` on `email` is a development mode: prints the outgoing message to stdout and reads the reply from stdin, no SMTP or REST API needed. See [api-reference.md](api-reference.md#contactmanager--contactmethod) for every detail key.
+Supported protocols: `stdio` (default when nothing is registered and the source was given `console=True` — never on the REST or MCP servers), `email` (requires the `email` extra), `webhook` (requires the `webhook` extra) — plus schema-only entries (`sms`, `messaging`, `enterprise`, `notification`, `session`) that can be recorded via the CLI/MCP but have no transport in this release, so they are never used to contact the user — contact selection skips them. `inbound_provider: "stdio"` on `email` is a development mode: prints the outgoing message to stdout and reads the reply from stdin, no SMTP or REST API needed. See [api-reference.md](api-reference.md#contactmanager--contactmethod) for every detail key.
 
 With more than one method registered, `ContactManager.identify_contact_method` asks an LLM to choose, weighing each method's `preference`, whether it's asynchronous, the user's `availability.*` settings (localized to `identity.timezone`), and whether they're `out_of_office`.
 
