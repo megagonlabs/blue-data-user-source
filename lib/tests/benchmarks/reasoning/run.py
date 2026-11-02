@@ -16,6 +16,7 @@ Usage (from ``lib/``, with OPENAI_API_KEY set):
     python -m tests.benchmarks.reasoning.run --case ctx_career_query
     python -m tests.benchmarks.reasoning.run --type contextualization --type expansion
     python -m tests.benchmarks.reasoning.run --record
+    python -m tests.benchmarks.reasoning.run --note "what changed since the last run"
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from ..common import reasoning_runner as rr
 from ..common import scoring
 from ..common.cases import ReasoningCase, cassette_filename, load_reasoning_cases
 from ..common.baseline import print_regressions
+from ..common.history import record_live_run
 from ..common.reporting import render_reasoning_table, write_detailed_log, write_json
 
 CASES_DIR   = Path(__file__).parent / "cases"
@@ -61,6 +63,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                         help="JSON score report path (default: .reports/live-<timestamp>.json)")
     parser.add_argument("--detail-out", type=Path, default=None,
                         help="Detailed log path (default: .reports/live-<timestamp>.detail.jsonl)")
+    parser.add_argument("--note", default="",
+                        help="Note recorded with the run in results/history.jsonl")
+    parser.add_argument("--no-history", action="store_true",
+                        help="Do not record the run in results/history.jsonl")
     parser.add_argument("--record", action="store_true",
                         help="(Re)write cassette files for test_reasoning_benchmark.py")
     return parser.parse_args(argv)
@@ -161,6 +167,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote {len(scores)} score(s) to {out_path}")
     print(f"Wrote detailed log to {detail_path}")
     print_regressions("reasoning", scores)
+    record_live_run("reasoning", scores, judge_model=args.judge_model, note=args.note,
+                    full=not args.case_ids and not args.types, enabled=not args.no_history,
+                    out=out_path)
     if args.record:
         print(f"Cassettes (re)written under {Path(__file__).parent / 'cassettes'}")
     return 0

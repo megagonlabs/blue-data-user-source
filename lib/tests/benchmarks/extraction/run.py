@@ -10,6 +10,7 @@ Usage (from ``lib/``, with OPENAI_API_KEY set):
     python -m tests.benchmarks.extraction.run --model gpt-4o --model gpt-4o-mini
     python -m tests.benchmarks.extraction.run --case basic_profile
     python -m tests.benchmarks.extraction.run --record
+    python -m tests.benchmarks.extraction.run --note "what changed since the last run"
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from pathlib import Path
 from ..common import runner, scoring
 from ..common.cases import ExtractionCase, cassette_filename, load_extraction_cases
 from ..common.baseline import print_regressions
+from ..common.history import record_live_run
 from ..common.reporting import render_extraction_table, write_detailed_log, write_json
 
 CASES_DIR   = Path(__file__).parent / "cases"
@@ -49,6 +51,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                         help="JSON score report path (default: .reports/live-<timestamp>.json)")
     parser.add_argument("--detail-out", type=Path, default=None,
                         help="Detailed log path (default: .reports/live-<timestamp>.detail.jsonl)")
+    parser.add_argument("--note", default="",
+                        help="Note recorded with the run in results/history.jsonl")
+    parser.add_argument("--no-history", action="store_true",
+                        help="Do not record the run in results/history.jsonl")
     parser.add_argument("--record", action="store_true",
                         help="(Re)write cassette files for test_extraction_benchmark.py")
     return parser.parse_args(argv)
@@ -132,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote {len(scores)} score(s) to {out_path}")
     print(f"Wrote detailed log to {detail_path}")
     print_regressions("extraction", scores)
+    record_live_run("extraction", scores, judge_model=args.judge_model, note=args.note,
+                    full=not args.case_ids, enabled=not args.no_history, out=out_path)
     if args.record:
         print(f"Cassettes (re)written under {Path(__file__).parent / 'cassettes'}")
     return 0

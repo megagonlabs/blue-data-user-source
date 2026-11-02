@@ -77,9 +77,9 @@ blue-data-user-source/
 │       ├── unit/                        # fast, offline, no API key; conftest.py fails any network access
 │       │   ├── backends/  data/  doubles/  interaction/  reasoning/  sources/
 │       └── benchmarks/                  # report-only LLM benchmarks, run live against a baseline
-│           ├── common/  extraction/  querying/  reasoning/
-│           ├── results/                 # committed, versioned live runs
-│           └── baseline.json            # per-case values the runners compare against
+│           ├── common/                  # runners, scoring, run history, baseline check
+│           ├── extraction/  querying/  reasoning/   # each with results/: history.jsonl + README.md
+│           └── results/                 # committed snapshots of full score reports
 │
 └── platform/                            # external interface services
     ├── cli/                             # command-line interface (blue-userdb)

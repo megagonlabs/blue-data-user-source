@@ -1,18 +1,19 @@
-"""The benchmark baseline check: warn below baseline - tolerance, never fail (#131)."""
+"""The benchmark baseline check: warn below baseline - tolerance, never fail (#131).
+
+The baseline is the run flagged in each module's committed history."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from tests.benchmarks.common import baseline as bl
+from tests.benchmarks.common import history
 from tests.benchmarks.common.scoring import QueryCaseScore, ReasoningCaseScore
 
 _BASELINE = {
-    "model": "gpt-4o", "judge_model": "gpt-4o-mini", "date": "2026-10-10", "commit": "abc1234",
-    "tolerance": 0.15,
-    "cases": {"reasoning/freshness_stale": 0.9, "querying/skills_by_name": 1.0},
+    "model": "gpt-4o", "date": "2026-10-10", "commit": "abc1234", "run_id": "20261010",
+    "tolerance": 0.15, "cases": {"freshness_stale": 0.9, "skills_by_name": 1.0},
 }
 
 
@@ -41,32 +42,59 @@ def test_other_models_and_new_cases_are_not_compared() -> None:
 
 
 def test_regressions_warn_and_do_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bl, "load", lambda path=bl.BASELINE_PATH: _BASELINE)
-    scores = [ReasoningCaseScore(case_id="freshness_stale", model="gpt-4o", benchmark_type="freshness", score=0.1)]
+    monkeypatch.setattr(bl, "load", lambda module: _BASELINE)
+    scores = [ReasoningCaseScore(case_id="freshness_stale", model="gpt-4o",
+                                 benchmark_type="freshness", score=0.1)]
     with pytest.warns(bl.BenchmarkRegression, match="freshness_stale"):
         bl.warn_regressions("reasoning", scores)
 
 
-def test_build_takes_the_run_model_s_scores_from_a_results_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(bl, "BASELINE_PATH", tmp_path / "baseline.json")
-    results = tmp_path / "results" / "run1"
-    results.mkdir(parents=True)
-    (results / "run.json").write_text(json.dumps(
-        {"model": "gpt-4o", "judge_model": "gpt-4o-mini", "date": "2026-10-10", "commit": "abc1234"}))
-    (results / "reasoning.json").write_text(json.dumps([
-        {"case_id": "freshness_stale", "model": "gpt-4o", "score": 0.9},
-        {"case_id": "freshness_stale", "model": "gpt-4o-mini", "score": 0.1},
-    ]))
-    (results / "querying.json").write_text(json.dumps([{"case_id": "skills_by_name", "model": "gpt-4o", "hit_rate": 1.0}]))
-    (results / "extraction.json").write_text(json.dumps([]))
+@pytest.fixture
+def benchmarks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(history, "BENCHMARKS_DIR", tmp_path)
+    return tmp_path
 
-    built = bl.build(results)
 
-    assert built["cases"] == {"querying/skills_by_name": 1.0, "reasoning/freshness_stale": 0.9}
-    assert built["model"] == "gpt-4o" and built["commit"] == "abc1234" and built["tolerance"] == 0.15
-    assert built["results"] == "results/run1"
+def _run(run_id: str, value: float, model: str = "gpt-4o") -> None:
+    scores = [QueryCaseScore(case_id="skills_by_name", model=model, addressing_style="by_name",
+                             hit_rate=value)]
+    history.record(history.summarize("querying", scores, judge_model="j", run_id=run_id,
+                                     commit="abc1234"))
+
+
+def test_the_baseline_is_the_flagged_run_of_the_history(benchmarks: Path) -> None:
+    _run("20261010", 1.0)
+    _run("20261101", 0.2)
+    assert bl.load("querying") is None  # nothing flagged: nothing compared
+    history.set_baseline("querying", "20261010")
+    base = bl.load("querying")
+    assert base is not None
+    assert (base["run_id"], base["model"], base["cases"]) == ("20261010", "gpt-4o",
+                                                              {"skills_by_name": 1.0})
+    later = [QueryCaseScore(case_id="skills_by_name", model="gpt-4o", addressing_style="by_name",
+                            hit_rate=0.2)]
+    assert len(bl.regressions("querying", later)) == 1
+    assert bl.load("reasoning") is None  # each module has its own
+
+
+def test_only_one_run_is_the_baseline(benchmarks: Path) -> None:
+    _run("20261010", 1.0)
+    _run("20261101", 0.5)
+    history.set_baseline("querying", "20261010")
+    history.set_baseline("querying")  # the latest
+    assert [r.get("baseline", False) for r in history.load("querying")] == [False, True]
+    page = (benchmarks / "querying" / "results" / "README.md").read_text()
+    assert "compared with the baseline, run `20261101`" in page
+
+
+def test_a_baseline_is_one_models_run(benchmarks: Path) -> None:
+    scores = [QueryCaseScore(case_id="skills_by_name", model=m, addressing_style="by_name")
+              for m in ("gpt-4o", "gpt-4o-mini")]
+    history.record(history.summarize("querying", scores, judge_model="j", run_id="r", commit="c"))
+    with pytest.raises(ValueError, match="ran 2 models"):
+        history.set_baseline("querying")
+    with pytest.raises(ValueError, match="no querying run 'nope'"):
+        history.set_baseline("querying", "nope")
 
 
 def test_a_judged_metric_case_counts_its_decision_not_its_raw_score() -> None:
@@ -77,7 +105,7 @@ def test_a_judged_metric_case_counts_its_decision_not_its_raw_score() -> None:
                                score=0.8, passes=True, expect_pass=False, correct=False)
     assert bl.case_value(right) == 1.0
     assert bl.case_value(wrong) == 0.0
-    baseline = {**_BASELINE, "cases": {"reasoning/completeness_empty": 1.0}}
+    baseline = {**_BASELINE, "cases": {"completeness_empty": 1.0}}
     assert bl.regressions("reasoning", [right], baseline) == []
     assert len(bl.regressions("reasoning", [wrong], baseline)) == 1
 

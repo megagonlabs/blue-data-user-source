@@ -411,3 +411,20 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - Library scripts that relied on being asked at the terminal pass `console=True` (the examples that do now do).
 - A registry host never asks on the console, whatever its streams, and needs no change. blue-data's side (megagon-internal/blue-data#250) is no longer needed for user-source, though a per-process property hook there would still help other sources.
 
+
+
+---
+
+## ADR-030 — Benchmark Results Are a Committed History per Module, with the Baseline Flagged in It
+
+**Date:** 2026-11-02
+**Status:** Accepted (supersedes #131's `baseline.json` and per-snapshot `README.md`)
+
+**Decision:** Each benchmark module keeps `lib/tests/benchmarks/<module>/results/history.jsonl`, one summary line per full live run (commit, models, value per case and per group, tokens, latency, note), and `results/README.md` rendered from it with trend charts, as blue-data-kb-source keeps its extraction benchmark's. The live runners append to it at the end of every full-suite run. The regression baseline is the run flagged `"baseline": true` in the module's history (`python -m tests.benchmarks.common.history baseline`), not a separate `baseline.json`. Snapshot directories under `tests/benchmarks/results/` keep only the full score reports and `run.json`.
+
+**Rationale:** The committed results were one hand-written snapshot and a baseline built from it: seeing a trend meant reading several snapshots side by side, and a new baseline needed a hand-written summary first. The history records every full run at no cost, and the generated page shows the change since the last run per case and per group. `baseline.json` held the same per-case values as a history line, so it was a second copy that could drift.
+
+**Consequences:**
+- A full live run changes two committed files; commit them to keep the run, or pass `--no-history`.
+- The 2026-10-10 gpt-4o run is in each module's history, flagged as the baseline, with its snapshot's notes; its per-case values are those of the removed `baseline.json`.
+- Snapshot directories are optional and are linked from their history lines.

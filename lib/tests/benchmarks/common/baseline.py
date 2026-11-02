@@ -1,27 +1,28 @@
-"""Committed baseline scores, and the "warn below this" check against them (#131).
+"""The "warn below this" check against each module's baseline run (#131).
 
-``baseline.json`` (next to this package) holds one score per case from a
-committed live run (see ``results/``), with the model it was measured on and a
-tolerance. A later run's score more than ``tolerance`` below the baseline is a
-regression: pytest emits a ``BenchmarkRegression`` warning and the live runners
-print it. Neither fails — the benchmarks stay report-only, because LLM-judged
-scores are noisy and one bad sample should not block a change; the warning
-makes the drop visible.
+A module's baseline is the run flagged ``"baseline": true`` in its committed
+history (``<module>/results/history.jsonl``, see ``history.py``): its value per
+case and its model. A later run's case value more than ``DEFAULT_TOLERANCE``
+below the baseline's is a regression: pytest emits a ``BenchmarkRegression``
+warning and the live runners print it. Neither fails — the benchmarks stay
+report-only, because LLM-judged scores are noisy and one bad sample should not
+block a change; the warning makes the drop visible.
 
-Regenerate the baseline from a results directory written by the runners::
+Flag another run as the baseline (default: the latest)::
 
-    python -m tests.benchmarks.common.baseline results/<run>/
+    python -m tests.benchmarks.common.history baseline --module <module> [--run <run_id>]
 """
 from __future__ import annotations
 
-import json
-import sys
 import warnings
-from pathlib import Path
 from typing import Any
 
-BASELINE_PATH = Path(__file__).parent.parent / "baseline.json"
-MODULES = ("extraction", "querying", "reasoning")
+from . import history
+from .history import MODULES, case_value
+
+__all__ = ["MODULES", "BenchmarkRegression", "case_value", "load", "regressions",
+           "warn_regressions", "print_regressions"]
+
 DEFAULT_TOLERANCE = 0.15
 
 
@@ -29,35 +30,30 @@ class BenchmarkRegression(UserWarning):
     """A benchmark case scored clearly below its committed baseline."""
 
 
-def case_value(score: Any) -> float:
-    """The headline number of a case score.
-
-    A judged metric case counts 1.0 when the metric's pass/fail decision is the
-    one the case expects and 0.0 when it is not (its raw score is not "higher
-    is better"); otherwise the hit rate (extraction, querying) or the judged
-    score (contextualization, expansion, appropriateness).
-    """
-    get = (lambda k: score.get(k)) if isinstance(score, dict) else (lambda k: getattr(score, k, None))
-    if get("correct") is not None:
-        return 1.0 if get("correct") else 0.0
-    return float(get("hit_rate") if get("hit_rate") is not None else get("score"))
-
-
 def _field(score: Any, name: str) -> Any:
     return score[name] if isinstance(score, dict) else getattr(score, name)
 
 
-def load(path: Path = BASELINE_PATH) -> dict[str, Any] | None:
-    return json.loads(path.read_text()) if path.exists() else None
+def load(module: str) -> dict[str, Any] | None:
+    """*module*'s baseline: the flagged run's model, date, commit and value per case."""
+    run = history.baseline_run(module)
+    if run is None:
+        return None
+    return {
+        "model": run["models"][0], "date": run["date"][:10], "commit": run.get("commit"),
+        "run_id": run["run_id"], "tolerance": DEFAULT_TOLERANCE,
+        "cases": {case_id: v["value"] for case_id, v in run["by_case"].items()},
+    }
 
 
-def regressions(module: str, scores: list[Any], baseline: dict[str, Any] | None = None) -> list[str]:
+def regressions(module: str, scores: list[Any],
+                baseline: dict[str, Any] | None = None) -> list[str]:
     """One message per case of *module* that scored more than the tolerance below baseline.
 
     Cases run on a different model than the baseline's, or without a baseline
     entry (new cases), are not compared.
     """
-    baseline = load() if baseline is None else baseline
+    baseline = load(module) if baseline is None else baseline
     if not baseline:
         return []
     tolerance = float(baseline.get("tolerance", DEFAULT_TOLERANCE))
@@ -65,12 +61,13 @@ def regressions(module: str, scores: list[Any], baseline: dict[str, Any] | None 
     for score in scores:
         if _field(score, "model") != baseline.get("model"):
             continue
-        key = f"{module}/{_field(score, 'case_id')}"
-        if key not in baseline["cases"]:
+        case_id = _field(score, "case_id")
+        if case_id not in baseline["cases"]:
             continue
-        expected, got = float(baseline["cases"][key]), case_value(score)
+        expected, got = float(baseline["cases"][case_id]), case_value(score)
         if got < expected - tolerance:
-            found.append(f"{key}: {got:.2f} vs baseline {expected:.2f} (tolerance {tolerance:.2f})")
+            found.append(f"{module}/{case_id}: {got:.2f} vs baseline {expected:.2f} "
+                         f"(tolerance {tolerance:.2f})")
     return found
 
 
@@ -84,39 +81,15 @@ def warn_regressions(module: str, scores: list[Any]) -> list[str]:
 
 def print_regressions(module: str, scores: list[Any]) -> None:
     """Print the comparison against the baseline at the end of a live run."""
-    baseline = load()
+    baseline = load(module)
     if not baseline:
-        print("No baseline.json; nothing to compare against.")
+        print(f"No baseline run in {module}/results/history.jsonl; nothing to compare against.")
         return
     found = regressions(module, scores, baseline)
+    against = f"baseline run {baseline['run_id']} ({baseline['model']}, {baseline['date']})"
     if found:
-        print(f"{len(found)} case(s) below the committed baseline ({baseline['model']}, {baseline['date']}):")
+        print(f"{len(found)} case(s) below the {against}:")
         for message in found:
             print(f"  REGRESSION {message}")
     else:
-        print(f"No regressions against the committed baseline ({baseline['model']}, {baseline['date']}).")
-
-
-def build(results_dir: Path, tolerance: float = DEFAULT_TOLERANCE) -> dict[str, Any]:
-    """A baseline from the ``<module>.json`` reports and ``run.json`` in *results_dir*."""
-    run = json.loads((results_dir / "run.json").read_text())
-    cases: dict[str, float] = {}
-    for module in MODULES:
-        for score in json.loads((results_dir / f"{module}.json").read_text()):
-            if score["model"] == run["model"]:
-                cases[f"{module}/{score['case_id']}"] = round(case_value(score), 3)
-    return {
-        "model": run["model"],
-        "judge_model": run["judge_model"],
-        "date": run["date"],
-        "commit": run["commit"],
-        "results": str(results_dir.relative_to(BASELINE_PATH.parent)),
-        "tolerance": tolerance,
-        "cases": dict(sorted(cases.items())),
-    }
-
-
-if __name__ == "__main__":
-    target = Path(sys.argv[1]).resolve()
-    BASELINE_PATH.write_text(json.dumps(build(target), indent=2) + "\n")
-    print(f"Wrote {BASELINE_PATH} from {target}")
+        print(f"No regressions against the {against}.")

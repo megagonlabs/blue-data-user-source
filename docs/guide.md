@@ -233,7 +233,7 @@ See [data/metadata_schema.json](../lib/src/blue_data_user_source/data/metadata_s
 
 ## Benchmarks
 
-`lib/tests/benchmarks/` scores query rewriting/expansion, extraction, and end-to-end querying against gold-standard cases, run live against the real API and compared with a committed baseline (`lib/tests/benchmarks/baseline.json`, from the versioned runs under `results/`). Report-only — a regression is reported, never fails the build. See [`lib/README.md`](../lib/README.md#benchmarks) for the full scoring methodology and how to run a live pass.
+`lib/tests/benchmarks/` scores query rewriting/expansion, extraction, and end-to-end querying against gold-standard cases, run live against the real API and recorded in a committed history per module (`lib/tests/benchmarks/<module>/results/`, with trend charts) and compared with a baseline run flagged in it. Report-only — a regression is reported, never fails the build. See [`lib/README.md`](../lib/README.md#benchmarks) for the full scoring methodology and how to run a live pass.
 
 ```bash
 cd lib

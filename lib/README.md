@@ -503,7 +503,7 @@ Report-only: benchmarks never fail on a metric regression — they print and wri
 | `querying` | 5 | Same KB data queried using second-person, "the user", and by-name phrasing; scores result alignment |
 | `reasoning` | 22 | Query contextualization precision, expansion coverage, completeness metric, freshness metric, privacy compliance, and interaction question appropriateness per contact channel |
 
-**The regression check is a live run** (below), compared against the committed [baseline](#committed-results-and-the-baseline). The pytest wrappers replay [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) recorded locally with `--record`. Cassettes are not committed, and replay is not yet complete (#150): the judge's calls are not recorded, and the OpenAI client needs a key even to replay. Without cassettes and without `OPENAI_API_KEY`, every case skips:
+**The regression check is a live run** (below), compared against the committed [baseline](#the-baseline). The pytest wrappers replay [VCR cassettes](https://vcrpy.readthedocs.io/en/latest/) recorded locally with `--record`. Cassettes are not committed, and replay is not yet complete (#150): the judge's calls are not recorded, and the OpenAI client needs a key even to replay. Without cassettes and without `OPENAI_API_KEY`, every case skips:
 
 ```bash
 # Run all benchmarks — cases without cassettes skip when OPENAI_API_KEY is unset
@@ -552,6 +552,8 @@ Common options (all three runners):
 | `--judge-model MODEL` | Model for LLM-judge scoring (default: `gpt-4o-mini`) |
 | `--out PATH` | JSON score report path (default: `.reports/live-<timestamp>.json`) |
 | `--detail-out PATH` | JSONL detail log path |
+| `--note TEXT` | Note recorded with the run in the module's results history |
+| `--no-history` | Do not record the run in the module's results history |
 | `--record` | Write cassettes to `cassettes/` for pytest replay |
 
 The reasoning runner also accepts `--type` to filter by benchmark type (`contextualization`, `expansion`, `completeness`, `freshness`, `appropriateness`, `privacy`).
@@ -564,18 +566,36 @@ Recording drops account identifiers from responses (the OpenAI organization and 
 
 After each run a JSON report and a JSONL detail log are written to `tests/benchmarks/<module>/.reports/` (git-ignored). A Rich table is also printed to the terminal.
 
-#### Committed results and the baseline
+#### Results history
 
-Versioned live runs are committed under `tests/benchmarks/results/<date>-<model>/`: each module's score report, `run.json` (model, judge model, date, commit) and a `README.md` summarizing the run. [`tests/benchmarks/baseline.json`](tests/benchmarks/baseline.json) holds one value per case from the latest committed run.
+Each module keeps its committed run history, as blue-data-kb-source does for its extraction benchmark:
 
-The value compared is the case's hit rate (extraction, querying) or judged score (contextualization, expansion, appropriateness). A metric case (completeness, freshness, privacy) declares `expect_pass` — whether the metric should pass its threshold for that input — and counts 1.0 when the metric's pass/fail decision matches and 0.0 when it does not; its raw score is not "higher is better" (an empty result set *should* score 0 on completeness).
+| Module | Results page |
+|---|---|
+| `extraction` | [`tests/benchmarks/extraction/results/`](tests/benchmarks/extraction/results/README.md) |
+| `querying` | [`tests/benchmarks/querying/results/`](tests/benchmarks/querying/results/README.md) |
+| `reasoning` | [`tests/benchmarks/reasoning/results/`](tests/benchmarks/reasoning/results/README.md) |
 
-A case scoring more than the baseline's `tolerance` (0.15) below its baseline is a regression: the pytest replay emits a `BenchmarkRegression` warning, and the live runners print it. Neither fails the run: LLM-judged scores are noisy, and the benchmarks stay report-only. Cases run on a different model than the baseline's are not compared.
+Every full live run of a module (no `--case`, and for reasoning no `--type`) appends one summary line to its `results/history.jsonl` — commit, models, the value per case and its mean per group (reasoning type, querying addressing style), tokens, latency and the `--note` — and regenerates `results/README.md` from it: the latest run with the change since the previous one and a sparkline per row, Mermaid charts of the trend over runs and of the latest run per group, and tables per case and of all runs. Commit both files to keep the run; pass `--no-history` for a run that should not be kept.
 
-To commit a new baseline, run the three runners with `--out tests/benchmarks/results/<run>/<module>.json`, add `run.json` and the run's `README.md`, then:
+The value of a case is its hit rate (extraction, querying) or judged score (contextualization, expansion, appropriateness). A metric case (completeness, freshness, privacy) declares `expect_pass` — whether the metric should pass its threshold for that input — and counts 1.0 when the metric's pass/fail decision matches and 0.0 when it does not; its raw score is not "higher is better" (an empty result set *should* score 0 on completeness).
 
 ```bash
-python -m tests.benchmarks.common.baseline tests/benchmarks/results/<run>/
+# Record a past run from its report, or re-render the pages
+python -m tests.benchmarks.common.history add tests/benchmarks/querying/.reports/live-<stamp>.json --module querying --note "..."
+python -m tests.benchmarks.common.history render
+```
+
+A run whose full score reports are worth keeping beside its summary is committed as a snapshot under `tests/benchmarks/results/<date>-<model>/` — each module's score report (written with `--out tests/benchmarks/results/<run>/<module>.json`) and a `run.json` (model, judge model, date, commit, commands) — and its history lines link to it. `python -m tests.benchmarks.common.history add tests/benchmarks/results/<run>/` records a snapshot that is not in the history yet.
+
+#### The baseline
+
+One run in each module's history is flagged as its baseline (now the first, 2026-10-10 gpt-4o run). A case scoring more than 0.15 below its value in the baseline run is a regression: the pytest replay emits a `BenchmarkRegression` warning, and the live runners print it. Neither fails the run: LLM-judged scores are noisy, and the benchmarks stay report-only. Cases run on a different model than the baseline's, and new cases, are not compared.
+
+To make another run the baseline (default: the module's latest run):
+
+```bash
+python -m tests.benchmarks.common.history baseline --module querying [--run <run_id>]
 ```
 
 ## Project structure
