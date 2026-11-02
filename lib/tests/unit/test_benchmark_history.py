@@ -120,3 +120,19 @@ def test_a_snapshot_is_added_once_per_module(results: Path) -> None:
     ]
     assert all(r["results"] == "results/2026-10-10-gpt-4o" for r in lines)
     assert history.load("extraction") == []  # the snapshot has no extraction report
+
+
+@pytest.mark.parametrize("status, dirty", [
+    ("", False),
+    # An earlier run of another module rewrote its results: the code is still clean.
+    (" M lib/tests/benchmarks/querying/results/README.md\n"
+     " M lib/tests/benchmarks/reasoning/results/history.jsonl", False),
+    (" M lib/src/blue_data_user_source/llm.py\n"
+     " M lib/tests/benchmarks/querying/results/README.md", True),
+    (" M lib/tests/benchmarks/common/history.py", True),
+])
+def test_only_code_changes_make_a_run_dirty(monkeypatch: pytest.MonkeyPatch, status: str,
+                                            dirty: bool) -> None:
+    # _git strips its output, so the first line has lost its leading space.
+    monkeypatch.setattr(history, "_git", lambda *args: status.strip())
+    assert history._dirty() is dirty

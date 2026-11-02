@@ -100,6 +100,15 @@ def _git(*args: str) -> str:
         return ""
 
 
+def _dirty() -> bool:
+    """Whether the checkout has uncommitted changes, other than to the results
+    histories and pages, which an earlier run (of another module, too) rewrites."""
+    changed = [line.split(maxsplit=1)[-1]
+               for line in _git("status", "--porcelain", "--untracked-files=no").splitlines()]
+    return any(not path.startswith("lib/tests/benchmarks/") or "/results/" not in path
+               for path in changed)
+
+
 def _answered(score: Any) -> float | None:
     """Extraction: share of questions with at least one expected value found."""
     per_query = _get(score, "per_query")
@@ -139,7 +148,7 @@ def summarize(module: str, scores: list[Any], *, judge_model: str, note: str = "
         "run_id": run_id or datetime.now().strftime("%Y%m%d-%H%M%S"),
         "date": date or datetime.now().isoformat(timespec="seconds"),
         "commit": commit or _git("rev-parse", "--short", "HEAD"),
-        "dirty": False if commit else bool(_git("status", "--porcelain", "--untracked-files=no")),
+        "dirty": False if commit else _dirty(),
         "models": sorted({_get(s, "model") for s in scores}),
         "judge_model": judge_model,
         "cases": len(models_per_case),
