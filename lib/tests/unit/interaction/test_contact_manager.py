@@ -500,8 +500,8 @@ def test_redact_details_masks_each_header_and_the_webhook_url() -> None:
 
 
 def test_a_var_reference_is_shown_because_it_holds_no_secret() -> None:
-    details = {"smtp_password": "$SMTP_PASSWORD", "address": "a@example.com"}
-    assert redact_details("email", details)["smtp_password"] == "$SMTP_PASSWORD"
+    details = {"smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD", "address": "a@example.com"}
+    assert redact_details("email", details)["smtp_password"] == "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"
 
 
 def test_redact_contacts_covers_the_whole_tree() -> None:
@@ -516,17 +516,17 @@ def test_contact_method_public_dict_is_masked() -> None:
 
 
 def test_resolve_secret_reads_the_environment_at_use(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOOK_TOKEN", "Bearer real")
-    assert resolve_secret("$HOOK_TOKEN") == "Bearer real"
-    assert resolve_secret({"Authorization": "$HOOK_TOKEN", "X": "y"}) == {"Authorization": "Bearer real", "X": "y"}
+    monkeypatch.setenv("BLUE_DATA_USER_CONTACT_HOOK_TOKEN", "Bearer real")
+    assert resolve_secret("$BLUE_DATA_USER_CONTACT_HOOK_TOKEN") == "Bearer real"
+    assert resolve_secret({"Authorization": "$BLUE_DATA_USER_CONTACT_HOOK_TOKEN", "X": "y"}) == {"Authorization": "Bearer real", "X": "y"}
     assert resolve_secret("plain") == "plain"
-    monkeypatch.delenv("HOOK_TOKEN")
-    with pytest.raises(InteractionError, match=r"\$HOOK_TOKEN"):
-        resolve_secret("$HOOK_TOKEN")
+    monkeypatch.delenv("BLUE_DATA_USER_CONTACT_HOOK_TOKEN")
+    with pytest.raises(InteractionError, match=r"\$BLUE_DATA_USER_CONTACT_HOOK_TOKEN"):
+        resolve_secret("$BLUE_DATA_USER_CONTACT_HOOK_TOKEN")
 
 
 async def test_email_sends_with_the_password_from_the_referenced_variable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SMTP_PASSWORD", "from-env")
+    monkeypatch.setenv("BLUE_DATA_USER_CONTACT_SMTP_PASSWORD", "from-env")
     seen: dict = {}
 
     async def _capture(msg, *, hostname, port, username, password, start_tls):
@@ -536,9 +536,81 @@ async def test_email_sends_with_the_password_from_the_referenced_variable(monkey
                 fut.set_result("ok")
 
     with patch.dict(sys.modules, {"aiosmtplib": _mock_aiosmtplib(_capture)}):
-        method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, "smtp_password": "$SMTP_PASSWORD"})
+        method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, "smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"})
         await method.interact().send("Pick a colour.")
     assert seen["password"] == "from-env"
+
+
+# ── which variables a contact may reference (#198) ───────────────────────────
+
+def test_a_variable_not_meant_for_contacts_is_never_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "server-secret")
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY.*BLUE_DATA_USER_CONTACT_\*"):
+        resolve_secret({"X-Demo": "$OPENAI_API_KEY"})
+
+
+def test_a_contact_stored_before_the_prefix_fails_at_use_and_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "server-secret")
+    method = ContactMethod(protocol="webhook", name="hook", details={
+        "url": "http://example.com/hook", "response_base_url": "http://example.com",
+        "headers": {"X-Demo": "$OPENAI_API_KEY"},
+    })
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        method.interact()
+
+
+@pytest.mark.parametrize("protocol, details", [
+    ("email", {"address": "a@example.com", "smtp_password": "$OPENAI_API_KEY"}),
+    ("webhook", {"url": "$OPENAI_API_KEY"}),
+    ("webhook", {"url": "http://example.com/hook", "headers": {"X-Demo": "$OPENAI_API_KEY"}}),
+])
+async def test_writing_a_reference_to_another_variable_is_refused(contact_manager: ContactManager, protocol: str,
+                                                                  details: dict) -> None:
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        await contact_manager.create_contact_method(protocol, "c", details)
+    assert await contact_manager.get_contact_method(protocol, "c") is None
+
+    await contact_manager.create_contact_method(protocol, "c", {"address": "a@example.com"})
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        await contact_manager.update_contact_method(protocol, "c", details=details)
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        await contact_manager.update_contact_method(protocol, "c", **details)
+    assert (await contact_manager.get_contact_method(protocol, "c")).details == {"address": "a@example.com", "preference": 0}
+
+
+async def test_a_contact_variable_can_be_written(contact_manager: ContactManager) -> None:
+    details = {"url": "$BLUE_DATA_USER_CONTACT_HOOK_URL", "headers": {"Authorization": "$BLUE_DATA_USER_CONTACT_TOKEN"}}
+    await contact_manager.create_contact_method("webhook", "hook", details)
+    assert (await contact_manager.get_contact_method("webhook", "hook")).details == {**details, "preference": 0}
+
+
+async def test_a_dollar_in_a_field_that_is_not_secret_is_only_text(contact_manager: ContactManager) -> None:
+    await contact_manager.create_contact_method("email", "work", {"address": "a@example.com", "subject": "$PRICE"})
+
+
+async def test_changing_the_preference_of_a_contact_stored_before_the_prefix_still_works(
+    contact_manager: ContactManager,
+) -> None:
+    contact_manager._store().set("contacts.email.old", {"address": "a@example.com", "smtp_password": "$SMTP_PASSWORD"})
+    await contact_manager.update_contact_method("email", "old", preference=3)
+    assert (await contact_manager.get_contact_method("email", "old")).preference == 3
+
+
+def test_the_cli_write_path_refuses_it_too() -> None:
+    from blue_data_user_source.data.manager import UserDataManager
+
+    manager = MagicMock(spec=UserDataManager)
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        UserDataManager.set_contact_field(manager, "email", "work", "smtp_password", "$OPENAI_API_KEY")
+    manager._ensure_contact_source.assert_not_called()
+
+
+def test_the_cli_write_path_sees_a_dotted_header() -> None:
+    from blue_data_user_source.data.manager import UserDataManager
+
+    manager = MagicMock(spec=UserDataManager)
+    with pytest.raises(InteractionError, match=r"\$OPENAI_API_KEY"):
+        UserDataManager.set_contact_field(manager, "webhook", "hook", "headers.X-Demo", "$OPENAI_API_KEY")
 
 
 # ── updating details (#137) ───────────────────────────────────────────────────

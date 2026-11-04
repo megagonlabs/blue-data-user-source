@@ -500,8 +500,10 @@ async def add_contact(
 
     Protocols with a transport: 'stdio', 'email', 'webhook'. 'sms', 'messaging',
     'enterprise', 'notification' and 'session' are recorded only. Secret fields
-    (smtp_password, a webhook's url and headers) can be '$VAR' references to
-    environment variables, resolved when used; read tools mask them.
+    (smtp_password, a webhook's url and headers) can be references to
+    BLUE_DATA_USER_CONTACT_* environment variables, such as
+    '$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD', resolved when used; any other
+    variable is refused. Read tools mask them.
 
     Args:
         user:       User name.

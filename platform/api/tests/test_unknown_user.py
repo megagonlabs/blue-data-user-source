@@ -63,3 +63,21 @@ def test_session_and_contact_errors_map_to_client_statuses(client):
     assert bad.status_code == 422 and "Unsupported contact protocol" in bad.json()["detail"]
     missing = client.patch("/bo/contacts/email/nope", json={"preference": 1})
     assert missing.status_code == 404 and "not found" in missing.json()["detail"]
+
+
+@pytest.mark.parametrize(("method", "path"), [
+    ("POST", "/ana/contacts"), ("PATCH", "/ana/contacts/webhook/hook"),
+])
+def test_a_contact_referencing_a_server_variable_is_422(client, method, path):
+    """#198: the variable would be sent to the contact's own target."""
+    assert client.post("/databases/ana").status_code == 201
+    details = {"url": "http://example.com/hook", "response_base_url": "http://example.com"}
+    assert client.post("/ana/contacts", json={"protocol": "webhook", "name": "hook",
+                                              "details": details}).status_code == 201
+    body = {"details": {**details, "headers": {"X-Demo": "$OPENAI_API_KEY"}}}
+    if method == "POST":
+        body |= {"protocol": "webhook", "name": "other"}
+    resp = client.request(method, path, json=body)
+    assert resp.status_code == 422, resp.text
+    assert "BLUE_DATA_USER_CONTACT_" in resp.json()["detail"]
+    assert client.get("/ana/contacts/webhook/hook").json()["details"].get("headers") is None

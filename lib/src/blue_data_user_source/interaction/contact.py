@@ -25,6 +25,9 @@ from blue_data_user_source.types import ContactNotFoundError, InteractionError, 
 _CONTACT_SCHEMA = Path(__file__).parent.parent / "data" / "contact_schema.json"
 MASK = "***"
 _ENV_REF = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
+# A contact can be written over REST and MCP, and it names where its secrets are
+# sent, so it reaches only the variables the operator set for contacts (#198).
+SECRET_ENV_PREFIX = "BLUE_DATA_USER_CONTACT_"
 
 
 def _secret_fields() -> dict[str, frozenset[str]]:
@@ -79,18 +82,43 @@ def redact_contacts(contacts: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _require_contact_variable(name: str) -> None:
+    if not name.startswith(SECRET_ENV_PREFIX):
+        raise InteractionError(
+            f"Contact secret references ${name}: "
+            f"a contact can only use variables named {SECRET_ENV_PREFIX}*."
+        )
+
+
+def check_secret_references(protocol: str, details: dict[str, Any]) -> None:
+    """Refuse a contact being written whose secret fields reference a variable it may not use.
+
+    A key may be dotted (``headers.Authorization``), as ``blue-userdb contact set`` writes it.
+    """
+    secret = SECRET_FIELDS.get(protocol, frozenset())
+    for key, value in details.items():
+        if key.split(".")[0] not in secret:
+            continue
+        for item in value.values() if isinstance(value, dict) else (value,):
+            match = _ENV_REF.fullmatch(item) if isinstance(item, str) else None
+            if match is not None:
+                _require_contact_variable(match.group(1))
+
+
 def resolve_secret(value: Any) -> Any:
     """Resolve a ``$VAR`` reference from the environment, at the moment the secret is used.
 
-    Storing ``"$SMTP_PASSWORD"`` instead of the password keeps it out of the
-    contacts store. Other values are returned unchanged; dict values are
-    resolved one by one (webhook headers).
+    Storing ``"$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"`` instead of the password
+    keeps it out of the contacts store. Other values are returned unchanged;
+    dict values are resolved one by one (webhook headers). Checked here as well
+    as on writes, so a contact stored before #198 cannot read other variables.
     """
     if isinstance(value, dict):
         return {k: resolve_secret(v) for k, v in value.items()}
     match = _ENV_REF.fullmatch(value) if isinstance(value, str) else None
     if match is None:
         return value
+    _require_contact_variable(match.group(1))
     resolved = os.environ.get(match.group(1))
     if not resolved:
         raise InteractionError(f"Contact secret references ${match.group(1)}, which is not set in the environment.")
@@ -511,6 +539,7 @@ class ContactManager:
             raise InteractionError(
                 f"Invalid contact name {name!r}: use 1-64 letters, digits, spaces, '_', '-', '@' or '+'."
             )
+        check_secret_references(protocol, details)
         entry = {**details, "preference": preference}
         self._store().set(path, entry)
 
@@ -546,6 +575,7 @@ class ContactManager:
         entry = get_path(store, path) if path else None
         if entry is None:
             raise ContactNotFoundError(f"Contact method {protocol!r}/{name!r} not found.")
+        check_secret_references(protocol, {**(details or {}), **fields})
         secret = SECRET_FIELDS.get(protocol, frozenset())
         if details is not None:
             replaced = {k: (_unmask(v, entry.get(k)) if k in secret else v) for k, v in details.items()}

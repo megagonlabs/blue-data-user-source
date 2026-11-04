@@ -292,6 +292,16 @@ async def test_add_and_list_contact():
     assert any(c.get("name") == "work" for c in contacts)
 
 
+async def test_add_contact_refuses_a_variable_not_meant_for_contacts():
+    """#198: a tool call could otherwise send the server's settings to a webhook."""
+    result = json.loads(await add_contact(
+        USER, "webhook", "hook", {"url": "http://example.com", "headers": {"X": "$OPENAI_API_KEY"}}
+    ))
+    assert "BLUE_DATA_USER_CONTACT_" in result["error"]
+    contacts = json.loads(await list_contacts(USER, protocol="webhook"))
+    assert not any(c.get("name") == "hook" for c in contacts)
+
+
 async def test_get_contact_returns_details():
     await add_contact(USER, "email", "home", {"address": "alice@home.com"})
     result = json.loads(await get_contact(USER, "email", "home"))

@@ -21,7 +21,7 @@ Each user has a `DataRegistry` (its own JSON store) holding these sources:
 |---------------|-------|-------|
 | `kb` | `KBSource` | The knowledge graph: the user's PERSON entity, extracted entities, facts (relations) and property values, each tied to a SOURCE node, plus one SOURCE node per added document (location, name, description, `original` date). Typed by the KB schema, `data/schema.json` |
 | `metadata` | `JSONSource` | Four categories from `data/metadata_schema.json`, seeded with nulls at creation: `identity` (name, pronouns, locale, timezone), `preferences` (communication style, verbosity, language), `availability` (working hours, preferred channel, out of office, per-topic overrides) and `privacy` (data sharing, sensitive categories, retention days, consent level). Addressed by dotted key, e.g. `identity.timezone` |
-| `contacts` | `JSONSource` | Contact methods at `<protocol>.<name>`: the protocol's fields from `data/contact_schema.json` plus `preference` (lower is preferred). Fields marked `"secret": true` are masked as `***` on read; a value may be a `$VAR` reference resolved when sending |
+| `contacts` | `JSONSource` | Contact methods at `<protocol>.<name>`: the protocol's fields from `data/contact_schema.json` plus `preference` (lower is preferred). Fields marked `"secret": true` are masked as `***` on read; a value may be a `$BLUE_DATA_USER_CONTACT_*` reference resolved when sending |
 | `sessions` | `JSONSource` | Session, query and interaction records (§6) |
 | `external_documents` | `DocumentDataSource` | Every added source's text, chunked and embedded; searched at query time |
 | `session_content` | `DocumentDataSource` | Every resolved clarification as `Q: …\nA: …` text, shared across the user's sessions; searched at query time |

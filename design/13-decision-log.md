@@ -428,3 +428,18 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - A full live run changes two committed files; commit them to keep the run, or pass `--no-history`.
 - The 2026-10-10 gpt-4o run is in each module's history, flagged as the baseline, with its snapshot's notes; its per-case values are those of the removed `baseline.json`.
 - Snapshot directories are optional and are linked from their history lines.
+
+---
+
+## ADR-031 — A Contact Reaches Only `BLUE_DATA_USER_CONTACT_*` Environment Variables
+
+**Date:** 2026-11-04
+**Status:** Accepted (narrows #143's `$VAR` references)
+
+**Decision:** A `$VAR` reference in a contact's secret field resolves only when the variable is named `BLUE_DATA_USER_CONTACT_*`. Any other name is refused with `InteractionError` when a contact is written (REST 422, an MCP error, a CLI error) and again when the secret is used.
+
+**Rationale:** Contacts can be written over REST and MCP, and a contact also names where its secrets go, so resolving any name let a caller send the server's provider keys and service passwords to a URL of their choice (#198). A prefix is safe with no configuration, where an allow-list setting is open until the operator fills it in. The check at use covers contacts stored before this change; the check on write reports the mistake at once.
+
+**Consequences:**
+- Breaking: a contact using `$SMTP_PASSWORD` must move to `$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD`, and the variable be renamed. Until then its clarifications fail with an error naming the variable; other updates to it, such as its preference, still work.
+- A caller who can write contacts can still send a `BLUE_DATA_USER_CONTACT_*` value to a target of their choice. Restricting webhook targets is separate work.

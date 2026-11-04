@@ -992,12 +992,13 @@ class UserDataManager:
         return get_path(self._ensure_contact_source(), path) if path else None
 
     def set_contact_field(self, protocol: str, name: str, field: str, value: Any) -> None:
-        from blue_data_user_source.interaction.contact import ContactManager
+        from blue_data_user_source.interaction.contact import ContactManager, check_secret_references
         from blue_data_user_source.types import InteractionError
 
         path = ContactManager._path(protocol, name)
         if path is None:
             raise InteractionError(f"Invalid contact {protocol!r}/{name!r}.")
+        check_secret_references(protocol, {field: value})
         store = self._ensure_contact_source()
         if get_path(store, path) is None:
             store.set(path, {})

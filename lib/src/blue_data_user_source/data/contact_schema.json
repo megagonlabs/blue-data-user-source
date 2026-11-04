@@ -7,7 +7,7 @@
     "smtp_host":          { "description": "SMTP server hostname. Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": null },
     "smtp_port":          { "description": "SMTP port.", "type": "int", "required": false, "default": 587 },
     "smtp_user":          { "description": "SMTP username.", "type": "str", "required": false, "default": null },
-    "smtp_password":      { "description": "SMTP password. Prefer a $VAR reference to an environment variable; read paths mask it.", "type": "str", "required": false, "default": "", "secret": true },
+    "smtp_password":      { "description": "SMTP password. Prefer a $BLUE_DATA_USER_CONTACT_* reference to an environment variable; read paths mask it.", "type": "str", "required": false, "default": "", "secret": true },
     "smtp_use_tls":       { "description": "Use STARTTLS.", "type": "bool", "required": false, "default": true },
     "reply_domain":       { "description": "Domain for Reply-To: interaction-{id}@reply_domain. Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": "localhost" },
     "response_base_url":  { "description": "Base URL of the user source REST API (link in email body + inbound endpoint). Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": null },
@@ -17,9 +17,9 @@
   },
   "webhook": {
     "__description__": "Outgoing webhook contact methods; POSTs a question and awaits a response via the user source REST API.",
-    "url":                { "description": "POST target for outgoing questions. Incoming-webhook URLs are often credentials themselves, so read paths mask it; may be a $VAR reference.", "type": "str", "required": true,  "default": null, "secret": true },
+    "url":                { "description": "POST target for outgoing questions. Incoming-webhook URLs are often credentials themselves, so read paths mask it; may be a $BLUE_DATA_USER_CONTACT_* reference.", "type": "str", "required": true,  "default": null, "secret": true },
     "response_base_url":  { "description": "Base URL of the user source REST API (response_url sent in payload).", "type": "str", "required": true,  "default": null },
-    "headers":            { "description": "Extra HTTP headers for the outgoing POST (e.g. Authorization). Values may be $VAR references; read paths mask them.", "type": "dict", "required": false, "default": null, "secret": true },
+    "headers":            { "description": "Extra HTTP headers for the outgoing POST (e.g. Authorization). Values may be $BLUE_DATA_USER_CONTACT_* references; read paths mask them.", "type": "dict", "required": false, "default": null, "secret": true },
     "timeout":            { "description": "Seconds to wait for a response.", "type": "number", "required": false, "default": 300 },
     "preference":         { "description": "Ordering priority (lower = preferred).", "type": "int", "required": false, "default": 0 }
   },

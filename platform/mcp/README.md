@@ -88,7 +88,7 @@ If `blue-userdb-mcp` is not on the system PATH, use the full path:
 - **Results and errors.** Every tool returns JSON text. On success it is the tool's payload, as documented per tool below. On failure it is `{"error": "<message>"}`, returned as normal content, not as an MCP `isError` result, so an agent can read the reason and recover. Every tool follows this rule.
 - **No `--format`.** The CLI's `--format table|json|nl` does not carry over: MCP results are always JSON. (`query` still takes `output_form`, which picks a table of rows or a prose answer *inside* the JSON.)
 - **Parameter schemas.** Every parameter has a description, and fixed-value parameters (`output_form`, `protocol`) are JSON Schema enums. The server refuses to start if a tool's parameter is undocumented.
-- **Secrets.** Read tools (`list_contacts`, `get_contact`) mask contact secrets as `***`. Pass secrets to `add_contact` / `update_contact` as `$VAR` environment-variable references (e.g. `"smtp_password": "$SMTP_PASSWORD"`) so they never appear in a tool call; sending a masked value back keeps the stored secret.
+- **Secrets.** Read tools (`list_contacts`, `get_contact`) mask contact secrets as `***`. Pass secrets to `add_contact` / `update_contact` as references to `BLUE_DATA_USER_CONTACT_*` environment variables (e.g. `"smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"`) so they never appear in a tool call; any other variable is refused; sending a masked value back keeps the stored secret.
 - **Scope.** Not exposed, deliberately: schema management (`blue-userdb schema ...`), keyword/semantic `data search`, `data export` / `import` / `extract`, onboarding (an interactive interview, which a server cannot hold — #120), and the CLI's own state (`database select`, `session select`, profiles). Use the CLI or the library for those; an agent works with users, sources, queries, sessions, metadata and contacts.
 - **Configuration** comes only from `BLUE_DATA_USER_SOURCE_*` environment variables (below). The server deliberately does not read the CLI's profiles, so a developer's CLI profile cannot reconfigure a running server.
 
@@ -317,7 +317,7 @@ webhook → {"url": "https://hooks.example.com/incoming",
 
 ¹ Not required when `inbound_provider` is `"stdio"`.
 
-**Secrets.** `smtp_password`, a webhook's `url` and `headers`, and a notification `endpoint` are secret: every read path (REST, MCP tools, `blue-userdb contact list/get`) returns them masked as `***`. To keep them out of the contacts store too, store a reference to an environment variable instead, e.g. `"smtp_password": "$SMTP_PASSWORD"`; it is resolved when a message is sent, and shown as-is on reads.
+**Secrets.** `smtp_password`, a webhook's `url` and `headers`, and a notification `endpoint` are secret: every read path (REST, MCP tools, `blue-userdb contact list/get`) returns them masked as `***`. To keep `smtp_password`, a webhook's `url` or a header value out of the contacts store too, store a reference to an environment variable instead, e.g. `"smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"`; it is resolved when a message is sent, and shown as-is on reads. Only variables named `BLUE_DATA_USER_CONTACT_*` can be referenced: any other name is refused when the contact is written, and fails the clarification when it is used, so a contact cannot read the server's other settings.
 
 **`inbound_provider: "stdio"`** — prints email to stdout and reads reply from stdin. No SMTP or `blue-userdb-api` needed. Useful for local development and testing.
 
