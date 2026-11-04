@@ -81,3 +81,23 @@ def test_a_contact_referencing_a_server_variable_is_422(client, method, path):
     assert resp.status_code == 422, resp.text
     assert "BLUE_DATA_USER_CONTACT_" in resp.json()["detail"]
     assert client.get("/ana/contacts/webhook/hook").json()["details"].get("headers") is None
+
+
+def test_nameless_sources_with_different_text_are_both_kept(client):
+    """#196: both answered 201, and the second had silently replaced the first."""
+    assert client.post("/databases/ana", json={"doc_search_mode": "bm25",
+                                               "doc_embedding_model": "dummy"}).status_code == 201
+    for text in ("Ana speaks fluent Japanese.", "Ana keeps bees in Lisbon."):
+        resp = client.post("/ana/sources", json={"source": text})
+        assert resp.status_code == 201 and resp.json()["updated"] is False
+    assert len(client.get("/ana/sources").json()["sources"]) == 2
+
+
+def test_a_named_source_posted_again_says_it_was_updated(client):
+    assert client.post("/databases/ana", json={"doc_search_mode": "bm25",
+                                               "doc_embedding_model": "dummy"}).status_code == 201
+    assert client.post("/ana/sources", json={"source": "One.", "name": "note"}).status_code == 201
+    resp = client.post("/ana/sources", json={"source": "Two.", "name": "note"})
+    assert resp.status_code == 200 and resp.json()["updated"] is True
+    assert len(client.get("/ana/sources").json()["sources"]) == 1
+

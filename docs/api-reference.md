@@ -66,8 +66,8 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 | Method | Returns | Description |
 |---|---|---|
-| `await add_source(source, database, optional_properties=None)` | `None` | Register a source; `optional_properties["queries"]` drives Type 2 extraction |
-| `await add_text_source(text, database, optional_properties=None)` | `None` | Add text as a source without a file (nothing is read or written on disk); same properties, `location` defaults to `"text:<name>"`. The REST API uses it |
+| `await add_source(source, database, optional_properties=None)` | `bool` | Register a source; `optional_properties["queries"]` drives Type 2 extraction. `True` when it updated an existing source |
+| `await add_text_source(text, database, optional_properties=None)` | `bool` | Add text as a source without a file (nothing is read or written on disk); same properties, `location` defaults to `"text:<name>"`, or `"text:<content hash>"` without a name. The REST API uses it |
 | `await remove_source(database, source_name)` | `dict` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept. Returns `{id, name, chunks_removed}`; raises `QueryError` if no source, or more than one, matches |
 | `import_data(source, database="default", collection="default", entity=None, mode="append", options=None)` | `dict` | Lower-level `KBSource.import_data` passthrough |
 
@@ -79,7 +79,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `name` | `str` | Human-readable label |
 | `description` | `str` | Optional description |
 | `original` | `str` | Original publication date or provenance note |
-| `location` | `str` | Label recorded as the source's location (default: the file's path, or `"text:<name>"` for a text source) |
+| `location` | `str` | Label recorded as the source's location, and what identifies it on a re-add (default: the file's resolved path, or for a text source `"text:<name>"`, or `"text:<content hash>"` without a name) |
 
 ### Data access
 
@@ -176,7 +176,7 @@ Owns one user's `DataRegistry` and its five built-in sources (`kb`, `metadata`, 
 | `await reset(schema_path=None, metadata_schema_path=None, contact_schema_path=None, sources=None)` | `None` | Clear and reseed selected sources (default: `kb`, `metadata`, `contacts`, `sessions`) |
 | `destroy()` | `None` | Delete all backing files, if file-backed |
 | `await execute_query(query, on_tool_call=None, on_tool_result=None, session_id=None)` | `tuple[list, dict]` | Answer against `kb`, then merge top-`5` `DOCUMENT.SEARCH` hits from `session_content` and `external_documents`, each tagged `"source"` |
-| `await add_source(source, queries=None, name=None, description=None, original=None)` | `None` | Ingest into `external_documents`; optionally run one `import_text` per query |
+| `await add_source(source, queries=None, name=None, description=None, original=None)` | `bool` | Ingest into `external_documents`; optionally run one `import_text` per query |
 | `await remove_source(source_name)` | `dict` | Delete the source's `external_documents` chunks and its KB SOURCE node (facts kept); `chunks_removed` is `None` for a source added before documents were recorded |
 | `await list_data()` | `list[dict]` | Raw KB data entries |
 | `await list_sources(source_id=None)` | `list[dict]` | KB `SOURCE` nodes |

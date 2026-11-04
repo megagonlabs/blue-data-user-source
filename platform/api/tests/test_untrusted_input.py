@@ -105,7 +105,7 @@ def test_create_rejects_names_that_are_not_plain_path_segments(client, source, n
 # ── POST /{name}/sources ──────────────────────────────────────────────────────
 
 def test_add_source_ingests_the_documented_free_text(client, source):
-    source.add_text_source = AsyncMock()
+    source.add_text_source = AsyncMock(return_value=False)
     text = "Alice joined Acme Corp in 2019 as a data scientist."
     resp = client.post("/alice/sources", json={"source": text, "name": "resume", "queries": ["What role?"]})
     assert resp.status_code == 201
@@ -120,7 +120,7 @@ def test_add_source_never_opens_a_server_path(client, source, tmp_path):
     secret = tmp_path / "unrelated" / "secret.txt"
     secret.parent.mkdir()
     secret.write_text("CANARY-LINE\n")
-    source.add_text_source = AsyncMock()
+    source.add_text_source = AsyncMock(return_value=False)
 
     resp = client.post("/alice/sources", json={"source": str(secret)})
     assert resp.status_code == 201
@@ -130,12 +130,12 @@ def test_add_source_never_opens_a_server_path(client, source, tmp_path):
 
 def test_add_source_records_a_label_not_a_server_path(client, source):
     """#151: the location used to be a deleted temp file under the server's temp directory."""
-    source.add_text_source = AsyncMock()
+    source.add_text_source = AsyncMock(return_value=False)
     client.post("/alice/sources", json={"source": "x", "name": "../../etc/passwd"})
     props = source.add_text_source.await_args.kwargs["optional_properties"]
     assert props["location"] == "rest:../../etc/passwd"  # a label, never opened
     client.post("/alice/sources", json={"source": "x"})
-    assert source.add_text_source.await_args.kwargs["optional_properties"]["location"] == "rest:text"
+    assert "location" not in source.add_text_source.await_args.kwargs["optional_properties"]  # the library's text:<hash>
 
 
 @pytest.mark.parametrize("value", ["", {"path": "/etc/passwd"}, ["a"]])

@@ -181,6 +181,8 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X POST http://localhost:8003/alice
 }
 ```
 
+The answer is `{database, added, updated}`. A `name` already in use replaces that source and answers `200` with `updated: true`; otherwise the answer is `201`. Without a `name`, different text is a new source, and the same text updates its source.
+
 ### Metadata
 
 | Method | Path | Description |

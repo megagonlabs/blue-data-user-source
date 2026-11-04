@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from blue_data_user_api.auth import SECURITY
@@ -34,8 +34,11 @@ async def list_sources(name: str, source_id: str | None = None, request: Request
 
 
 @router.post("/{name}/sources", status_code=status.HTTP_201_CREATED, summary="Add a source from text")
-async def add_source(name: str, body: AddSourceRequest, request: Request) -> dict:
-    """Add `source` as a text document. Text only: file uploads are not supported over REST in 1.0."""
+async def add_source(name: str, body: AddSourceRequest, request: Request, response: Response) -> dict:
+    """Add `source` as a text document. Text only: file uploads are not supported over REST in 1.0.
+
+    A named source replaces the one of that name, answering 200 with `updated: true`.
+    """
     props: dict[str, Any] = {}
     if body.name:
         props["name"] = body.name
@@ -45,12 +48,15 @@ async def add_source(name: str, body: AddSourceRequest, request: Request) -> dic
         props["original"] = body.original
     if body.queries:
         props["queries"] = body.queries
-    props.setdefault("name", "text")
     # Ingested as text: no server path is read (#133), and none is written or
-    # recorded as the source's location (#151).
-    props["location"] = f"rest:{props['name']}"
-    await request.app.state.source.add_text_source(body.source, database=name, optional_properties=props)
-    return {"database": name, "added": True}
+    # recorded as the source's location (#151). Without a name, the library
+    # tells sources apart by their text (#196).
+    if body.name:
+        props["location"] = f"rest:{body.name}"
+    updated = await request.app.state.source.add_text_source(body.source, database=name, optional_properties=props)
+    if updated:
+        response.status_code = status.HTTP_200_OK
+    return {"database": name, "added": True, "updated": updated}
 
 
 @router.delete("/{name}/sources/{source_name}", summary="Remove a source")

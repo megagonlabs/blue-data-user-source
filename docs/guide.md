@@ -98,7 +98,7 @@ await us.add_source(
 await us.remove_source("alice", "data/resume.txt")   # document leaves search; extracted facts kept
 ```
 
-Adding a file that is already a source, as the Type 2 step does here, updates that source instead of adding a second one: its chunks are replaced by the new ingest (so an edited file is picked up), and the extraction is recorded under it. The same file under another `name` is another source.
+Adding a file that is already a source, as the Type 2 step does here, updates that source instead of adding a second one: its chunks are replaced by the new ingest (so an edited file is picked up), and the extraction is recorded under it. A file is the same source whatever spelling of its path you use, and two files with the same name in different directories are two sources. If the new ingest fails, the old document stays. The same file under another `name` is another source.
 
 ---
 

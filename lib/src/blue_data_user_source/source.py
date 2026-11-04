@@ -856,30 +856,32 @@ class UserSource(DataSource):
         source: Any,
         database: str,
         optional_properties: dict[str, object] | None = None,
-    ) -> None:
+    ) -> bool:
         """Register a file as a source in the user's KB and optionally extract via queries.
 
         ``optional_properties``: ``queries``, ``name``, ``description``,
         ``original``, ``effort``, ``model`` (the extraction's LLM; by default the
         configured extraction model, else the provider's default), and
         ``location`` (the label recorded on the SOURCE node; defaults to the
-        file's path).
+        file's resolved path). Returns True when this updated an existing source.
         """
-        await self._get_manager(database).add_source(source, **self._source_kwargs(optional_properties))
+        return await self._get_manager(database).add_source(source, **self._source_kwargs(optional_properties))
 
     async def add_text_source(
         self,
         text: str,
         database: str,
         optional_properties: dict[str, object] | None = None,
-    ) -> None:
+    ) -> bool:
         """Add *text* as a source, without a file: nothing is read from or written to disk.
 
         Same ``optional_properties`` as :meth:`add_source`; ``location``
-        defaults to ``"text:<name>"``. The REST API uses this, so a request
-        never names, or leaves behind, a server path (#133, #151).
+        defaults to ``"text:<name>"``, or ``"text:<content hash>"`` without a
+        name, so different nameless texts stay separate sources (#196). The REST
+        API uses this, so a request never names, or leaves behind, a server path
+        (#133, #151). Returns True when this updated an existing source.
         """
-        await self._get_manager(database).add_source(None, text=text, **self._source_kwargs(optional_properties))
+        return await self._get_manager(database).add_source(None, text=text, **self._source_kwargs(optional_properties))
 
     @staticmethod
     def _source_kwargs(optional_properties: dict[str, object] | None) -> dict[str, Any]:

@@ -443,3 +443,20 @@ Architectural decisions are recorded here as they are made, throughout the desig
 **Consequences:**
 - Breaking: a contact using `$SMTP_PASSWORD` must move to `$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD`, and the variable be renamed. Until then its clarifications fail with an error naming the variable; other updates to it, such as its preference, still work.
 - A caller who can write contacts can still send a `BLUE_DATA_USER_CONTACT_*` value to a target of their choice. Restricting webhook targets is separate work.
+
+---
+
+## ADR-032 — A Source Is Its Resolved Path, Its Name or Its Content; the Ingest Comes First
+
+**Date:** 2026-11-04
+**Status:** Accepted (narrows #176's update-in-place)
+
+**Decision:** `add_source` matches an existing source on its location, and that location now identifies one thing: a file's resolved absolute path, `text:<name>` for named text, and `text:<content hash>` for nameless text. An explicit `location` still overrides these. The new document is ingested before the SOURCE node is created or the old chunks are deleted. Over REST, a named source posted again answers `200` with `updated: true`, and `add_source` returns whether it updated.
+
+**Rationale:** Comparing the location string as given made every nameless text one source, so a different document silently deleted the earlier one, and made a relative path mean different files from different directories (#196). A content hash keeps re-adding the same text idempotent, which a fresh id per call would not. Deleting first meant a failed re-add lost the document.
+
+**Consequences:**
+- Document ids are content hashes, so unchanged content ingests to the id it already has; its chunks are not deleted, only its record is rewritten.
+- A file added without a `name` keeps the path as given as its name, so it can be removed by what was typed, while its location is absolute.
+- A source recorded earlier with a relative location does not match its file any more: re-adding it makes a second source. Remove the old one by name.
+

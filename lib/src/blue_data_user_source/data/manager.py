@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 
@@ -130,6 +131,11 @@ _NAME_SEPARATOR_REPLACEMENT = "__SEP__"
 # Registry record type that maps a KB SOURCE id to its document in
 # "external_documents" (document_id + chunk_count) — see add_source.
 _DOCUMENT_RECORD = "document"
+
+
+def _content_id(text: str) -> str:
+    """What identifies nameless text: its content, so only the same text is the same source."""
+    return sha256(text.encode()).hexdigest()[:16]
 _UNSAFE_NAME_CHARS = ("/", "\\", ".")
 
 
@@ -695,7 +701,7 @@ class UserDataManager:
         location: str | None = None,
         text: str | None = None,
         model: str | None = None,
-    ) -> None:
+    ) -> bool:
         """Register a file as a source, always ingesting it into the shared
         "external_documents" DocumentDataSource (parsed, chunked, embedded —
         see :meth:`ensure_external_documents_source`), and optionally also
@@ -718,14 +724,19 @@ class UserDataManager:
         same name, when *name* is given) updates it instead of registering a
         second one (#176): its document chunks are replaced by the new ingest,
         and any extraction is recorded under it. Its description and original
-        date stay as first recorded.
+        date stay as first recorded. A file's location is its resolved path,
+        and nameless text's is its content hash, so only the same file or the
+        same text matches (#196). Nothing is replaced until the ingest succeeds.
+
+        Returns True when an existing source was updated, False when one was added.
         """
         kb = self._ensure_kb_source()
         # With ``text``, the document is that text and *source* is unused: no file
         # is read or written. ``location`` is what the SOURCE node records; it
         # defaults to the path read, or "text:<name>" for text (#151).
-        path = None if text is not None else getattr(source, "location", str(source))
-        location = location or path or f"text:{name or 'text'}"
+        given = None if text is not None else getattr(source, "location", str(source))
+        path = None if given is None else str(Path(given).resolve())
+        location = location or path or f"text:{name or _content_id(text)}"
         # The SOURCE node's description is rendered into the extraction system
         # prompt, so naming the owner here is what lets the extractor tie an
         # unattributed document ("Results-driven Project Manager with...") to
@@ -735,16 +746,6 @@ class UserDataManager:
             s for s in await self.list_sources()
             if s.get("source") == location and (name is None or s.get("name") == name)
         ]
-        if len(existing) == 1:
-            source_id = existing[0]["id"]
-            self._delete_document(source_id)
-        else:
-            source_id = await kb.add_source(
-                self._database, location, name=name,
-                description=description or f"Belongs to {owner}, the user this knowledge base is about",
-                original=original,
-            )
-
         doc_source = self.ensure_external_documents_source()
         # No "collection" override — falls through to the pipeline's own
         # default_collection ("documents"), matching the index created by
@@ -753,6 +754,19 @@ class UserDataManager:
             chunks = doc_source.ingest_text(text, file_name=f"{name or 'text'}.txt")
         else:
             chunks = doc_source.execute_query({"op": "DOCUMENT.INGEST", "path": path})
+        updated = len(existing) == 1
+        if updated:
+            source_id = existing[0]["id"]
+            # Document ids are content hashes: unchanged content is the document
+            # just ingested, which must stay.
+            self._delete_document(source_id, keep=chunks[0]["document_id"] if chunks else None)
+        else:
+            # Named as given, so it can be removed by the name it was added under.
+            source_id = await kb.add_source(
+                self._database, location, name=name or given,
+                description=description or f"Belongs to {owner}, the user this knowledge base is about",
+                original=original,
+            )
         if chunks:
             # The doc store can delete a document from another process only by
             # id + chunk count (its path index is per-process), so keep both,
@@ -781,6 +795,7 @@ class UserDataManager:
                 self._database, text, queries=queries, source_id=source_id, effort=effort,
                 model=model or llm.configured_model("EXTRACTION"),
             )
+        return updated
 
     async def remove_source(self, source_name: str) -> dict[str, Any]:
         """Remove a source added with :meth:`add_source`, by its name or id.
@@ -811,8 +826,9 @@ class UserDataManager:
         await self._ensure_kb_source().delete_source(self._database, source_id)
         return {"id": source_id, "name": matches[0].get("name"), "chunks_removed": chunks_removed}
 
-    def _delete_document(self, source_id: str) -> int | None:
-        """Delete the "external_documents" chunks recorded for *source_id*.
+    def _delete_document(self, source_id: str, keep: str | None = None) -> int | None:
+        """Delete the "external_documents" chunks recorded for *source_id*, unless
+        they are the document *keep*; its record goes either way.
 
         Returns how many were deleted, or None when none are recorded (a source
         added before its document was recorded).
@@ -821,11 +837,12 @@ class UserDataManager:
         if not record:
             return None
         props = record.get("properties") or {}
-        self.ensure_external_documents_source().execute_query({
-            "op": "DOCUMENT.DELETE",
-            "document_id": props["document_id"],
-            "chunk_count": props["chunk_count"],
-        })
+        if props["document_id"] != keep:
+            self.ensure_external_documents_source().execute_query({
+                "op": "DOCUMENT.DELETE",
+                "document_id": props["document_id"],
+                "chunk_count": props["chunk_count"],
+            })
         self._registry.deregister(record)
         return int(props["chunk_count"])
 
