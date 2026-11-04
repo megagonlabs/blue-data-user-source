@@ -460,3 +460,19 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - A file added without a `name` keeps the path as given as its name, so it can be removed by what was typed, while its location is absolute.
 - A source recorded earlier with a relative location does not match its file any more: re-adding it makes a second source. Remove the old one by name.
 
+---
+
+## ADR-033 — A Store's Password Is Recorded as the Name of Its Environment Variable
+
+**Date:** 2026-11-04
+**Status:** Accepted
+
+**Decision:** A store with a password carries `password_env`, the name of the variable holding it, in its `connection`. `create_user` raises `QueryError` for a `password` without one. The CLI records `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD`; `RedisUserSource` passes its `password_env` to each of a user's stores. Records user-source writes itself go through `without_passwords`, and a reference whose variable is unset raises an error naming it before the backend is contacted.
+
+**Rationale:** blue-data strips passwords from what it stores, so a user on Neo4j or a password-protected Redis worked only in the process that created it, and the next one failed with the backend's authentication error (#194). A reference is what blue-data's `connect_source` already resolves. Failing at creation beats creating a user nothing can reopen. The records written by `UserSource` itself did not pass through that sanitizer and held the Redis password in clear; they use a scrub of `password` keys alone because the sanitizer also removes unrelated settings (blue-data#265).
+
+**Consequences:**
+- A user created earlier on such a store has no reference and cannot be reopened; recreate it.
+- Every process opening the user needs the variable: the CLI gets it from the profile, the MCP and REST servers from their environment.
+- A `RedisUserSource` rebuilt by a blue-data host gets the password resolved and the reference dropped, so it cannot create users (blue-data#267).
+

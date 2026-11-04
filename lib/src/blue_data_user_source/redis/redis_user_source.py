@@ -11,7 +11,10 @@ class RedisUserSource(UserSource):
     - ``host``      — Redis host (default: ``localhost``)
     - ``port``      — Redis port (default: ``6379``)
     - ``db``        — Redis database index (default: ``0``)
-    - ``password``  — Redis password (default: None)
+    - ``password_env`` — Name of the environment variable holding the Redis
+      password (default: none). Only the name is recorded, so every process
+      using this source needs the variable. A ``password`` can be given beside
+      it, but users cannot be created with a ``password`` alone.
     - ``namespace`` — Key prefix for registry entries (default: source name)
 
     Protocol: ``user/redis``
@@ -36,7 +39,7 @@ class RedisUserSource(UserSource):
                     "host": conn.get("host", "localhost"),
                     "port": conn.get("port", 6379),
                     "db": conn.get("db", 0),
-                    **({"password": conn["password"]} if conn.get("password") else {}),
+                    **{key: conn[key] for key in ("password", "password_env") if conn.get(key)},
                 },
                 "namespace": conn.get("namespace", name),
             }

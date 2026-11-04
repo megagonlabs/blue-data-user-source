@@ -21,7 +21,9 @@ from blue_data_user_source.data.manager import (
     _build_json_source,
     _enrich_props,
     _expand_user_paths,
+    require_password_references,
     resolve_doc_search,
+    without_passwords,
 )
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
@@ -259,7 +261,7 @@ class UserSource(DataSource):
                 scope="/",
                 description=f"{name} user data source",
                 properties={
-                    **self.properties,
+                    **without_passwords(self.properties),
                     "_class": f"{cls.__module__}.{cls.__qualname__}",
                     "schema": self.properties.get("schema") or _DEFAULT_SCHEMA_PATH,
                     "metadata_schema": self.properties.get("metadata_schema") or _DEFAULT_METADATA_SCHEMA_PATH,
@@ -269,7 +271,7 @@ class UserSource(DataSource):
         else:
             for key in ("connection", "registry", "schema", "metadata_schema", "contact_schema"):
                 if self.properties.get(key):
-                    self._registry.set_source_property(name, key, self.properties[key])
+                    self._registry.set_source_property(name, key, without_passwords(self.properties[key]))
 
     @property
     def console(self) -> bool:
@@ -738,6 +740,11 @@ class UserSource(DataSource):
         it again re-registered the name against new stores, orphaning the
         existing user's data (#141).
 
+        A store with a password also names the environment variable holding it,
+        as ``password_env`` in its ``connection``: only that name is recorded,
+        and later processes read the password from there. A ``password`` without
+        one raises ``QueryError`` (#194).
+
         A leading ``~`` in any store's ``path`` or ``directory`` is expanded
         before the stores are built, and the expanded path is what is recorded
         (#171).
@@ -758,6 +765,10 @@ class UserSource(DataSource):
                 registry_props, kb_source_props, metadata_source_props, contact_source_props,
                 session_source_props, doc_source_props,
             ])
+        require_password_references([
+            registry_props, kb_source_props, metadata_source_props, contact_source_props,
+            session_source_props, doc_source_props,
+        ])
         manager = UserDataManager(
             name, registry_props, doc_source_props=doc_source_props, data_root=self._data_root(),
         )
@@ -775,8 +786,8 @@ class UserSource(DataSource):
         # it's read again by _get_manager on every reconnect, before build() would run.
         self._registry.register_source_database(
             self.name, name, properties={
-                "registry": _enrich_props(registry_props, "json"),
-                "doc_source": doc_source_props,
+                "registry": without_passwords(_enrich_props(registry_props, "json")),
+                "doc_source": without_passwords(doc_source_props),
             }
         )
         self._managers[name] = manager

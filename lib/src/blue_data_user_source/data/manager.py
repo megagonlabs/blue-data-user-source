@@ -164,6 +164,57 @@ def _enrich_props(props: dict, kind: str) -> dict:
     return {"_class": cls, "connection": props}
 
 
+def _with_env_password(connection: dict) -> dict:
+    """*connection* with ``password`` read from its ``password_env`` reference.
+
+    Records keep only the reference, because blue-data strips passwords from what
+    it stores. The reference stays in the result, so a source built from it
+    records it in turn (#194).
+    """
+    ref = connection.get("password_env")
+    if not ref or connection.get("password"):
+        return connection
+    password = os.environ.get(ref)
+    if password is None:
+        raise ValueError(f"The store needs its password from ${ref}, which is not set in the environment.")
+    return {**connection, "password": password}
+
+
+def without_passwords(props: Any) -> Any:
+    """A copy of *props* with every ``password`` key removed, for a record we write ourselves.
+
+    Not blue-data's sanitizer: that also removes settings whose names merely
+    contain ``token`` or ``pass`` (blue-data#265), and a user's document settings
+    are read back from these records.
+    """
+    if isinstance(props, dict):
+        return {k: without_passwords(v) for k, v in props.items() if k != "password"}
+    if isinstance(props, list):
+        return [without_passwords(v) for v in props]
+    return props
+
+
+def require_password_references(props: Any) -> None:
+    """Raise ``QueryError`` for a store with a password but no ``password_env``.
+
+    No record keeps the password, so such a user could not be reopened by any
+    later process (#194).
+    """
+    from blue_data_user_source.types import QueryError
+
+    if isinstance(props, list):
+        for value in props:
+            require_password_references(value)
+    if isinstance(props, dict):
+        if props.get("password") and not props.get("password_env"):
+            raise QueryError(
+                "A store with a password needs a 'password_env' naming the environment variable "
+                "that holds it: passwords are not recorded, so later processes read it from there."
+            )
+        for value in props.values():
+            require_password_references(value)
+
+
 def _expand_user_paths(props: Any) -> Any:
     """A copy of *props* with ``~`` expanded in every ``path`` and ``directory`` it holds.
 
@@ -205,7 +256,7 @@ def _build_embedding_model(spec: str | dict | None) -> Any:
 def _build_json_source(name: str, props: dict) -> Any:
     """Bootstrap a JSONSource using DataSource.instantiate."""
     enriched = _enrich_props(props, "json")
-    conn = enriched.get("connection", {})
+    conn = _with_env_password(enriched.get("connection", {}))
     if conn.get("protocol", "").startswith("json/file") and "path" in conn:
         Path(conn["path"]).parent.mkdir(parents=True, exist_ok=True)
     # Pass through all top-level keys (e.g. "namespace" for Redis) alongside connection
@@ -308,7 +359,7 @@ class UserDataManager:
         kb_extra = {k: v for k, v in kb_enriched.items() if k not in ("_class", "connection")}
         kb_source = DataSource.instantiate(
             kb_enriched["_class"], "kb",
-            properties={"connection": kb_enriched.get("connection", {}), **kb_extra},
+            properties={"connection": _with_env_password(kb_enriched.get("connection", {})), **kb_extra},
         )
         self._registry.register_source(kb_source)
         await self.seed_kb_source_schema(schema_path)
@@ -477,7 +528,7 @@ class UserDataManager:
                 if "path" in conn:
                     self._unlink_store_file(conn["path"])
                 elif props.get("namespace"):
-                    self._registry.connect_source(src_name).delete(None)
+                    self._connect_source(src_name).delete(None)
                 elif conn.get("protocol", "").startswith("json/redis"):
                     logger.warning(
                         "Not clearing %s store of %r: it has no namespace of its own and may hold other users' data",
@@ -513,12 +564,19 @@ class UserDataManager:
     # Internal source access (via DataRegistry.connect_source)            #
     # ------------------------------------------------------------------ #
 
+    def _connect_source(self, name: str) -> Any:
+        """The registry's source *name*; a missing password is named here, where
+        the backend's own authentication error would not say what is wrong (#194)."""
+        properties = self._registry.get_source_properties(name) or {}
+        _with_env_password(properties.get("connection") or {})
+        return self._registry.connect_source(name)
+
     def _ensure_kb_source(self) -> KBSource:
         if self._kb_source is not None:
             return self._kb_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        source = self._registry.connect_source("kb")
+        source = self._connect_source("kb")
         if source is None:
             raise ValueError(f"No 'kb' source in registry for user {self._database!r}.")
         self._kb_source = source
@@ -529,7 +587,7 @@ class UserDataManager:
             return self._metadata_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        source = self._registry.connect_source("metadata")
+        source = self._connect_source("metadata")
         if source is None:
             raise ValueError(f"No 'metadata' source in registry for user {self._database!r}.")
         self._metadata_source = source
@@ -540,7 +598,7 @@ class UserDataManager:
             return self._contact_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        source = self._registry.connect_source("contacts")
+        source = self._connect_source("contacts")
         if source is None:
             raise ValueError(f"No 'contacts' source in registry for user {self._database!r}.")
         self._contact_source = source
@@ -551,7 +609,7 @@ class UserDataManager:
             return self._session_source
         if self._registry is None:
             raise ValueError("Registry not ready — call build() or connect() first.")
-        source = self._registry.connect_source("sessions")
+        source = self._connect_source("sessions")
         if source is None:
             raise ValueError(f"No 'sessions' source in registry for user {self._database!r}.")
         self._session_source = source
@@ -1009,7 +1067,10 @@ class UserDataManager:
         return get_path(self._ensure_contact_source(), path) if path else None
 
     def set_contact_field(self, protocol: str, name: str, field: str, value: Any) -> None:
-        from blue_data_user_source.interaction.contact import ContactManager, check_secret_references
+        from blue_data_user_source.interaction.contact import (
+            ContactManager,
+            check_secret_references,
+        )
         from blue_data_user_source.types import InteractionError
 
         path = ContactManager._path(protocol, name)

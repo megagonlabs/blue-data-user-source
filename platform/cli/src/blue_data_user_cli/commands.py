@@ -670,6 +670,9 @@ def database_create(
             "port": neo4j_port,
             "user": neo4j_user,
             "password": neo4j_password,
+            # No record keeps the password. Later commands read it from here,
+            # where the profile exports it (#194).
+            "password_env": "BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD",
         }
 
     try:

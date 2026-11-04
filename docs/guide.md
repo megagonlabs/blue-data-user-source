@@ -62,6 +62,8 @@ us.remove_user("alice")         # remove from outer registry only — backing fi
 
 For an in-memory KB during development, swap `kb_source_props` for `blue_data_kb_source.memory_kb_source.MemoryKBSource`; for Neo4j, `blue_data_kb_source.neo4j.neo4j_kb_source.NEO4JKBSource`.
 
+A store with a password names the environment variable that holds it, as `"password_env": "MY_NEO4J_PASSWORD"` in its `connection`. Passwords are never recorded, so every process that opens the user needs that variable set, and creating a user with a `password` alone raises `QueryError`. The same goes for `RedisUserSource`'s `connection`.
+
 ### Document search
 
 Session transcripts and added files go into document stores, and each query searches them alongside the KB. How they are searched is chosen when the user is created and recorded with the user (`get_user(name)["doc_source"]`):
