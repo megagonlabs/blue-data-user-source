@@ -26,7 +26,7 @@ class _ConnectError(Exception):
 
 
 async def _ask(manager: UserDataManager) -> list:
-    reasoner = UserQueryReasoner(source=MagicMock(console=False), manager=manager)
+    reasoner = UserQueryReasoner(source=MagicMock(console=False, replies=None), manager=manager)
     reasoner.assess_query_results = AsyncMock(return_value=_FAILING)  # type: ignore[method-assign]
     with patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value="Where do you live?")):
         return await reasoner.resolve_via_interaction("where do I live?", "where?", ["Berlin"], {}, max_rounds=3)
@@ -85,7 +85,7 @@ async def test_no_answer_in_time_ends_timeout_and_the_query_still_answers(
 
 async def test_onboarding_records_a_failed_question_and_moves_on(manager: UserDataManager, user_id: str) -> None:
     await ContactManager(user_id, manager).create_contact_method("email", "work", {})
-    reasoner = UserQueryReasoner(source=MagicMock(console=False), manager=manager)
+    reasoner = UserQueryReasoner(source=MagicMock(console=False, replies=None), manager=manager)
     with patch("blue_data_user_source.reasoning.reasoner._llm_complete", AsyncMock(return_value={})):
         await reasoner.onboard(metadata_schema_path=None, include_metadata=False)  # asks the name question
 

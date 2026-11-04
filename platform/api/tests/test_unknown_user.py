@@ -101,3 +101,21 @@ def test_a_named_source_posted_again_says_it_was_updated(client):
     assert resp.status_code == 200 and resp.json()["updated"] is True
     assert len(client.get("/ana/sources").json()["sources"]) == 1
 
+
+def test_a_reply_to_a_question_asked_by_another_process_is_accepted(client, tmp_path):
+    """#197: the question lives in the shared registry, not in this process."""
+    from uuid import uuid4
+
+    other_process = create_source(tmp_path)
+    iid = str(uuid4())
+    other_process.replies.open(iid, 60)
+    assert client.get(f"/interactions/{iid}/respond").status_code == 200
+    assert client.post(f"/interactions/{iid}/response", json={"text": "Lisbon"}).status_code == 200
+    assert other_process.replies.reply(iid) == "Lisbon"
+    assert client.post(f"/interactions/{iid}/response", json={"text": "Porto"}).status_code == 409
+    assert client.get(f"/interactions/{iid}/respond").status_code == 404
+
+
+def test_a_reply_to_nothing_is_404(client):
+    assert client.post("/interactions/nothing/response", json={"text": "x"}).status_code == 404
+

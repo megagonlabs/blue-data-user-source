@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from blue_data_user_api.auth import SECURITY
-from blue_data_user_source.interaction.pending import pending_interactions
+from blue_data_user_source.interaction.pending import deliver_reply, is_reply_pending
 
 router = APIRouter(prefix="/interactions", tags=["interactions"])
 
@@ -24,19 +24,18 @@ class InteractionResponse(BaseModel):
     summary="Post response to a pending interaction",
     dependencies=SECURITY,
 )
-async def post_response(interaction_id: str, body: InteractionResponse) -> dict:
-    future = pending_interactions.get(interaction_id)
-    if future is None:
+async def post_response(interaction_id: str, body: InteractionResponse, request: Request) -> dict:
+    outcome = deliver_reply(request.app.state.source.replies, interaction_id, body.text)
+    if outcome == "unknown":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No pending interaction with id {interaction_id!r}",
         )
-    if future.done():
+    if outcome == "resolved":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Interaction {interaction_id!r} already resolved",
         )
-    future.set_result(body.text)
     return {"interaction_id": interaction_id, "accepted": True}
 
 
@@ -51,9 +50,8 @@ async def post_response(interaction_id: str, body: InteractionResponse) -> dict:
     summary="HTML form for responding to a pending interaction (email link fallback)",
     include_in_schema=False,
 )
-async def respond_form(interaction_id: str) -> HTMLResponse:
-    future = pending_interactions.get(interaction_id)
-    if future is None or future.done():
+async def respond_form(interaction_id: str, request: Request) -> HTMLResponse:
+    if not is_reply_pending(request.app.state.source.replies, interaction_id):
         return HTMLResponse(
             content=_page("Interaction not found or already resolved",
                           "<p>This interaction has expired or was already answered.</p>"),
@@ -86,13 +84,11 @@ async def respond_form_submit(interaction_id: str, request: Request) -> HTMLResp
             content=_page("Empty response", "<p>Please enter a response before submitting.</p>"),
             status_code=400,
         )
-    future = pending_interactions.get(interaction_id)
-    if future is None or future.done():
+    if deliver_reply(request.app.state.source.replies, interaction_id, text) != "accepted":
         return HTMLResponse(
             content=_page("Already answered", "<p>This interaction has already been resolved.</p>"),
             status_code=409,
         )
-    future.set_result(text)
     return HTMLResponse(content=_page("Thank you", "<p>Your response has been received.</p>"))
 
 
@@ -131,17 +127,15 @@ async def email_inbound(request: Request, provider: str = "mailgun") -> dict:
     except (ValueError, NotImplementedError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    future = pending_interactions.get(interaction_id)
-    if future is None:
+    outcome = deliver_reply(request.app.state.source.replies, interaction_id, reply_text)
+    if outcome == "unknown":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No pending interaction with id {interaction_id!r}",
         )
-    if future.done():
+    if outcome == "resolved":
         # Idempotent — email may be delivered more than once.
         return {"interaction_id": interaction_id, "accepted": False, "reason": "already resolved"}
-
-    future.set_result(reply_text)
     return {"interaction_id": interaction_id, "accepted": True}
 
 

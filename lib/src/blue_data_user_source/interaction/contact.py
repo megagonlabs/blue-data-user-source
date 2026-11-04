@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from blue_data_user_source.data.paths import get_path
 from blue_data_user_source.interaction.manager import InteractionManager
-from blue_data_user_source.interaction.pending import pending_interactions
+from blue_data_user_source.interaction.pending import ReplyBox, pending_interactions, wait_for_reply
 from blue_data_user_source.types import ContactNotFoundError, InteractionError, InteractionTimeoutError, LLMError
 
 # ------------------------------------------------------------------ #
@@ -204,12 +204,14 @@ class ContactMethod:
     # is out of office or outside their stated working hours.
     ASYNC_PROTOCOLS = frozenset({"email", "webhook", "notification"})
 
-    def __init__(self, protocol: str, name: str, details: dict[str, Any]) -> None:
+    def __init__(self, protocol: str, name: str, details: dict[str, Any], replies: ReplyBox | None = None) -> None:
+        """``replies`` lets a reply reach this process from another one (#197)."""
         if protocol not in self.SUPPORTED_PROTOCOLS:
             raise InteractionError(f"Unsupported contact protocol: {protocol}")
         self.protocol = protocol
         self.name = name
         self.details = details
+        self.replies = replies
 
     @property
     def preference(self) -> int:
@@ -234,6 +236,19 @@ class ContactMethod:
         return self.protocol == "stdio" or (
             self.protocol == "email" and self.details.get("inbound_provider") == "stdio"
         )
+
+    def _expect_reply(self, interaction_id: str, timeout: float) -> asyncio.Future[str]:
+        """Where the reply to *interaction_id* will arrive, set up before the question goes out."""
+        future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+        pending_interactions[interaction_id] = future
+        if self.replies is not None:
+            self.replies.open(interaction_id, timeout)
+        return future
+
+    def _forget_reply(self, interaction_id: str) -> None:
+        pending_interactions.pop(interaction_id, None)
+        if self.replies is not None:
+            self.replies.close(interaction_id)
 
     def _required(self, key: str) -> Any:
         """A required detail, or an ``InteractionError`` naming what is missing (#138)."""
@@ -301,9 +316,7 @@ class ContactMethod:
             import httpx
 
             iid = interaction_id or str(uuid4())
-            loop = asyncio.get_running_loop()
-            future: asyncio.Future[str] = loop.create_future()
-            pending_interactions[iid] = future
+            future = self._expect_reply(iid, timeout)
 
             response_url = f"{response_base_url}/interactions/{iid}/response"
             try:
@@ -325,13 +338,13 @@ class ContactMethod:
                     raise InteractionError(
                         f"webhook contact {self.name!r} could not deliver the question: {type(exc).__name__}: {exc}"
                     ) from exc
-                return await asyncio.wait_for(future, timeout=timeout)
+                return await wait_for_reply(iid, future, timeout, self.replies)
             except asyncio.TimeoutError:
                 raise InteractionTimeoutError(
                     f"No response received within {timeout}s for interaction {iid!r}"
                 )
             finally:
-                pending_interactions.pop(iid, None)
+                self._forget_reply(iid)
 
         async def _stop() -> None:
             pass
@@ -432,9 +445,7 @@ class ContactMethod:
             import aiosmtplib
 
             iid = interaction_id or str(uuid4())
-            loop = asyncio.get_running_loop()
-            future: asyncio.Future[str] = loop.create_future()
-            pending_interactions[iid] = future
+            future = self._expect_reply(iid, timeout)
 
             reply_to = f"interaction-{iid}@{reply_domain}"
             respond_link = f"{response_base_url}/interactions/{iid}/respond"
@@ -476,13 +487,13 @@ class ContactMethod:
                     raise InteractionError(
                         f"email contact {self.name!r} could not send the question: {type(exc).__name__}: {exc}"
                     ) from exc
-                return await asyncio.wait_for(future, timeout=timeout)
+                return await wait_for_reply(iid, future, timeout, self.replies)
             except asyncio.TimeoutError:
                 raise InteractionTimeoutError(
                     f"No email response within {timeout}s for interaction {iid!r}"
                 )
             finally:
-                pending_interactions.pop(iid, None)
+                self._forget_reply(iid)
 
         async def _stop() -> None:
             pass
@@ -493,16 +504,22 @@ class ContactMethod:
 class ContactManager:
     """Manages contact methods stored as contacts.{protocol}.{name} in the contact JSONSource."""
 
-    def __init__(self, database: str, data_manager: Any, console: bool = True) -> None:
+    def __init__(
+        self, database: str, data_manager: Any, console: bool = True, replies: ReplyBox | None = None,
+    ) -> None:
         """``console`` says whether this process has a console the user is at.
 
         Servers pass False: their stdin/stdout are not the user's (for the MCP
         stdio transport, stdout is the protocol stream), so methods that ask on
         the console are never selected there.
+
+        ``replies`` is the source's shared :class:`ReplyBox`; without it, a reply
+        must reach this process.
         """
         self._database = database
         self._data_manager = data_manager
         self._console = console
+        self._replies = replies
 
     def _store(self) -> Any:
         return self._data_manager.get_contact_source()
@@ -550,7 +567,7 @@ class ContactManager:
         entry = get_path(self._store(), path)
         if entry is None:
             return None
-        return ContactMethod(protocol=protocol, name=name, details=entry)
+        return ContactMethod(protocol=protocol, name=name, details=entry, replies=self._replies)
 
     async def update_contact_method(
         self,
@@ -608,7 +625,7 @@ class ContactManager:
                 if not isinstance(details, dict):
                     continue
                 try:
-                    methods.append(ContactMethod(protocol=proto, name=entry_name, details=details))
+                    methods.append(ContactMethod(protocol=proto, name=entry_name, details=details, replies=self._replies))
                 except InteractionError:
                     continue
         return methods

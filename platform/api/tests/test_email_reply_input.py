@@ -8,12 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from blue_data_user_api.app import app
+from blue_data_user_api.source import create_source
 
 _JSON, _FORM = "application/json", "application/x-www-form-urlencoded"
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(tmp_path) -> TestClient:
+    app.state.source = create_source(tmp_path)
     return TestClient(app, raise_server_exceptions=False)
 
 

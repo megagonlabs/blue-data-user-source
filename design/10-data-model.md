@@ -267,7 +267,7 @@ Stored at `sessions.{session_id}.queries.{query_id}.interactions.{interaction_id
 | `started_at` | ISO 8601 datetime | When the interaction was sent |
 | `resolved_at` | ISO 8601 datetime \| `null` | When it resolved, timed out or failed |
 
-`interaction_id` is the same id used to key the transport-level `pending_interactions` Future-correlation dict (webhook/email) — see [04-detailed-architecture.md](04-detailed-architecture.md) and ADR-017 in [13-decision-log.md](13-decision-log.md).
+`interaction_id` is the same id used to key the transport-level `pending_interactions` Future-correlation dict (webhook/email), and the `interaction` record in the outer registry through which a reply reaches another process (ADR-034) — see [04-detailed-architecture.md](04-detailed-architecture.md) and ADR-017 in [13-decision-log.md](13-decision-log.md).
 
 **Example:**
 

@@ -290,7 +290,8 @@ class UserQueryReasoner:
         query_id = self._query_id or await session_manager.create_query(session_id, query)
 
         contact_manager = ContactManager(
-            database=self._manager._database, data_manager=self._manager, console=self._source.console
+            database=self._manager._database, data_manager=self._manager, console=self._source.console,
+            replies=self._source.replies,
         )
         channel = await contact_manager.identify_contact_method(topic=topic)
         if channel is None:
@@ -492,7 +493,8 @@ class UserQueryReasoner:
             return
 
         contact_manager = ContactManager(
-            database=self._manager._database, data_manager=self._manager, console=self._source.console
+            database=self._manager._database, data_manager=self._manager, console=self._source.console,
+            replies=self._source.replies,
         )
         channel = await contact_manager.identify_contact_method(topic="onboarding")
         if channel is None:

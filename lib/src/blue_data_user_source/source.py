@@ -26,6 +26,7 @@ from blue_data_user_source.data.manager import (
     without_passwords,
 )
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
+from blue_data_user_source.interaction.pending import ReplyBox
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning import UserQueryReasoner
 from blue_data_user_source.types import (
@@ -277,6 +278,11 @@ class UserSource(DataSource):
     def console(self) -> bool:
         """Whether the user is at this process's console; see the ``console`` prop."""
         return self._console
+
+    @property
+    def replies(self) -> ReplyBox:
+        """Pending interactions, shared with every process using this registry (#197)."""
+        return ReplyBox(self._registry)
 
     # ------------------------------------------------------------------ #
     # DataSource: database = user                                          #
@@ -961,7 +967,8 @@ class UserSource(DataSource):
 
     def _contact_manager(self, database: str) -> ContactManager:
         return ContactManager(
-            database=database, data_manager=self._get_manager(database), console=self.console
+            database=database, data_manager=self._get_manager(database), console=self.console,
+            replies=self.replies,
         )
 
     async def add_contact_method(

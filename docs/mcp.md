@@ -254,6 +254,8 @@ webhook → {"url": "https://hooks.example.com/incoming",
            "response_base_url": "http://localhost:8003", "timeout": 300}
 ```
 
+`response_base_url` is the address of a running `blue-userdb-api` that uses the same data directory as this server: the reply goes there, and reaches the waiting query through that shared store. The tool call blocks until the reply or the contact's `timeout`.
+
 For a production email contact, also set `from_address`, `smtp_host`, `reply_domain`, `response_base_url`, and an `inbound_provider` of `mailgun`, `postmark`, or `sendgrid` — see [api.md](api.md#email-contact-method) for the full key set and the inbound webhook wiring.
 
 #### `update_contact`

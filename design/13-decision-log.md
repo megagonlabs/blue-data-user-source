@@ -476,3 +476,19 @@ Architectural decisions are recorded here as they are made, throughout the desig
 - Every process opening the user needs the variable: the CLI gets it from the profile, the MCP and REST servers from their environment.
 - A `RedisUserSource` rebuilt by a blue-data host gets the password resolved and the reference dropped, so it cannot create users (blue-data#267).
 
+---
+
+## ADR-034 — A Reply Reaches Another Process Through the Outer Registry
+
+**Date:** 2026-11-04
+**Status:** Accepted (extends ADR-017)
+
+**Decision:** A question sent by webhook or email also opens an `interaction` record in the source's outer registry, with its deadline. `deliver_reply` wakes a waiter in the receiving process if there is one, and otherwise writes the reply into that record. The waiting process polls the record once a second alongside its own Future, and removes it when the question ends. The outcomes are `accepted`, `resolved` and `unknown`, so the routes keep their status codes.
+
+**Rationale:** `pending_interactions` is a dict in the asking process, but replies arrive at `blue-userdb-api`, so a query made through the MCP server or the CLI waited out its timeout while its reply got a 404 (#197). A reply carries only the interaction id, and an email reply cannot carry more, so a per-user store would need a lookup across users; the outer registry is the one store every process of a source shares, locked across processes on files and shared on Redis. The Future stays, so a reply in the same process is immediate and a source without a shared store still works.
+
+**Consequences:**
+- The API server must share the asking process's data directory or Redis. `MemoryUserSource` replies stay in one process.
+- A reply sits in the registry until the asker polls it, at most a second. If the asker dies after a reply, the record stays there; past its deadline it is removed the next time that id is used.
+- The MCP tool call still blocks until the reply or the timeout.
+

@@ -334,7 +334,7 @@ For `webhook`, the agent will `POST` to `url` with:
 ```
 
 The external system posts the user's reply to `response_url`, unblocking the
-waiting agent. `response_base_url` must point to a running `blue-userdb-api` instance.
+waiting agent. `response_base_url` must point to a running `blue-userdb-api` instance using the same data directory as this server: that shared store is how the reply reaches the waiting query, which picks it up within a second.
 
 #### `update_contact`
 
