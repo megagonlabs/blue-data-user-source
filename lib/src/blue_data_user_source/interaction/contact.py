@@ -657,8 +657,10 @@ class ContactManager:
     async def list_contact_methods(
         self, protocol: str | None = None
     ) -> list[ContactMethod]:
+        if protocol and protocol not in ContactMethod.SUPPORTED_PROTOCOLS:
+            raise InteractionError(f"Unsupported contact protocol: {protocol!r}")
         all_contacts: dict[str, Any] = self._store().get("contacts") or {}
-        protocols = {protocol: all_contacts[protocol]} if protocol else all_contacts
+        protocols = {protocol: all_contacts.get(protocol)} if protocol else all_contacts
         methods: list[ContactMethod] = []
         for proto, entries in protocols.items():
             if not isinstance(entries, dict):

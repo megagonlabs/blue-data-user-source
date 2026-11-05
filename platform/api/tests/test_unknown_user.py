@@ -126,3 +126,11 @@ def test_a_contact_with_a_malformed_field_is_422(client):
     resp = client.post("/ana/contacts", json={"protocol": "webhook", "name": "hook", "details": {"timeout": "soon"}})
     assert resp.status_code == 422 and "timeout" in resp.json()["detail"]
 
+
+def test_listing_contacts_by_an_unknown_protocol_is_422(client):
+    """#203: it was a KeyError, so a 500."""
+    assert client.post("/databases/ana").status_code == 201
+    assert client.get("/ana/contacts?protocol=webhook").status_code == 200
+    resp = client.get("/ana/contacts?protocol=pigeon")
+    assert resp.status_code == 422 and "pigeon" in resp.json()["detail"]
+

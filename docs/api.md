@@ -202,7 +202,7 @@ curl -H "X-API-Key: $BLUE_DATA_USER_API_KEY" -X PUT http://localhost:8003/alice/
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/{name}/contacts` | List contact methods; optional `?protocol=` filter |
+| `GET` | `/{name}/contacts` | List contact methods; optional `?protocol=` filter (`422` for an unsupported protocol) |
 | `POST` | `/{name}/contacts` | Add a contact method |
 | `GET` | `/{name}/contacts/{protocol}/{contact_name}` | Get a specific contact method |
 | `PATCH` | `/{name}/contacts/{protocol}/{contact_name}` | Update details or preference: `details` replaces the stored fields (the preference is kept unless given); a secret field sent back masked as `***` keeps its stored value |

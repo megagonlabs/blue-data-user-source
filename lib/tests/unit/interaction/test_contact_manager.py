@@ -613,6 +613,18 @@ def test_the_cli_write_path_sees_a_dotted_header() -> None:
         UserDataManager.set_contact_field(manager, "webhook", "hook", "headers.X-Demo", "$OPENAI_API_KEY")
 
 
+# ── the protocol filter (#203) ────────────────────────────────────────────────
+
+async def test_a_supported_protocol_with_no_contacts_lists_nothing(contact_manager: ContactManager) -> None:
+    contact_manager._store().set("contacts", {})  # as a store never seeded with it
+    assert await contact_manager.list_contact_methods("webhook") == []
+
+
+async def test_an_unsupported_protocol_filter_is_refused(contact_manager: ContactManager) -> None:
+    with pytest.raises(InteractionError, match="pigeon"):
+        await contact_manager.list_contact_methods("pigeon")
+
+
 # ── what a write refuses (#202) ───────────────────────────────────────────────
 
 @pytest.mark.parametrize(("protocol", "details"), [
