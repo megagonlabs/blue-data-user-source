@@ -21,6 +21,11 @@ from typing import Any
 
 from blue_data_user_source.types import LLMError
 
+# LiteLLM writes records below WARNING to stdout, which under an MCP server is the
+# JSON-RPC stream (#199). It reads this once, on import, and the KB's client can be
+# the first to import it, so it is set here rather than before our own call.
+os.environ.setdefault("LITELLM_LOG", "WARNING")
+
 PROVIDER_ENV = "BLUE_DATA_LLM_PROVIDER"
 DEFAULT_PROVIDER = "openai"
 DEFAULT_MODELS = {"openai": "gpt-4o", "anthropic": "claude-opus-4-8"}
