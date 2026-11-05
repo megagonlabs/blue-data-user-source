@@ -26,7 +26,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 
 | Method | Returns | Description |
 |---|---|---|
-| `create_database(database, properties=None, overwrite=False)` | `dict` | Sync `DataSource` override; delegates to `create_user` via `asyncio.run()`. Works with no properties: the stores come from `default_user_props`, and any store config given in `properties` replaces that default. `overwrite=True` replaces an existing user. Does not onboard unless `properties["onboard"]` is true |
+| `create_database(database, properties=None, overwrite=False)` | `dict` | Sync `DataSource` override; delegates to `create_user` via `run_sync`. `doc_search_mode` and `doc_embedding_model` in `properties` choose how the user's documents are searched. Works with no properties: the stores come from `default_user_props`, and any store config given in `properties` replaces that default. `overwrite=True` replaces an existing user. Does not onboard unless `properties["onboard"]` is true |
 | `default_user_props(name)` | `dict` | A new user's store configs: in memory for `MemoryUserSource`, files beside the registry for `FileUserSource` (`registries/<name>.json`, `sources/<name>/`), Redis JSON stores (no KB default) for `RedisUserSource` |
 | `await create_user(name, registry_props, kb_source_props, metadata_source_props, contact_source_props, session_source_props, doc_source_props=None, onboard=True, onboard_metadata=True)` | `None` | Build a new user's `DataRegistry` + all built-in sources from scratch, seed schemas. With `onboard` (the default), then interview the user over their contact method, the console when none is registered; pass `onboard=False` to skip |
 | `list_users()` | `list[str]` | Registered user names |
@@ -48,9 +48,13 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | Key | Type | Description |
 |---|---|---|
 | `session` | `str` | Session to append this query to (reused). Raises `QueryError` if unknown or ended. Omit to auto-create a new single-query session |
-| `output_form` | `"json"` \| `"nl"` | `"json"` (default) → `list[QueryResult]`; `"nl"` → synthesized string |
+| `output_form` | `"json"` \| `"nl"` | `"json"` (default) → one aggregated table, a list of dicts; `"nl"` → synthesized string |
 | `include_expanded` | `bool` | Also return per-sub-question queries/results alongside the synthesized answer; shape becomes `{"result": ..., "expanded": ...}` |
 | `max_interaction_rounds` | `int` | Max clarification rounds when quality metrics fail (default 3) |
+| `max_subqueries` | `int` | Most sub-questions added to the query, each answered by the KB's agent; `0` answers the query alone, with no expansion call (default: as many as the expansion proposes, at most 5) |
+| `max_kb_turns` | `int` | Most tool-calling turns of the KB's agent per sub-question (default 25) |
+| `model` | `str` | Model for the reasoning steps and the KB's agent (default: the configured reasoning model, else the provider's default) |
+| `on_interaction_start`, `on_interaction_end` | `Callable[[], None]` | Called just before a clarification question is put to the user and once the exchange is over, answered or not |
 | `top_k` | `int` | Max chunks taken from each document store (`external_documents`, `session_content`) per sub-question (default 5); the knowledge graph has no result limit |
 
 ### Sessions
@@ -79,6 +83,8 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 | `name` | `str` | Human-readable label |
 | `description` | `str` | Optional description |
 | `original` | `str` | Original publication date or provenance note |
+| `effort` | `"low"` \| `"medium"` \| `"high"` | Extraction passes over the document: 1, 2 or 3 (default `"medium"`) |
+| `model` | `str` | Model for the extraction (default: the configured extraction model, else the provider's default) |
 | `location` | `str` | Label recorded as the source's location, and what identifies it on a re-add (default: the file's resolved path, or for a text source `"text:<name>"`, or `"text:<content hash>"` without a name) |
 
 ### Data access
@@ -114,7 +120,7 @@ UserSource(name: str = "user_source", properties: dict | None = None)
 ## `UserQueryReasoner`
 
 ```python
-UserQueryReasoner(source, manager=None, session_id=None, query_id=None)
+UserQueryReasoner(source, manager=None, session_id=None, query_id=None, model=None)
 ```
 
 Encapsulates query rewriting, metric-based assessment, and the interaction loop for one `execute_query` call. Instantiated with `_DEFAULT_METRICS` (`CompletenessMetric`, `FreshnessMetric`); appends `PrivacyMetric(manager=manager)` when a `manager` is given.
@@ -124,9 +130,9 @@ Encapsulates query rewriting, metric-based assessment, and the interaction loop 
 | `await contextualize_query(query)` | `str` | Rewrite the query, replacing self-references to the user with their actual name (`identity.name`, falling back to the database id) |
 | `await expand_query(query)` | `list[str]` | Decompose into standalone, schema-grounded, third-person sub-questions (0–5) |
 | `await assess_query_results(query, query_results, query_results_metadata)` | `list[MetricEvaluation]` | Evaluate all applicable metrics in parallel |
-| `await assess_user_interaction(query, query_results, query_results_metadata, evaluations)` | `bool` | Whether any metric failed (also prints a per-metric line) |
-| `await request_user_interaction(query, data, metadata, metrics, topic=None)` | `tuple[list, dict]` | Pick a contact method, ask one clarification question, record and return the augmented result |
-| `await resolve_via_interaction(query, assessment_query, data, metadata, max_rounds=3, topic=None)` | `list[Any]` | Owns the full assess → interact → reassess cycle; returns only the newly collected responses |
+| `await assess_user_interaction(query, query_results, query_results_metadata, evaluations)` | `bool` | Whether any metric failed (each metric is logged at DEBUG) |
+| `await request_user_interaction(query, data, metadata, metrics, topic=None, on_interaction_start=None, on_interaction_end=None)` | `tuple[list, dict]` | Pick a contact method, ask one clarification question, record and return the augmented result |
+| `await resolve_via_interaction(query, assessment_query, data, metadata, max_rounds=3, topic=None, on_interaction_start=None, on_interaction_end=None)` | `list[Any]` | Owns the full assess → interact → reassess cycle; returns only the newly collected responses |
 
 ---
 
@@ -164,7 +170,7 @@ class MetricEvaluation:
 ## `UserDataManager`
 
 ```python
-UserDataManager(database: str, registry_props: dict, doc_source_props: dict | None = None)
+UserDataManager(database: str, registry_props: dict, doc_source_props: dict | None = None, data_root: str | Path | None = None)
 ```
 
 Owns one user's `DataRegistry` and its five built-in sources (`kb`, `metadata`, `contacts`, `sessions`, plus the shared `session_content`/`external_documents` document stores).

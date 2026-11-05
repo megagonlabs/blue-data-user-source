@@ -37,28 +37,20 @@ pip install -e ".[dev]"
 
 ### Construct a multi-user source
 
-`UserSource(name, properties)` takes a name and a properties dict. The `"registry"` property points to the JSONSource that backs the outer DataRegistry (where users are registered as databases and schema paths are stored as source properties):
+Use a concrete source: `FileUserSource` keeps the outer DataRegistry (where users are registered as databases and schema paths are stored as source properties) and each user's stores in files, `MemoryUserSource` in memory, and `RedisUserSource` in Redis. A bare `UserSource` has no data directory, so it deletes no files:
 
 ```python
 import asyncio
-from blue_data_user_source import UserSource
+from blue_data_user_source import FileUserSource, MemoryUserSource
 
 # File-backed (survives process restarts)
-us = UserSource("user_source", {
-    "registry": {
-        "_class": "blue_data.source.json.file_json_source.FileJSONSource",
-        "connection": {"protocol": "json/file", "path": "~/.blue-userdb-lib/registry.json"},
-    },
-    "schema": "data/schema.json",   # optional — used when creating/resetting databases
+us = FileUserSource("user_source", {
+    "connection": {"path": "~/.blue-userdb-lib/registry.json"},
+    # "schema": "my_schema.json",   # optional — replaces the bundled schema when creating/resetting databases
 })
 
 # In-memory (useful for testing)
-us = UserSource("user_source", {
-    "registry": {
-        "_class": "blue_data.source.json.memory_json_source.MemoryJSONSource",
-        "connection": {"protocol": "json/memory"},
-    },
-})
+us = MemoryUserSource("user_source")
 ```
 
 ### Manage databases
@@ -100,11 +92,12 @@ async def main() -> None:
     # Reset — clear KB data + imported registry entries, reseed schema
     await us.reset_user("alice")
 
-    # Remove from outer registry only (KB data kept)
-    us.remove_user("alice")
-
     # Remove from outer registry AND wipe all backing files
     await us.delete_user("alice")
+
+    # Or remove from outer registry only (KB data kept): after this, delete_user
+    # raises UserNotFoundError, so use one or the other
+    # us.remove_user("alice")
 
 asyncio.run(main())
 ```
@@ -140,18 +133,18 @@ async def main() -> None:
 
     # Type 1 — register a file (.txt/.pdf/.docx); always parsed, chunked, and
     # embedded into the shared "external_documents" DocumentDataSource
-    await us.add_source("resume.txt", database="alice")
+    await us.add_source("data/resume.txt", database="alice")
 
     # Type 2 — same ingestion, plus extract specific knowledge via LLM into the KG.
     # The file is already a source, so this updates it rather than adding a second.
     await us.add_source(
-        "resume.txt",
+        "data/resume.txt",
         database="alice",
         optional_properties={"queries": ["What skills does the user have?"]},
     )
 
     # Remove a source: its document leaves search; facts extracted from it are kept
-    await us.remove_source("alice", "resume.txt")
+    await us.remove_source("alice", "data/resume.txt")
 
     # Query — returns (answer, session_id): the answer is one aggregated table (a list
     # of dicts). Omitting "session" auto-creates a new single-query session; pass the

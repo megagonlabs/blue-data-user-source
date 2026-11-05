@@ -41,7 +41,7 @@ cd ../mcp && pip install -e '.[dev]'
 cd ../api && pip install -e '.[dev]'
 ```
 
-`platform/mcp` and `platform/api` ship an `install.sh` that runs the equivalent `pip install -e '.[dev]'`:
+`platform/mcp` and `platform/api` ship an `install.sh` that installs the siblings and the library first, then runs `pip install -e '.[dev]'`:
 
 ```bash
 cd platform/mcp && bash scripts/install.sh
@@ -129,7 +129,7 @@ The library's benchmark suites (`lib/tests/benchmarks/`) are separate from the d
 
 ## Environment variables
 
-Directory locations, backend selection, and server configuration are set via environment variables — there is no separate config file for the CLI, MCP server, or REST API.
+Directory locations, backend selection, and server configuration are set via environment variables. The CLI also reads its `.profiles` file (below), and the REST API a `.env` file ([api.md](api.md)).
 
 | Variable | Used by | Purpose |
 |---|---|---|
@@ -142,6 +142,7 @@ Directory locations, backend selection, and server configuration are set via env
 | `BLUE_DATA_USER_SOURCE_DATABASE` | CLI | Default `--database` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_SESSION` | CLI | Default `--session` when not passed explicitly |
 | `BLUE_DATA_USER_SOURCE_DATA_DIR` | CLI, MCP, API | Directory for `registry.json` and per-user files (default `~/.blue-userdb`) |
+| `BLUE_DATA_USER_SOURCE_ALLOWED_ORIGINS` | API | Comma-separated browser origins, besides the API's own, allowed to make state-changing requests |
 | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `schema.json` for KB schema seeding |
 | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `metadata_schema.json` (default: the one packaged with the library) |
 | `BLUE_DATA_USER_SOURCE_CONTACT_SCHEMA_PATH` | CLI, MCP, API | Path to a custom `contact_schema.json` (default: the one packaged with the library) |

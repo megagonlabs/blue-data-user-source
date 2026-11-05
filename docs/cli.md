@@ -169,6 +169,9 @@ Manage user databases.
 | `--neo4j-port` | `7687` | Neo4j bolt port |
 | `--neo4j-user` | `neo4j` | Neo4j username |
 | _(password)_ | the profile's `BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` | Neo4j password (required for `neo4j` backend). Not a command-line option, so it stays out of shell history: set it with `blue-userdb profile config BLUE_DATA_USER_SOURCE_NEO4J_PASSWORD` (prompts) or export that variable. The password is not stored with the user: each command reads it from that profile value or variable, and so must any other process opening the user (the MCP and REST servers need the variable set) |
+| `--kb-vector-backend` | `file` | Vector store for KB semantic search: `memory` or `file` (`--kb-search-mode semantic` only) |
+| `--kb-embedding-model` | `text-embedding-3-small` | OpenAI embedding model for KB semantic search (`--kb-search-mode semantic` only) |
+| `--metadata-onboard` / `--no-metadata-onboard` | on | Include structured metadata questions in onboarding (KB questions are always asked) |
 | `--doc-backend` | `file` | Vector backend for the user's documents (session transcripts, added files): `memory` or `file` |
 | `--doc-search-mode` | `vector` | How those documents are searched: `vector` (by meaning), `hybrid` (meaning and keywords) or `bm25` (keywords). `bm25`'s index lasts only for the command that added the documents, so later commands find nothing |
 | `--doc-embedding-model` | `openai` | `openai` (`text-embedding-3-small`; needs `OPENAI_API_KEY`) or `dummy` (a hash, no API calls; only with `--doc-search-mode bm25`) |
@@ -246,7 +249,7 @@ blue-userdb data extract "Alice joined Acme Corp in 2019 as a data scientist." \
 | `blue-userdb data source add FILE [options]` | Register a file as a source — always ingested into `external_documents`; optionally extracted into the KG |
 | `blue-userdb data source remove NAME [--yes]` | Remove a source by name or id: its document leaves search and query answers; facts extracted from it are kept |
 
-`source add` options: `--query QUESTION` (repeatable — presence triggers Type 2), `--name`, `--description`, `--original`.
+`source add` options: `--query QUESTION` (repeatable — presence triggers Type 2), `--name`, `--description`, `--original`, `--effort low|medium|high` (extraction passes over the document: 1, 2 or 3; default `medium`).
 
 ```bash
 blue-userdb data source add data/resume.txt                                  # Type 1

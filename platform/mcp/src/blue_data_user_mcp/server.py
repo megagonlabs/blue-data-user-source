@@ -19,9 +19,8 @@ Contacts (read)  — list_contacts, get_contact
 
 Quick start
 -----------
-    # Install
-    pip install -e ../../lib
-    pip install -e .
+    # Install, with the sibling repos and the library
+    bash scripts/install.sh
 
     # Run (stdio transport for Claude Desktop / Claude Code)
     blue-userdb-mcp
@@ -103,9 +102,8 @@ async def create_database(
     try:
         source = get_source()
         if name in source.list_users():
-            # UserSource.create_user is permissive — it rebuilds the manager and
-            # re-registers the record — so the guard lives here, as it does in
-            # the CLI's `database create`.
+            # create_user would raise UserExistsError too (#141); this reports it
+            # before the stores are set up, as the CLI's `database create` does.
             raise ValueError(f"Database '{name}' already exists.")
         props = source.default_user_props(name)
         # Named values only, checked against an allowlist: never a class or a
