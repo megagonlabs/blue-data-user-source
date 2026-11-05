@@ -14,9 +14,10 @@ from pathlib import Path
 import pytest
 
 from blue_data_user_source import FileUserSource, MemoryUserSource, UserExistsError, UserSource
-from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_MEMORY
+from blue_data_user_source.data.manager import CLS_JSON_FILE, CLS_KB_FILE, CLS_KB_MEMORY
 
 _MEM_KB = {"_class": CLS_KB_MEMORY, "connection": {"protocol": "kb/memory"}}
+_OFFLINE_DOCS = {"embedding_model": "dummy", "search_mode": "bm25"}
 
 
 def _json_file(path: Path) -> dict:
@@ -225,3 +226,63 @@ def test_a_base_user_source_expands_its_registry_path(home: Path) -> None:
     us.create_database("hal")
     assert (home / ".blue-userdb-lib" / "registry.json").exists()
     assert not Path("~").exists()
+
+
+# ── the KB's search index (#200) ──────────────────────────────────────────────
+
+def _kb_with_search(data_dir: Path, index: Path) -> dict:
+    return {
+        "_class": CLS_KB_FILE,
+        "connection": {"protocol": "kb/file", "directory": str(data_dir / "sources" / "alice")},
+        "search": {"mode": "bm25", "bm25_index_dir": str(index),
+                   "vector": {"connection": {"directory": str(index.parent / "kb_vectors")}}},
+    }
+
+
+async def _user_with_indexed_text(us: FileUserSource, data_dir: Path, index: Path) -> None:
+    props = us.default_user_props("alice")
+    await us.create_user(
+        "alice", props["registry"], _kb_with_search(data_dir, index), props["metadata_source"],
+        props["contact_source"], props["session_source"], _OFFLINE_DOCS, onboard=False,
+    )
+    kb = us._get_manager("alice")._ensure_kb_source()
+    person = await kb.find_class("alice", "PERSON")
+    await kb.add_entity("alice", "Bluebird Project Lead", class_id=person["id"])
+
+
+def _holds(directory: Path, text: str) -> bool:
+    return any(text in f.read_text() for f in directory.rglob("*.json"))
+
+
+async def test_delete_removes_the_search_index_and_the_users_directory(data_dir: Path) -> None:
+    us = _source(data_dir)
+    index = data_dir / "sources" / "alice" / "kb_search_index"
+    await _user_with_indexed_text(us, data_dir, index)
+    (index.parent / "kb_vectors").mkdir()
+    assert _holds(index, "Bluebird")
+
+    assert await us.delete_user("alice") == []
+    assert not (data_dir / "sources" / "alice").exists()
+
+
+async def test_reset_keeps_no_old_text_on_disk_or_in_the_live_index(data_dir: Path) -> None:
+    us = _source(data_dir)
+    index = data_dir / "sources" / "alice" / "kb_search_index"
+    await _user_with_indexed_text(us, data_dir, index)
+
+    await us.reset_user("alice")
+
+    kb = us._get_manager("alice")._ensure_kb_source()
+    person = await kb.find_class("alice", "PERSON")
+    await kb.add_entity("alice", "Someone Else", class_id=person["id"])  # saves the index again
+    assert _holds(index, "Someone Else")
+    assert not _holds(index, "Bluebird")
+
+
+async def test_a_search_index_outside_the_data_directory_is_refused(data_dir: Path, outside: Path) -> None:
+    us = _source(data_dir)
+    index = outside / "kb_search_index"
+    await _user_with_indexed_text(us, data_dir, index)
+    assert str(index) in await us.delete_user("alice")
+    assert _holds(index, "Bluebird")
+

@@ -405,6 +405,7 @@ class UserDataManager:
             sources = {"kb", "metadata", "contacts", "sessions"}
 
         if "kb" in sources:
+            self._clear_kb_search()
             await self.clear_kb()
             # Ingested documents go with the KB that records them (its SOURCE
             # nodes): left on disk, they came back in the next query (#144).
@@ -499,6 +500,21 @@ class UserDataManager:
         if contained is not None and contained.exists():
             shutil.rmtree(contained)
 
+    def _clear_kb_search(self) -> None:
+        """Remove the KB's search index directories, which hold the user's text (#200).
+
+        The live KB source goes too, because its index keeps that text in memory
+        and would write it back on the next save.
+        """
+        search = (self._registry.get_source_properties("kb") or {}).get("search") or {}
+        vector = ((search.get("vector") or {}).get("connection") or {}).get("directory")
+        directories = [d for d in (search.get("bm25_index_dir"), vector) if d]
+        for directory in directories:
+            self._rmtree(directory)
+        if directories:
+            self._kb_source = None
+            self._registry.sources.pop("kb", None)
+
     def destroy(self) -> list[str]:
         """Delete this user's stored data: backing files, and namespaced stores (e.g. Redis).
 
@@ -519,6 +535,7 @@ class UserDataManager:
                 if user_dir is not None:
                     self._unlink_store_file(user_dir / f"{self._database}.json")
                     self._unlink(user_dir / f".{self._database}.lock")  # the KB's write lock
+            self._clear_kb_search()
 
             # Metadata, contacts, and sessions — a file, or a namespaced store
             # whose keys used to be left behind on Redis (#153).
