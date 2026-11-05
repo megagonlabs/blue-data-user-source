@@ -445,6 +445,8 @@ class UserQueryReasoner:
         from blue_data_user_source.types import InteractionError
 
         new_items: list[Any] = []
+        if max_rounds == 0:  # nothing an assessment could lead to
+            return new_items
         metrics = await self.assess_query_results(assessment_query, data, metadata)
         for _ in range(max_rounds):
             if not await self.assess_user_interaction(assessment_query, data, metadata, metrics):

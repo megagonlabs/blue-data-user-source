@@ -17,13 +17,13 @@ All three are intended to run in CI. `ruff format` and `ruff` are also expected 
 ```toml
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]   # pycodestyle, pyflakes, isort, pyupgrade
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
@@ -35,7 +35,7 @@ venv = ".venv"
 
 Type hints are required on all public methods, public class attributes, and module-level constants. Private methods must also be annotated.
 
-Use Python 3.10+ syntax throughout — no imports from `typing` where newer syntax applies:
+Use Python 3.12+ syntax throughout — no imports from `typing` where newer syntax applies:
 
 ```python
 # correct

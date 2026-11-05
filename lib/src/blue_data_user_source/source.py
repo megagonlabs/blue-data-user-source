@@ -1073,6 +1073,9 @@ class UserSource(DataSource):
         props = optional_properties or {}
         output_form = str(props.get("output_form", "json"))
         include_expanded = bool(props.get("include_expanded", False))
+        if not isinstance(query, str):
+            # A dict op, say, would otherwise be answered as text, at the cost of a query.
+            raise QueryError(f"A query must be a string, not {type(query).__name__}; UserSource serves no ops.")
         top_k = _bounded_int(props, "top_k", DOC_SEARCH_TOP_K, minimum=1)
         max_subqueries = _bounded_int(props, "max_subqueries", None, minimum=0)
         max_kb_turns = _bounded_int(props, "max_kb_turns", None, minimum=1)
@@ -1099,7 +1102,7 @@ class UserSource(DataSource):
 
         # Phase 1: contextualize then expand (sequential — expand uses the rewritten query)
         rewritten = await reasoner.contextualize_query(query)
-        questions = await reasoner.expand_query(rewritten)
+        questions = [] if max_subqueries == 0 else await reasoner.expand_query(rewritten)
         if max_subqueries is not None:
             questions = questions[:max_subqueries]
         questions.append(rewritten)

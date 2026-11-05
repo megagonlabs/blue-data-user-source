@@ -124,3 +124,28 @@ async def test_the_extraction_runs_on_the_model_given(source) -> None:
         await source.add_text_source("Alice likes jazz.", database="alice",
                                      optional_properties={"queries": ["q"]})
         assert import_text.await_args.kwargs["model"] == "gpt-4o"  # the provider's default (#190)
+
+
+# ── zero bounds spend nothing, and an op is no query (#207) ───────────────────
+
+async def test_no_subqueries_makes_no_expansion_call(source, kb_answer) -> None:
+    with patch("blue_data_user_source.reasoning.reasoner.UserQueryReasoner.expand_query", AsyncMock()) as expand:
+        await _ask(source, max_subqueries=0)
+    expand.assert_not_awaited()
+    assert kb_answer.await_count == 1
+
+
+async def test_no_interaction_rounds_makes_no_assessment_calls(source, kb_answer) -> None:
+    with patch("blue_data_user_source.reasoning.reasoner.UserQueryReasoner.assess_query_results",
+               AsyncMock()) as assess:
+        await _ask(source, max_interaction_rounds=0)
+    assess.assert_not_awaited()
+
+
+@pytest.mark.parametrize("query", [{"op": "SOMETHING"}, ["a"], None, 5])
+async def test_a_query_that_is_no_string_is_refused_before_anything_runs(source, kb_answer, query) -> None:
+    with pytest.raises(QueryError, match="must be a string"):
+        await source.async_execute_query(query, database="alice")
+    kb_answer.assert_not_awaited()
+    assert await source.list_sessions("alice") == {}
+
