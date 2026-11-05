@@ -9,7 +9,7 @@ bash platform/cli/scripts/install.sh       # or scripts/install.sh for the MCP s
 export OPENAI_API_KEY=sk-...
 ```
 
-> **Cost.** Each query and each `--query` extraction makes dozens of OpenAI calls. At the default model (gpt-4o), this walkthrough cost about $1.50–$2 in testing, mostly its four queries ($0.20–$0.55 each); the cost of a query varies from run to run. To spend less, add `--max-subqueries 1 --max-kb-turns 8` to `data query`, and see [Cost](guide.md#cost) for cheaper model settings.
+> **Cost.** Each query and each `--query` extraction makes dozens of OpenAI calls. The queries below add `--max-subqueries 1 --max-kb-turns 8` to bound that. At the default model (gpt-4o), this walkthrough cost about $0.65 in testing: about $0.10 per query and $0.25 for the extraction. Without those options, the walkthrough cost about $1.50–$2 in testing ($0.20–$0.55 per query), and a query searches more of the knowledge graph. The cost of a query varies from run to run. See [Cost](guide.md#cost) for cheaper model settings.
 
 ## 1. Create a database and select it
 
@@ -38,7 +38,7 @@ Adding a file that is already a source, as the Type 2 step does here, updates th
 ## 3. Query
 
 ```bash
-blue-userdb data query "What jobs are suitable for me?"
+blue-userdb data query "What jobs are suitable for me?" --max-subqueries 1 --max-kb-turns 8
 ```
 
 The answer is a table of rows whose columns come from the answer itself (for example `job_title`, `organization`, `skills`). `--format nl` answers in prose, and `--include-expanded` also prints each sub-question with its raw results under "Expanded:".
@@ -46,7 +46,7 @@ The answer is a table of rows whose columns come from the answer itself (for exa
 `execute_query` rewrites the query (resolving "me"/"you" to the user's actual name), expands it into schema-grounded sub-questions, retrieves data for each from the knowledge graph and any registered documents, and assesses the combined result for completeness and freshness — asking a clarification question if quality checks fail.
 
 ```bash
-blue-userdb data query "What jobs are suitable for me?" --format nl
+blue-userdb data query "What jobs are suitable for me?" --format nl --max-subqueries 1 --max-kb-turns 8
 ```
 
 ## 4. Group queries into a session
@@ -55,8 +55,8 @@ A session ties multiple queries and their clarification interactions into one co
 
 ```bash
 blue-userdb session start
-blue-userdb data query "What jobs are suitable for me?"    # continues the selected session
-blue-userdb data query "What about remote roles?"          # same session
+blue-userdb data query "What jobs are suitable for me?" --max-subqueries 1 --max-kb-turns 8    # continues the selected session
+blue-userdb data query "What about remote roles?" --max-subqueries 1 --max-kb-turns 8          # same session
 blue-userdb session show                                    # see queries and interactions
 blue-userdb session end
 ```
