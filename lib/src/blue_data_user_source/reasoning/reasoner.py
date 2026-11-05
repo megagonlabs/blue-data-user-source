@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,7 +59,8 @@ def _strip_json_fences(text: str) -> str:
 
 
 def _parse_json_object(content: str) -> Any:
-    """The JSON value in *content*: the whole text, else the first object in it.
+    """The JSON value in *content*: the whole text, else the first object in it,
+    trying each ``{`` because the words before it may hold one (#204).
 
     OpenAI's JSON mode returns bare JSON; other providers have no JSON mode for
     a reply without a schema (LiteLLM drops ``response_format`` for Anthropic),
@@ -68,11 +70,20 @@ def _parse_json_object(content: str) -> Any:
     text = _strip_json_fences(content)
     try:
         return json.loads(text)
-    except ValueError:  # json.JSONDecodeError is a ValueError
-        start = text.find("{")
-        if start < 0:
-            raise
-        return json.JSONDecoder().raw_decode(text[start:])[0]
+    except ValueError as exc:  # json.JSONDecodeError is a ValueError
+        decoder = json.JSONDecoder()
+        empty = False
+        for match in re.finditer(r"\{", text):
+            try:
+                found = decoder.raw_decode(text[match.start():])[0]
+            except ValueError:
+                continue
+            if found:
+                return found
+            empty = True  # "{}" in the words before the object
+        if empty:
+            return {}
+        raise exc
 
 
 async def _llm_complete(
