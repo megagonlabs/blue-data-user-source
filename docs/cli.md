@@ -27,7 +27,7 @@ Data is persisted under `~/.blue-userdb/` by default:
 ```
 ~/.blue-userdb/
 ├── .selected.database          # active database name (written by 'database select'/'create')
-├── .selected.session            # active session id (written by 'session select'/'start', and auto-created sessions)
+├── .selected.session.alice      # alice's active session id (written by 'session select'/'start', and auto-created sessions; removed by 'database reset')
 ├── registry.json               # outer registry (users + source properties)
 ├── registries/
 │   └── alice.json              # per-user registry (sources registered for alice)
@@ -66,7 +66,7 @@ blue-userdb [--database NAME] [--session ID] [--data-dir DIR] [--schema-path PAT
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | the selection in `~/.blue-userdb/.selected.database`, then the profile | Active database (user) name |
-| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.blue-userdb/.selected.session` | Session id for query context |
+| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the database's selection in `~/.blue-userdb/.selected.session.<database>` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to a custom `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to a custom metadata schema |
@@ -190,7 +190,7 @@ A session groups the queries and clarification interactions of one conversation.
 | `blue-userdb session list [--format]` | List sessions |
 | `blue-userdb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected one) |
 
-**Resolution order** for the session used by `blue-userdb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and writes it to `.selected.session`, so the next query continues it automatically.
+**Resolution order** for the session used by `blue-userdb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → the database's `.selected.session.<database>` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and writes it to `.selected.session`, so the next query continues it automatically.
 
 ---
 

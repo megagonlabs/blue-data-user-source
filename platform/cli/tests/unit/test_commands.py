@@ -447,7 +447,7 @@ def test_session_start_creates_and_selects_session(runner: CliRunner, data_dir: 
         result = _invoke(runner, data_dir, ["session", "start"])
     assert result.exit_code == 0
     assert "sess-1" in result.output
-    assert (data_dir / ".selected.session").read_text() == "sess-1"
+    assert (data_dir / ".selected.session.alice").read_text() == "sess-1"
 
 
 def test_session_select_unknown_id_exits_with_code_1(runner: CliRunner, data_dir: Path) -> None:
@@ -461,13 +461,13 @@ def test_session_select_unknown_id_exits_with_code_1(runner: CliRunner, data_dir
 
 def test_session_end_clears_matching_selection(runner: CliRunner, data_dir: Path) -> None:
     _select_database(data_dir, "alice")
-    (data_dir / ".selected.session").write_text("sess-1")
+    (data_dir / ".selected.session.alice").write_text("sess-1")
     mock = MagicMock()
     mock.end_session = AsyncMock(return_value=None)
     with _patched(mock):
         result = _invoke(runner, data_dir, ["session", "end", "sess-1"])
     assert result.exit_code == 0
-    assert not (data_dir / ".selected.session").exists()
+    assert not (data_dir / ".selected.session.alice").exists()
 
 
 def test_session_list_shows_sessions(runner: CliRunner, data_dir: Path) -> None:
@@ -584,7 +584,7 @@ def test_data_query_selects_new_session_when_none_given(
     mock.async_execute_query = AsyncMock(return_value=([], "sess-new"))
     with _patched(mock):
         _invoke(runner, data_dir, ["data", "query", "q"])
-    assert (data_dir / ".selected.session").read_text() == "sess-new"
+    assert (data_dir / ".selected.session.alice").read_text() == "sess-new"
 
 
 def test_root_session_option_is_forwarded(runner: CliRunner, data_dir: Path) -> None:
@@ -631,7 +631,7 @@ def test_command_session_option_outranks_the_root_one(
 def test_selected_session_file_is_the_last_resort(runner: CliRunner, data_dir: Path) -> None:
     """The file still wins over nothing, and still loses to an explicit value."""
     _select_database(data_dir, "alice")
-    (data_dir / ".selected.session").write_text("sess-file")
+    (data_dir / ".selected.session.alice").write_text("sess-file")
     mock = MagicMock()
     mock.async_execute_query = AsyncMock(return_value=([], "sess-1"))
     with _patched(mock):
@@ -1435,3 +1435,63 @@ def test_neo4j_password_is_not_a_command_line_option(runner: CliRunner, data_dir
                                         "--neo4j-password", "s3cret", "--no-onboard"])
     assert result.exit_code == 2
     assert "No such option" in result.output
+
+
+# ── the session selection is per database (#195) ──────────────────────────────
+
+def _query_session(runner: CliRunner, data_dir: Path, *args: str) -> str | None:
+    """The session `data query` sends, and the session the query answers with."""
+    mock = MagicMock()
+    mock.async_execute_query = AsyncMock(return_value=([], "sess-new"))
+    with _patched(mock):
+        result = _invoke(runner, data_dir, [*args, "data", "query", "hello"])
+    assert result.exit_code == 0, result.output
+    return mock.async_execute_query.await_args.kwargs["optional_properties"].get("session")
+
+
+def test_a_session_is_never_sent_to_another_database(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session.alice").write_text("sess-alice")
+    _select_database(data_dir, "bob")
+    assert _query_session(runner, data_dir) is None  # a first query starts bob's own
+    assert (data_dir / ".selected.session.bob").read_text() == "sess-new"
+    assert (data_dir / ".selected.session.alice").read_text() == "sess-alice"
+
+
+def test_coming_back_to_a_database_continues_its_session(runner: CliRunner, data_dir: Path) -> None:
+    (data_dir / ".selected.session.alice").write_text("sess-alice")
+    (data_dir / ".selected.session.bob").write_text("sess-bob")
+    _select_database(data_dir, "bob")
+    assert _query_session(runner, data_dir) == "sess-bob"
+    assert _query_session(runner, data_dir, "--database", "alice") == "sess-alice"
+
+
+def test_a_selection_from_before_the_per_database_file_is_ignored(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session").write_text("sess-old")
+    assert _query_session(runner, data_dir) is None
+
+
+def test_reset_clears_only_that_databases_selection(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session.alice").write_text("sess-alice")
+    (data_dir / ".selected.session.bob").write_text("sess-bob")
+    mock = MagicMock()
+    mock.reset_user = AsyncMock(return_value=[])
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "reset", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert not (data_dir / ".selected.session.alice").exists()
+    assert (data_dir / ".selected.session.bob").exists()
+
+
+def test_deleting_a_database_that_is_not_selected_clears_its_selection(runner: CliRunner, data_dir: Path) -> None:
+    _select_database(data_dir, "alice")
+    (data_dir / ".selected.session.bob").write_text("sess-bob")
+    mock = MagicMock()
+    mock.delete_user = AsyncMock(return_value=[])
+    with _patched(mock):
+        result = _invoke(runner, data_dir, ["database", "delete", "bob", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert not (data_dir / ".selected.session.bob").exists()
+

@@ -621,13 +621,13 @@ A session groups the queries/interactions of one conversation. Commands mirror `
 
 | Command | Description |
 |---------|-------------|
-| `blue-userdb session start` | Create a new session for the active database and select it (persists to `.selected.session`) |
+| `blue-userdb session start` | Create a new session for the active database and select it (persists to `.selected.session.<database>`) |
 | `blue-userdb session select SESSION_ID` | Set the active session |
 | `blue-userdb session end [SESSION_ID]` | End a session (defaults to the selected session); clears the selection if it matches |
 | `blue-userdb session list [--format]` | List sessions for the active database |
 | `blue-userdb session show [SESSION_ID] [--format]` | Show a session's queries and interactions (defaults to the selected session) |
 
-Session selection resolves the same way as `--database`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. **Unlike** database selection, an unresolved session is not an error — `blue-userdb data query` falls through to auto-creating a new session (reuse-or-create), and that new session is then auto-selected for the next call.
+Session selection resolves the same way as `--database`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session.<database>` file. **Unlike** database selection, an unresolved session is not an error — `blue-userdb data query` falls through to auto-creating a new session (reuse-or-create), and that new session is then auto-selected for the next call.
 
 ---
 
@@ -657,7 +657,7 @@ All `data` commands require an active database.
 | `--include-expanded` | Also show each sub-question's raw results |
 | `--model` | LLM model for this query |
 
-When a query auto-creates a new session (no `--session`, no selected session), the CLI writes it to `.selected.session` so the next `blue-userdb data query` call continues the same session automatically.
+When a query auto-creates a new session (no `--session`, no selected session), the CLI writes it to `.selected.session.<database>` so the next `blue-userdb data query` call continues the same session automatically.
 
 **Example**
 

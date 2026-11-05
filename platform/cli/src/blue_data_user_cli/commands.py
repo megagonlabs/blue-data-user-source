@@ -331,13 +331,15 @@ def _get_db(obj: dict, fmt: str | None = None) -> str:
     _fail("No database selected. Use --database or run 'blue-userdb database select NAME'.", fmt)
 
 
-def _selected_session_path(data_dir: Path) -> Path:
-    return data_dir / _SELECTED_SESSION_FILE
+def _selected_session_path(data_dir: Path, db: str) -> Path:
+    """Where *db*'s selected session is kept. Sessions belong to one user, so a
+    selection shared between databases sent one's session to another (#195)."""
+    return data_dir / f"{_SELECTED_SESSION_FILE}.{db}"
 
 
 def _get_session(obj: dict, session: str | None) -> str | None:
-    """Resolve a session id: command argument → root `--session` → the
-    `.selected.session` file → None.
+    """Resolve a session id: command argument → root `--session` → the active
+    database's `.selected.session.<database>` file → None.
 
     The root option carries the environment variable and the profile with it
     (see the root callback), so this no longer reads `BLUE_DATA_USER_SOURCE_SESSION`
@@ -351,8 +353,9 @@ def _get_session(obj: dict, session: str | None) -> str | None:
         return session
     if obj.get("session"):
         return obj["session"]
-    sel_path = _selected_session_path(obj["data_dir"])
-    if sel_path.exists():
+    db = _active_db(obj)
+    sel_path = _selected_session_path(obj["data_dir"], db) if db else None
+    if sel_path is not None and sel_path.exists():
         sel = sel_path.read_text().strip()
         if sel:
             return sel
@@ -771,9 +774,7 @@ def database_delete(obj: dict, name: str, yes: bool) -> None:
     sel_path = _selected_db_path(obj["data_dir"])
     if sel_path.exists() and sel_path.read_text().strip() == name:
         sel_path.unlink()
-        sess_sel_path = _selected_session_path(obj["data_dir"])
-        if sess_sel_path.exists():
-            sess_sel_path.unlink()
+    _selected_session_path(obj["data_dir"], name).unlink(missing_ok=True)
     console.print(f"Deleted database: [bold]{name}[/bold]")
 
 
@@ -838,6 +839,7 @@ def database_reset(obj: dict, yes: bool) -> None:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     _warn_kept(kept)
+    _selected_session_path(obj["data_dir"], db).unlink(missing_ok=True)  # its sessions are gone
     console.print(f"Reset database: [bold]{db}[/bold]")
 
 
@@ -909,7 +911,7 @@ def session_start(obj: dict) -> None:
         session_id = asyncio.run(source.create_session(db))
     except (UDbError, Exception) as exc:
         _fail(str(exc))
-    _selected_session_path(obj["data_dir"]).write_text(session_id)
+    _selected_session_path(obj["data_dir"], db).write_text(session_id)
     console.print(f"Started session: [bold]{session_id}[/bold] (selected)")
 
 
@@ -926,7 +928,7 @@ def session_select(obj: dict, session_id: str) -> None:
         _fail(str(exc))
     if found is None:
         _fail(f"Session '{session_id}' not found.")
-    _selected_session_path(obj["data_dir"]).write_text(session_id)
+    _selected_session_path(obj["data_dir"], db).write_text(session_id)
     console.print(f"Selected session: [bold]{session_id}[/bold]")
 
 
@@ -950,7 +952,7 @@ def session_end(obj: dict, session_id: str | None) -> None:
     except UDbError as exc:
         err.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    sel_path = _selected_session_path(data_dir)
+    sel_path = _selected_session_path(data_dir, db)
     if sel_path.exists() and sel_path.read_text().strip() == sid:
         sel_path.unlink()
     console.print(f"Ended session: [bold]{sid}[/bold]")
@@ -1314,7 +1316,7 @@ def data_query(
     if not resolved_session:
         # Auto-select-after-auto-create: continue this session on the next query
         # without requiring an explicit 'blue-userdb session select'.
-        _selected_session_path(obj["data_dir"]).write_text(session_id)
+        _selected_session_path(obj["data_dir"], db).write_text(session_id)
     answer = results["result"] if isinstance(results, dict) else results
     expanded = results.get("expanded") if isinstance(results, dict) else None
 

@@ -69,7 +69,7 @@ blue-userdb [--profile NAME] [--database NAME] [--session ID] [--data-dir DIR]
 |---|---|---|---|
 | `--profile NAME` | — (`BLUE_DATA_PROFILE`) | the selection in `~/.blue-userdb/.selected.profile` | Configuration profile |
 | `--database NAME` | `BLUE_DATA_USER_SOURCE_DATABASE` | the selection in `~/.blue-userdb/.selected.database`, then the profile | Active database (user) name |
-| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the selection in `~/.blue-userdb/.selected.session` | Session id for query context |
+| `--session ID` | `BLUE_DATA_USER_SOURCE_SESSION` | the database's selection in `~/.blue-userdb/.selected.session.<database>` | Session id for query context |
 | `--data-dir DIR` | `BLUE_DATA_USER_SOURCE_DATA_DIR` | `~/.blue-userdb` | Directory where database files are stored |
 | `--schema-path PATH` | `BLUE_DATA_USER_SOURCE_SCHEMA_PATH` | — | Path to `schema.json` for KB schema seeding |
 | `--metadata-schema-path PATH` | `BLUE_DATA_USER_SOURCE_METADATA_SCHEMA_PATH` | packaged `metadata_schema.json` | Path to the metadata schema |
@@ -227,7 +227,7 @@ blue-userdb session list
 blue-userdb session end
 ```
 
-**Resolution order** for the session used by `blue-userdb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → `.selected.session` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and that session is then written to `.selected.session`, so the next query continues it automatically.
+**Resolution order** for the session used by `blue-userdb data query`: `--session` flag → `BLUE_DATA_USER_SOURCE_SESSION` env var → the database's `.selected.session.<database>` file. Unlike database selection, an unresolved session is **not** an error — the query auto-creates a new session and that session is then written to `.selected.session`, so the next query continues it automatically.
 
 ---
 
@@ -388,7 +388,7 @@ Data is persisted under `~/.blue-userdb/` by default:
 ├── .profiles                  # configuration profiles (mode 0600, written by 'blue-userdb profile config')
 ├── .selected.profile          # active profile name (written by 'blue-userdb profile select')
 ├── .selected.database         # active database name (written by 'blue-userdb database select'/'create')
-├── .selected.session           # active session id (written by 'blue-userdb session select'/'start', and auto-created sessions)
+├── .selected.session.alice     # alice's active session id (written by 'blue-userdb session select'/'start', and auto-created sessions; removed by 'database reset')
 ├── registry.json              # outer DataRegistry store (databases + source properties)
 ├── registries/
 │   └── alice.json             # per-user DataRegistry store (sources registered for alice)
