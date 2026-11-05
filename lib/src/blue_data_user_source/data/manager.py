@@ -485,15 +485,17 @@ class UserDataManager:
         if contained is not None:
             contained.unlink(missing_ok=True)
 
-    def _unlink_store_file(self, path: str | Path) -> None:
+    def _unlink_store_file(self, path: str | Path) -> Path | None:
         """Remove a store's file and the ``<file>.lock`` sidecar its locking leaves (#179).
 
         The sidecar sits beside the file, so it is removed only when the file is.
+        Returns the path removed, or None when it was refused.
         """
         contained = self._contained(path)
         if contained is not None:
             contained.unlink(missing_ok=True)
             contained.with_name(f"{contained.name}.lock").unlink(missing_ok=True)
+        return contained
 
     def _rmtree(self, path: str | Path) -> None:
         contained = self._contained(path)
@@ -523,7 +525,13 @@ class UserDataManager:
         every other user, so clearing "its" keys would delete theirs. A recorded
         file path outside the data directory is left alone too (#156); the
         paths refused are returned (and logged).
+
+        A KB with no directory (Neo4j) is emptied first, through the KB itself.
+        If that fails, ``UDbError`` is raised with nothing removed, because the
+        user's records are the only way back to that graph (#201).
         """
+        from blue_data_user_source.types import UDbError
+
         self._refused = []
         user_dir: Path | None = None
         if self._registry is not None:
@@ -535,6 +543,13 @@ class UserDataManager:
                 if user_dir is not None:
                     self._unlink_store_file(user_dir / f"{self._database}.json")
                     self._unlink(user_dir / f".{self._database}.lock")  # the KB's write lock
+            else:
+                try:
+                    self._ensure_kb_source().create_database(self._database, overwrite=True)
+                except Exception as exc:
+                    raise UDbError(
+                        f"Could not clear the KB of user {self._database!r}, so nothing was deleted: {exc}"
+                    ) from exc
             self._clear_kb_search()
 
             # Metadata, contacts, and sessions — a file, or a namespaced store
@@ -543,7 +558,10 @@ class UserDataManager:
                 props = self._registry.get_source_properties(src_name) or {}
                 conn = props.get("connection", {})
                 if "path" in conn:
-                    self._unlink_store_file(conn["path"])
+                    removed = self._unlink_store_file(conn["path"])
+                    # A KB with no directory says nothing of where the user's files are.
+                    if user_dir is None and removed is not None:
+                        user_dir = removed.parent
                 elif props.get("namespace"):
                     self._connect_source(src_name).delete(None)
                 elif conn.get("protocol", "").startswith("json/redis"):
