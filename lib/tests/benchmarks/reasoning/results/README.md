@@ -15,17 +15,17 @@ Value: mean case value: 1/0 for a metric decision (completeness, freshness, priv
 
 ## Latest run
 
-`20261102-190647` · commit `35955a5` · gpt-4o · 22 cases, 22 runs · judge gpt-4o-mini · 5k tokens · *calls through LiteLLM (#190), console off by default (#191), Python 3.12*
+`20261105-161709` · commit `1fff0fd` · gpt-4o · 22 cases, 22 runs · judge gpt-4o-mini · 5k tokens · *milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272)*
 
 | | value |
 |---|---|
-| **all** | 0.91 `██` |
-| appropriateness (3) | 0.67 ▼0.10 `▇▆` |
-| completeness (3) | 1.00 `██` |
-| contextualization (3) | 0.83 ▼0.03 `▇▇` |
-| expansion (3) | 0.87 ▲0.13 `▆▇` |
-| freshness (5) | 1.00 `██` |
-| privacy (5) | 1.00 `██` |
+| **all** | 0.89 ▼0.03 `███` |
+| appropriateness (3) | 0.67 `▇▆▆` |
+| completeness (3) | 1.00 `███` |
+| contextualization (3) | 0.80 ▼0.03 `▇▇▇` |
+| expansion (3) | 0.73 ▼0.13 `▆▇▆` |
+| freshness (5) | 0.99 ▼0.01 `███` |
+| privacy (5) | 1.00 `███` |
 
 Each cell: latest value, ▲/▼ change since the previous run, and the history as a sparkline (`▁` = 0, `█` = 1).
 
@@ -35,15 +35,15 @@ Each cell: latest value, ▲/▼ change since the previous run, and the history 
 %%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#2563eb, #16a34a, #dc2626, #9333ea, #ea580c, #0891b2, #ca8a04"}}}}%%
 xychart-beta
     title "reasoning: per run"
-    x-axis ["20261010", "261102-1906"]
+    x-axis ["20261010", "261102-1906", "261105-1617"]
     y-axis "value" 0 --> 1
-    line [0.91, 0.91]
-    line [0.77, 0.67]
-    line [1.00, 1.00]
-    line [0.87, 0.83]
-    line [0.73, 0.87]
-    line [1.00, 1.00]
-    line [1.00, 1.00]
+    line [0.91, 0.91, 0.89]
+    line [0.77, 0.67, 0.67]
+    line [1.00, 1.00, 1.00]
+    line [0.87, 0.83, 0.80]
+    line [0.73, 0.87, 0.73]
+    line [1.00, 1.00, 0.99]
+    line [1.00, 1.00, 1.00]
 ```
 
 *Lines: blue = all, green = appropriateness, red = completeness, purple = contextualization, orange = expansion, teal = freshness, yellow = privacy.*
@@ -53,9 +53,9 @@ xychart-beta
 ```mermaid
 xychart-beta horizontal
     title "reasoning, latest run: per group (weakest first)"
-    x-axis ["appropriateness", "contextualization", "expansion", "completeness", "freshness", "privacy"]
+    x-axis ["appropriateness", "expansion", "contextualization", "freshness", "completeness", "privacy"]
     y-axis "value" 0 --> 1
-    bar [0.67, 0.83, 0.87, 1.00, 1.00, 1.00]
+    bar [0.67, 0.73, 0.80, 0.99, 1.00, 1.00]
 ```
 
 ## By case (latest run)
@@ -64,28 +64,28 @@ xychart-beta horizontal
 
 | case | group | value | score |
 |---|---|---|---|
-| appropriateness_email | appropriateness | 0.90 `██` | — |
-| appropriateness_stdio | appropriateness | 0.20 ▼0.30 `▅▂` | — |
-| appropriateness_webhook | appropriateness | 0.90 `██` | — |
-| completeness_empty | completeness | 1.00 `██` | 0.00 |
-| completeness_rich_profile | completeness | 1.00 `██` | 0.80 |
-| completeness_sparse_profile | completeness | 1.00 `██` | 0.10 |
-| ctx_career_query | contextualization | 0.80 ▼0.10 `█▇` | — |
-| ctx_location_query | contextualization | 0.80 ▼0.10 `█▇` | — |
-| ctx_skills_query | contextualization | 0.90 ▲0.10 `▇█` | — |
-| exp_job_query | expansion | 1.00 `██` | — |
-| exp_learning_query | expansion | 0.80 `▇▇` | — |
-| exp_relocation_query | expansion | 0.80 ▲0.40 `▄▇` | — |
-| freshness_empty | freshness | 1.00 `██` | 0.00 |
-| freshness_mixed_nodes | freshness | 1.00 `██` | — |
-| freshness_moderate | freshness | 1.00 `██` | 0.75 |
-| freshness_recent | freshness | 1.00 `██` | 1.00 |
-| freshness_stale | freshness | 1.00 `██` | 0.00 |
-| privacy_minimal_consent_detailed | privacy | 1.00 `██` | 0.20 |
-| privacy_no_restrictions | privacy | 1.00 `██` | 0.90 |
-| privacy_public_sharing | privacy | 1.00 `██` | 1.00 |
-| privacy_sensitive_exposure | privacy | 1.00 `██` | 0.20 |
-| privacy_sensitive_safe_results | privacy | 1.00 `██` | 1.00 |
+| appropriateness_email | appropriateness | 0.80 ▼0.10 `██▇` | — |
+| appropriateness_stdio | appropriateness | 0.30 ▲0.10 `▅▂▃` | — |
+| appropriateness_webhook | appropriateness | 0.90 `███` | — |
+| completeness_empty | completeness | 1.00 `███` | 0.00 |
+| completeness_rich_profile | completeness | 1.00 `███` | 0.80 |
+| completeness_sparse_profile | completeness | 1.00 `███` | 0.20 |
+| ctx_career_query | contextualization | 0.80 `█▇▇` | — |
+| ctx_location_query | contextualization | 0.80 `█▇▇` | — |
+| ctx_skills_query | contextualization | 0.80 ▼0.10 `▇█▇` | — |
+| exp_job_query | expansion | 1.00 `███` | — |
+| exp_learning_query | expansion | 0.80 `▇▇▇` | — |
+| exp_relocation_query | expansion | 0.40 ▼0.40 `▄▇▄` | — |
+| freshness_empty | freshness | 1.00 `███` | 0.00 |
+| freshness_mixed_nodes | freshness | 0.95 ▼0.05 `███` | — |
+| freshness_moderate | freshness | 1.00 `███` | 0.75 |
+| freshness_recent | freshness | 1.00 `███` | 1.00 |
+| freshness_stale | freshness | 1.00 `███` | 0.10 |
+| privacy_minimal_consent_detailed | privacy | 1.00 `███` | 0.20 |
+| privacy_no_restrictions | privacy | 1.00 `███` | 0.80 |
+| privacy_public_sharing | privacy | 1.00 `███` | 1.00 |
+| privacy_sensitive_exposure | privacy | 1.00 `███` | 0.00 |
+| privacy_sensitive_safe_results | privacy | 1.00 `███` | 1.00 |
 
 *score*: the metric's own reading, for a metric case; its value is whether the pass/fail decision is the expected one.
 
@@ -95,6 +95,7 @@ xychart-beta horizontal
 
 | run | commit | models | cases | value | tokens | latency | note |
 |---|---|---|---|---|---|---|---|
+| 20261105-161709 | `1fff0fd` | gpt-4o | 22 | 0.89 | 5k | 30s | milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272) |
 | 20261102-190647 | `35955a5` | gpt-4o | 22 | 0.91 | 5k | 31s | calls through LiteLLM (#190), console off by default (#191), Python 3.12 |
 | 20261010 | `d00f477` | gpt-4o | 22 | 0.91 | 5k | 19s | **baseline** [`results/2026-10-10-gpt-4o/`](../../results/2026-10-10-gpt-4o/) first committed run (#131). One sample per case: exp_relocation_query scored 1.0 in an earlier probe and 0.40 here. |
 

@@ -15,14 +15,14 @@ Value: mean hit rate: share of expected facts retrieved.
 
 ## Latest run
 
-`20261102-191000` · commit `35955a5` · gpt-4o · 5 cases, 5 runs · judge gpt-4o-mini · 566k tokens · *calls through LiteLLM (#190), console off by default (#191), Python 3.12*
+`20261105-162201` · commit `1fff0fd` · gpt-4o · 5 cases, 5 runs · judge gpt-4o-mini · 595k tokens · *milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272)*
 
 | | value |
 |---|---|
-| **all** | 0.73 ▲0.33 `▄▆` |
-| by_name (1) | 1.00 `██` |
-| second_person (2) | 0.50 ▲0.50 `▁▅` |
-| third_person_user (2) | 0.83 ▲0.33 `▅▇` |
+| **all** | 0.60 ▼0.13 `▄▆▅` |
+| by_name (1) | 0.00 ▼1.00 `██▁` |
+| second_person (2) | 0.50 `▁▅▅` |
+| third_person_user (2) | 1.00 ▲0.17 `▅▇█` |
 
 Each cell: latest value, ▲/▼ change since the previous run, and the history as a sparkline (`▁` = 0, `█` = 1).
 
@@ -32,12 +32,12 @@ Each cell: latest value, ▲/▼ change since the previous run, and the history 
 %%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#2563eb, #16a34a, #dc2626, #9333ea"}}}}%%
 xychart-beta
     title "querying: per run"
-    x-axis ["20261010", "261102-1910"]
+    x-axis ["20261010", "261102-1910", "261105-1622"]
     y-axis "value" 0 --> 1
-    line [0.40, 0.73]
-    line [1.00, 1.00]
-    line [0.00, 0.50]
-    line [0.50, 0.83]
+    line [0.40, 0.73, 0.60]
+    line [1.00, 1.00, 0.00]
+    line [0.00, 0.50, 0.50]
+    line [0.50, 0.83, 1.00]
 ```
 
 *Lines: blue = all, green = by_name, red = second_person, purple = third_person_user.*
@@ -47,9 +47,9 @@ xychart-beta
 ```mermaid
 xychart-beta horizontal
     title "querying, latest run: per group (weakest first)"
-    x-axis ["second_person", "third_person_user", "by_name"]
+    x-axis ["by_name", "second_person", "third_person_user"]
     y-axis "value" 0 --> 1
-    bar [0.50, 0.83, 1.00]
+    bar [0.00, 0.50, 1.00]
 ```
 
 ## By case (latest run)
@@ -58,11 +58,11 @@ xychart-beta horizontal
 
 | case | group | value |
 |---|---|---|
-| skills_by_name | by_name | 1.00 `██` |
-| preferences_second_person | second_person | 1.00 ▲1.00 `▁█` |
-| skills_second_person | second_person | 0.00 `▁▁` |
-| career_by_user_pronoun | third_person_user | 0.67 ▲0.67 `▁▆` |
-| skills_third_person_user | third_person_user | 1.00 `██` |
+| skills_by_name | by_name | 0.00 ▼1.00 `██▁` |
+| preferences_second_person | second_person | 0.00 ▼1.00 `▁█▁` |
+| skills_second_person | second_person | 1.00 ▲1.00 `▁▁█` |
+| career_by_user_pronoun | third_person_user | 1.00 ▲0.33 `▁▆█` |
+| skills_third_person_user | third_person_user | 1.00 `███` |
 
 </details>
 
@@ -70,6 +70,7 @@ xychart-beta horizontal
 
 | run | commit | models | cases | value | tokens | latency | note |
 |---|---|---|---|---|---|---|---|
+| 20261105-162201 | `1fff0fd` | gpt-4o | 5 | 0.60 | 595k | 352s | milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272) |
 | 20261102-191000 | `35955a5` | gpt-4o | 5 | 0.73 | 566k | 323s | calls through LiteLLM (#190), console off by default (#191), Python 3.12 |
 | 20261010 | `d00f477` | gpt-4o | 5 | 0.40 | 988k | 351s | **baseline** [`results/2026-10-10-gpt-4o/`](../../results/2026-10-10-gpt-4o/) first committed run (#131). Every query was rewritten to the user's name, but the KB query agent sometimes loops until it gives up and returns nothing: the three 0.0 cases took 61-121 agent calls against 14-20 for the two that succeeded, and skills_second_person scored 1.0 in a probe minutes earlier (blue-data-kb-source#133). |
 
