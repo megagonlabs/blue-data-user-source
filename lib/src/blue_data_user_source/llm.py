@@ -16,6 +16,7 @@ base spec: claude-opus-4-8 / gpt-4o).
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 from collections.abc import Iterator
 from types import SimpleNamespace
@@ -24,9 +25,10 @@ from typing import Any
 from blue_data_user_source.types import LLMError
 
 # LiteLLM writes records below WARNING to stdout, which under an MCP server is the
-# JSON-RPC stream (#199). It reads this once, on import, and the KB's client can be
-# the first to import it, so it is set here rather than before our own call.
-os.environ.setdefault("LITELLM_LOG", "WARNING")
+# JSON-RPC stream (#199). The KB's client can be the first to import it, so this is
+# set here rather than before our own call. On the logger, as in blue-data-kb-source,
+# so a LITELLM_LOG in the environment can't put those records back.
+logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 PROVIDER_ENV = "BLUE_DATA_LLM_PROVIDER"
 DEFAULT_PROVIDER = "openai"

@@ -2,7 +2,7 @@
 
 FastMCP sets the root logger to INFO, and LiteLLM writes records below WARNING to
 stdout, so each LLM call put non-protocol lines in the stream. Run in a process of
-its own: LiteLLM reads its log level once, on import.
+its own: LiteLLM sets up its handler once, on import.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def test_litellm_writes_nothing_to_stdout() -> None:
     assert "a warning" in done.stderr
 
 
-def test_an_explicit_litellm_log_is_kept() -> None:
+def test_an_explicit_litellm_log_cannot_write_to_stdout() -> None:
     done = _run(LITELLM_LOG="INFO")
     assert done.returncode == 0, done.stderr
-    assert "provider = openai" in done.stdout
+    assert done.stdout == ""
