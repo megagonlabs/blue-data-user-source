@@ -9,7 +9,7 @@ bash platform/cli/scripts/install.sh       # or scripts/install.sh for the MCP s
 export OPENAI_API_KEY=sk-...
 ```
 
-> **Cost.** Each query and each `--query` extraction makes dozens of OpenAI calls. At the default model (gpt-4o), this walkthrough cost about $7 in testing, mostly its four queries ($0.60–$2 each). To spend less, add `--max-subqueries 1 --max-kb-turns 8` to `data query`, and see [Cost](guide.md#cost) for cheaper model settings.
+> **Cost.** Each query and each `--query` extraction makes dozens of OpenAI calls. At the default model (gpt-4o), this walkthrough cost about $1.50–$2 in testing, mostly its four queries ($0.20–$0.55 each); the cost of a query varies from run to run. To spend less, add `--max-subqueries 1 --max-kb-turns 8` to `data query`, and see [Cost](guide.md#cost) for cheaper model settings.
 
 ## 1. Create a database and select it
 
