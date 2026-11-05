@@ -30,12 +30,14 @@ _ENV_REF = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
 SECRET_ENV_PREFIX = "BLUE_DATA_USER_CONTACT_"
 
 
+_SCHEMA: dict[str, dict[str, Any]] = json.loads(_CONTACT_SCHEMA.read_text())
+
+
 def _secret_fields() -> dict[str, frozenset[str]]:
     """``{protocol: {field, ...}}`` for the fields the contact schema marks ``"secret": true``."""
-    schema = json.loads(_CONTACT_SCHEMA.read_text())
     return {
         protocol: frozenset(f for f, spec in fields.items() if isinstance(spec, dict) and spec.get("secret"))
-        for protocol, fields in schema.items()
+        for protocol, fields in _SCHEMA.items()
     }
 
 
@@ -103,6 +105,33 @@ def check_secret_references(protocol: str, details: dict[str, Any]) -> None:
             match = _ENV_REF.fullmatch(item) if isinstance(item, str) else None
             if match is not None:
                 _require_contact_variable(match.group(1))
+
+
+def _has_type(value: Any, kind: str | None) -> bool:
+    """Whether *value* suits the schema type *kind*. Numbers may be numeric strings."""
+    if kind in ("int", "number"):
+        try:
+            (int if kind == "int" else float)(value)
+        except (TypeError, ValueError):
+            return False
+        return not isinstance(value, bool)
+    expected = {"str": str, "bool": bool, "dict": dict}.get(kind or "")
+    return expected is None or isinstance(value, expected)
+
+
+def check_contact_details(protocol: str, details: dict[str, Any]) -> None:
+    """Refuse contact *details* being written that could not be used (#198, #202).
+
+    Required fields are not checked: a contact can be built one field at a time,
+    and which are needed depends on others. One still missing when the contact
+    is used ends that interaction, not the query.
+    """
+    check_secret_references(protocol, details)
+    fields = _SCHEMA.get(protocol, {})
+    for key, value in details.items():
+        spec = fields.get(key)
+        if value is not None and isinstance(spec, dict) and not _has_type(value, spec.get("type")):
+            raise InteractionError(f"{protocol} contact field {key!r} must be {spec['type']}, not {value!r}.")
 
 
 def resolve_secret(value: Any) -> Any:
@@ -215,7 +244,11 @@ class ContactMethod:
 
     @property
     def preference(self) -> int:
-        return int(self.details.get("preference", 0))
+        # Read to choose among methods, so a bad stored value must not stop that.
+        try:
+            return int(self.details.get("preference", 0))
+        except (TypeError, ValueError):
+            return 0
 
     @property
     def is_async(self) -> bool:
@@ -236,6 +269,14 @@ class ContactMethod:
         return self.protocol == "stdio" or (
             self.protocol == "email" and self.details.get("inbound_provider") == "stdio"
         )
+
+    def _number(self, key: str, default: Any, kind: type = float) -> Any:
+        """A numeric detail, or an ``InteractionError`` naming what is malformed (#202)."""
+        value = self.details.get(key, default)
+        try:
+            return kind(value)
+        except (TypeError, ValueError) as exc:
+            raise InteractionError(f"{self.protocol} contact {self.name!r} has a malformed {key!r}: {value!r}.") from exc
 
     def _expect_reply(self, interaction_id: str, timeout: float) -> asyncio.Future[str]:
         """Where the reply to *interaction_id* will arrive, set up before the question goes out."""
@@ -307,7 +348,7 @@ class ContactMethod:
         url: str = resolve_secret(self._required("url"))
         response_base_url: str = self._required("response_base_url").rstrip("/")
         headers: dict[str, str] = resolve_secret(self.details.get("headers") or {})
-        timeout: float = float(self.details.get("timeout", 300))
+        timeout: float = self._number("timeout", 300)
 
         async def _start() -> None:
             pass
@@ -368,7 +409,7 @@ class ContactMethod:
                            (default: 'localhost')
             subject      — email subject line (default: 'A question for you')
         """
-        address: str = self.details["address"]
+        address: str = self._required("address")
         from_address: str = self.details.get("from_address") or "agent"
         reply_domain: str = (self.details.get("reply_domain") or "localhost").lstrip("@")
         subject: str = self.details.get("subject") or "A question for you"
@@ -428,12 +469,12 @@ class ContactMethod:
         smtp_host: str = self._required("smtp_host")
         reply_domain: str = self._required("reply_domain").lstrip("@")
         response_base_url: str = self._required("response_base_url").rstrip("/")
-        smtp_port: int = int(self.details.get("smtp_port", 587))
+        smtp_port: int = self._number("smtp_port", 587, int)
         smtp_user: str = self.details.get("smtp_user") or from_address
         smtp_password: str = resolve_secret(self.details.get("smtp_password") or "")
         smtp_use_tls: bool = bool(self.details.get("smtp_use_tls", True))
         subject: str = self.details.get("subject") or "A question for you"
-        timeout: float = float(self.details.get("timeout", 300))
+        timeout: float = self._number("timeout", 300)
 
         async def _start() -> None:
             pass
@@ -556,7 +597,7 @@ class ContactManager:
             raise InteractionError(
                 f"Invalid contact name {name!r}: use 1-64 letters, digits, spaces, '_', '-', '@' or '+'."
             )
-        check_secret_references(protocol, details)
+        check_contact_details(protocol, details)
         entry = {**details, "preference": preference}
         self._store().set(path, entry)
 
@@ -592,7 +633,8 @@ class ContactManager:
         entry = get_path(store, path) if path else None
         if entry is None:
             raise ContactNotFoundError(f"Contact method {protocol!r}/{name!r} not found.")
-        check_secret_references(protocol, {**(details or {}), **fields})
+        written = {**(details or {}), **fields}
+        check_contact_details(protocol, written if preference is None else {**written, "preference": preference})
         secret = SECRET_FIELDS.get(protocol, frozenset())
         if details is not None:
             replaced = {k: (_unmask(v, entry.get(k)) if k in secret else v) for k, v in details.items()}

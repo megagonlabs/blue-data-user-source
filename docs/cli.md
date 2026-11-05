@@ -99,6 +99,8 @@ $ blue-userdb metadata list identity
 # 3. Register a contact method (stdio dev mode for local testing)
 $ blue-userdb contact add email dev --preference 0
 Added contact: email/dev
+$ blue-userdb contact set email dev address alice@example.com
+Set email.dev.address = alice@example.com
 $ blue-userdb contact set email dev inbound_provider stdio
 Set email.dev.inbound_provider = stdio
 

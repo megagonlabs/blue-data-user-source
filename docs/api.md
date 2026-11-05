@@ -306,6 +306,8 @@ When the agent needs to contact a user, it sends an SMTP email with a `Reply-To:
 
 ¹ Not required when `inbound_provider` is `"stdio"`.
 
+A field of the wrong type, such as a `timeout` that is not a number, is refused with `422` when the contact is written. Required fields are checked when the contact is used: one still missing ends that clarification, and the query answers with what it retrieved.
+
 **Secrets.** `smtp_password`, a webhook's `url` and `headers`, and a notification `endpoint` are secret: every read path (REST, MCP tools, `blue-userdb contact list/get`) returns them masked as `***`. To keep `smtp_password`, a webhook's `url` or a header value out of the contacts store too, store a reference to an environment variable instead, e.g. `"smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"`; it is resolved when a message is sent, and shown as-is on reads. Only variables named `BLUE_DATA_USER_CONTACT_*` can be referenced: any other name is refused when the contact is written, and fails the clarification when it is used, so a contact cannot read the server's other settings.
 
 **`inbound_provider: "stdio"`** — development mode: prints email content to stdout and reads the reply from stdin. Useful for local testing without an SMTP server or inbound webhook.

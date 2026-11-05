@@ -397,6 +397,11 @@ class UserQueryReasoner:
         except InteractionError as exc:
             await session_manager.mark_interaction_failed(session_id, query_id, interaction_id, str(exc))
             raise
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            # Details stored without being checked, such as a number for a URL (#202).
+            reason = f"contact {channel.name!r} is malformed: {type(exc).__name__}: {exc}"
+            await session_manager.mark_interaction_failed(session_id, query_id, interaction_id, reason)
+            raise InteractionError(reason) from exc
 
     async def resolve_via_interaction(
         self,

@@ -12,10 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from blue_data_user_source.data.manager import UserDataManager
-from blue_data_user_source.interaction.contact import ContactManager
+from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.session import SessionManager
 from blue_data_user_source.reasoning.metric import MetricEvaluation
 from blue_data_user_source.reasoning.reasoner import UserQueryReasoner
+from blue_data_user_source.types import InteractionError
 
 _FAILING = [MetricEvaluation(name="completeness", score=0.0, reasoning="", passes=False)]
 _WEBHOOK = {"url": "https://hooks.example.com/q", "response_base_url": "http://localhost:8000", "timeout": 0.05}
@@ -92,3 +93,36 @@ async def test_onboarding_records_a_failed_question_and_moves_on(manager: UserDa
     records = await _interactions(manager, user_id)
     assert records and all(r["status"] == "failed" for r in records)
     assert manager.get_metadata("identity.name") is None
+
+
+# ── a malformed contact (#202) ────────────────────────────────────────────────
+
+@pytest.mark.parametrize(("protocol", "details", "reason"), [
+    ("webhook", {**_WEBHOOK, "timeout": "soon"}, "timeout"),
+    ("email", {"address": "a@example.com", "from_address": "b@example.com", "smtp_host": "smtp",
+               "reply_domain": "example.com", "response_base_url": "http://x", "smtp_port": "smtp"}, "smtp_port"),
+    ("webhook", {**_WEBHOOK, "response_base_url": 5}, "malformed"),  # stored before writes were checked
+])
+async def test_a_malformed_contact_ends_failed_and_the_query_still_answers(
+    manager: UserDataManager, user_id: str, protocol: str, details: dict, reason: str,
+) -> None:
+    manager._ensure_contact_source().set(f"contacts.{protocol}.bad", details)
+    assert await _ask(manager) == []
+    [record] = await _interactions(manager, user_id)
+    assert record["status"] == "failed"
+    assert reason in record["error"]
+
+
+def test_an_email_contact_for_the_console_needs_an_address() -> None:
+    method = ContactMethod("email", "dev", {"inbound_provider": "stdio"})
+    with pytest.raises(InteractionError, match="address"):
+        method.interact()
+
+
+async def test_a_stored_preference_that_is_no_number_does_not_stop_the_choice(
+    manager: UserDataManager, user_id: str,
+) -> None:
+    manager._ensure_contact_source().set("contacts.webhook.bad", {**_WEBHOOK, "preference": "high"})
+    cm = ContactManager(user_id, manager)
+    assert (await cm.identify_contact_method()).preference == 0
+

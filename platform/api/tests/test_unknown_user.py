@@ -119,3 +119,10 @@ def test_a_reply_to_a_question_asked_by_another_process_is_accepted(client, tmp_
 def test_a_reply_to_nothing_is_404(client):
     assert client.post("/interactions/nothing/response", json={"text": "x"}).status_code == 404
 
+
+def test_a_contact_with_a_malformed_field_is_422(client):
+    """#202."""
+    assert client.post("/databases/ana").status_code == 201
+    resp = client.post("/ana/contacts", json={"protocol": "webhook", "name": "hook", "details": {"timeout": "soon"}})
+    assert resp.status_code == 422 and "timeout" in resp.json()["detail"]
+

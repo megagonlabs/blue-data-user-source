@@ -613,6 +613,33 @@ def test_the_cli_write_path_sees_a_dotted_header() -> None:
         UserDataManager.set_contact_field(manager, "webhook", "hook", "headers.X-Demo", "$OPENAI_API_KEY")
 
 
+# ── what a write refuses (#202) ───────────────────────────────────────────────
+
+@pytest.mark.parametrize(("protocol", "details"), [
+    ("webhook", {"timeout": "soon"}),
+    ("webhook", {"url": 5}),
+    ("webhook", {"headers": "X: y"}),
+    ("email", {"smtp_port": "smtp"}),
+    ("email", {"smtp_use_tls": "no"}),
+    ("email", {"preference": "high"}),
+])
+async def test_a_field_of_the_wrong_type_is_refused(contact_manager: ContactManager, protocol: str, details: dict) -> None:
+    with pytest.raises(InteractionError, match=next(iter(details))):
+        await contact_manager.create_contact_method(protocol, "c", details)
+    await contact_manager.create_contact_method(protocol, "c", {})
+    with pytest.raises(InteractionError, match=next(iter(details))):
+        await contact_manager.update_contact_method(protocol, "c", **details)
+
+
+@pytest.mark.parametrize("details", [
+    {},  # built field by field, as the CLI does
+    {"timeout": 300}, {"timeout": 2.5}, {"timeout": "300"}, {"timeout": None},
+    {"unknown_field": object},
+])
+async def test_what_a_write_accepts(contact_manager: ContactManager, details: dict) -> None:
+    await contact_manager.create_contact_method("webhook", "c", details)
+
+
 # ── updating details (#137) ───────────────────────────────────────────────────
 
 async def test_updating_details_replaces_the_stored_fields(contact_manager: ContactManager) -> None:
