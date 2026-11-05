@@ -15,7 +15,9 @@ base spec: claude-opus-4-8 / gpt-4o).
 """
 from __future__ import annotations
 
+import contextlib
 import os
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 
@@ -89,6 +91,18 @@ def missing_key() -> str | None:
 def is_upstream_error(exc: BaseException) -> bool:
     """Whether *exc* came from LiteLLM, a provider SDK or the HTTP client under them."""
     return any(c.__module__.split(".")[0] in _UPSTREAM_PACKAGES for c in type(exc).__mro__)
+
+
+@contextlib.contextmanager
+def upstream_errors_as_llm_error() -> Iterator[None]:
+    """Report an upstream failure as ``LLMError``, for calls made through another
+    client, such as the KB's, whose LiteLLM exceptions reach us unchanged (#205)."""
+    try:
+        yield
+    except Exception as exc:
+        if isinstance(exc, LLMError) or not is_upstream_error(exc):
+            raise
+        raise LLMError(f"LLM call ({provider()}) failed: {exc}") from exc
 
 
 class AsyncClient:

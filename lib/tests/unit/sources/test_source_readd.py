@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from blue_data_user_source import FileUserSource
+from blue_data_user_source import FileUserSource, LLMError
 
 _OFFLINE = {"doc_embedding_model": "dummy", "doc_search_mode": "bm25"}
 
@@ -152,4 +152,35 @@ async def test_re_adding_an_unchanged_file_keeps_its_chunks_and_record(us, resum
     assert _found(us, "Python")
     assert (await us.remove_source("alice", str(resume)))["chunks_removed"] >= 1
     assert not _found(us, "Python")
+
+
+# ── a failed extraction (#205) ────────────────────────────────────────────────
+
+_Upstream = type("InternalServerError", (Exception,), {"__module__": "litellm.exceptions"})
+
+
+async def test_a_failed_extraction_leaves_no_new_source_and_is_an_llm_error(us, resume, import_text) -> None:
+    import_text.side_effect = _Upstream("provider down")
+    with pytest.raises(LLMError, match="provider down"):
+        await us.add_source(str(resume), "alice", {"queries": ["What skills?"]})
+    assert await us.list_sources("alice") == []
+    assert not _found(us, "Python")
+
+
+async def test_a_failed_extraction_keeps_an_existing_source_with_its_new_document(us, resume, import_text) -> None:
+    await us.add_source(str(resume), "alice")
+    [source] = await us.list_sources("alice")
+    resume.write_text("Alice Example\nSkills: Haskell.\n")
+    import_text.side_effect = _Upstream("provider down")
+    with pytest.raises(LLMError):
+        await us.add_source(str(resume), "alice", {"queries": ["What skills?"]})
+    assert await us.list_sources("alice") == [source]
+    assert _found(us, "Haskell")
+
+
+async def test_an_error_of_ours_is_not_called_an_llm_failure(us, resume, import_text) -> None:
+    import_text.side_effect = KeyError("a bug")
+    with pytest.raises(KeyError):
+        await us.add_source(str(resume), "alice", {"queries": ["What skills?"]})
+    assert await us.list_sources("alice") == []
 

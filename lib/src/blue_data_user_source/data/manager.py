@@ -722,13 +722,14 @@ class UserDataManager:
         kb_options: dict[str, Any] = {"model": model or llm.configured_model("REASONING")}
         if max_turns is not None:
             kb_options["max_turns"] = max_turns
-        result, metadata = await self._ensure_kb_source().answer(
-            self._database, query,
-            include_metadata=True,
-            on_tool_call=on_tool_call,
-            on_tool_result=on_tool_result,
-            **kb_options,
-        )
+        with llm.upstream_errors_as_llm_error():
+            result, metadata = await self._ensure_kb_source().answer(
+                self._database, query,
+                include_metadata=True,
+                on_tool_call=on_tool_call,
+                on_tool_result=on_tool_result,
+                **kb_options,
+            )
         data = result if isinstance(result, list) else ([{"answer": result}] if result else [])
         metadata = metadata if isinstance(metadata, dict) else {}
 
@@ -884,10 +885,19 @@ class UserDataManager:
             # leaves the extractor with no entity to hang WORKED_AT/HAS_SKILL facts on,
             # so it either invents a second person or skips the relations entirely.
             text = f"This document belongs to {owner}, the subject of every fact in it.\n{body}"
-            await kb.import_text(
-                self._database, text, queries=queries, source_id=source_id, effort=effort,
-                model=model or llm.configured_model("EXTRACTION"),
-            )
+            try:
+                with llm.upstream_errors_as_llm_error():
+                    await kb.import_text(
+                        self._database, text, queries=queries, source_id=source_id, effort=effort,
+                        model=model or llm.configured_model("EXTRACTION"),
+                    )
+            except Exception:
+                # A source just added goes with its failed extraction, so adding it
+                # again starts clean. An updated one keeps its new document (#205).
+                if not updated:
+                    self._delete_document(source_id)
+                    await kb.delete_source(self._database, source_id)
+                raise
         return updated
 
     async def remove_source(self, source_name: str) -> dict[str, Any]:
@@ -978,9 +988,10 @@ class UserDataManager:
             f"The following question and answer are about {self._owner_name()}, "
             f"the user this knowledge base describes.\n{text}"
         )
-        await self._ensure_kb_source().import_text(
-            self._database, anchored, queries=queries, source_id=source_id
-        )
+        with llm.upstream_errors_as_llm_error():
+            await self._ensure_kb_source().import_text(
+                self._database, anchored, queries=queries, source_id=source_id
+            )
 
     async def set_person_name(self, first_name: str, last_name: str | None = None) -> str:
         """Deterministically create/update the user's single USER entity (``IS_INSTANCE_OF
