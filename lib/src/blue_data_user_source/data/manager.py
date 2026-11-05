@@ -1205,7 +1205,7 @@ class UserDataManager:
             return
         self._rmtree(directory / "transcripts")
         for path in directory.glob("*.json"):
-            self._unlink(path)
+            self._unlink_store_file(path)
         self._session_doc_source = None
 
     def _clear_external_documents(self) -> None:

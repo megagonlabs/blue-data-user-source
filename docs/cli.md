@@ -45,7 +45,7 @@ Data is persisted under `~/.blue-userdb/` by default:
 
 A question asked by webhook or email from the CLI is answered through a running `blue-userdb-api` using the same data directory (the contact's `response_base_url`); the command waits for the reply or the contact's `timeout`.
 
-Each JSON store has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
+Each JSON store and document store file has a `<file>.lock` beside it, and the knowledge graph a `.alice.lock`: cross-process write locks, removed with the user.
 
 Override the data directory globally:
 
