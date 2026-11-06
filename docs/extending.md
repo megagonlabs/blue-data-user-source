@@ -36,7 +36,7 @@ Once implemented, `DataSource.instantiate("mypackage.MyUserSource", "name", prop
 
 ## Choosing a per-user knowledge-graph backend
 
-Each user's `"kb"` source is a `blue_data_kb_source.kb_source.KBSource` mixin, selected at `create_user`/`build` time via `kb_source_props["_class"]` — this library never imports a concrete KB backend directly. The three backends `blue-data-kb-source` ships (`MemoryKBSource`, `FileKBSource`, `NEO4JKBSource`) all work here unmodified; see [`blue-data-kb-source`'s extending.md](https://github.com/megagon-internal/blue-data-kb-source/blob/1.0/docs/extending.md) for implementing a genuinely new one. Class paths this library recognizes as legacy shorthand (`data/manager.py`'s `_KB_BACKENDS`):
+Each user's `"kb"` source is a `blue_data_kb_source.kb_source.KBSource` mixin, selected at `create_user`/`build` time via `kb_source_props["_class"]` — this library never imports a concrete KB backend directly. The three backends `blue-data-kb-source` ships (`MemoryKBSource`, `FileKBSource`, `NEO4JKBSource`) all work here unmodified; see [`blue-data-kb-source`'s extending.md](https://github.com/megagonlabs/blue-data-kb-source/blob/1.0/docs/extending.md) for implementing a genuinely new one. Class paths this library recognizes as legacy shorthand (`data/manager.py`'s `_KB_BACKENDS`):
 
 ```python
 CLS_KB_MEMORY = "blue_data_kb_source.memory_kb_source.MemoryKBSource"
@@ -85,7 +85,7 @@ doc_source_props={
 }
 ```
 
-`data/manager.py`'s `_build_embedding_model` is the only place that resolves the `embedding_model` string — currently `"dummy"` (`DummyEmbeddingModel`, no network calls) and `"openai"` (`OpenAIEmbeddingModel`) from `blue-data-doc-source`. A new embedding provider means adding a branch there and its name to `DOC_EMBEDDING_MODELS`, which `resolve_doc_search` checks every user's settings against; a new vector backend is a `blue-data` `VectorSource` implementation passed the same way `blue-data-kb-source` accepts one (see [that repo's extending.md](https://github.com/megagon-internal/blue-data-kb-source/blob/1.0/docs/extending.md#implementing-a-new-vectorsource-backend)) — this library doesn't reconnect these sources through the generic registry `_class`/`connection` path (a live embedding-model object can't round-trip through that), so a new backend choice has to be added to `_build_embedding_model`/the vector-source construction in `data/manager.py` directly, not just registered externally.
+`data/manager.py`'s `_build_embedding_model` is the only place that resolves the `embedding_model` string — currently `"dummy"` (`DummyEmbeddingModel`, no network calls) and `"openai"` (`OpenAIEmbeddingModel`) from `blue-data-doc-source`. A new embedding provider means adding a branch there and its name to `DOC_EMBEDDING_MODELS`, which `resolve_doc_search` checks every user's settings against; a new vector backend is a `blue-data` `VectorSource` implementation passed the same way `blue-data-kb-source` accepts one (see [that repo's extending.md](https://github.com/megagonlabs/blue-data-kb-source/blob/1.0/docs/extending.md#implementing-a-new-vectorsource-backend)) — this library doesn't reconnect these sources through the generic registry `_class`/`connection` path (a live embedding-model object can't round-trip through that), so a new backend choice has to be added to `_build_embedding_model`/the vector-source construction in `data/manager.py` directly, not just registered externally.
 
 ---
 

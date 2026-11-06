@@ -65,7 +65,7 @@ cd platform/api && bash scripts/build.sh
 ## Requirements
 
 - Python 3.12 or 3.13
-- [`blue-data`](https://github.com/megagon-internal/blue-data), [`blue-data-kb-source`](https://github.com/megagon-internal/blue-data-kb-source), and [`blue-data-doc-source`](https://github.com/megagon-internal/blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
+- [`blue-data`](https://github.com/megagonlabs/blue-data), [`blue-data-kb-source`](https://github.com/megagonlabs/blue-data-kb-source), and [`blue-data-doc-source`](https://github.com/megagonlabs/blue-data-doc-source) (local sibling dependencies — not yet published to PyPI)
 - An API key for any LLM feature: query rewriting/expansion, LLM-based extraction (`add_source` with `queries`), result assessment prompts, and natural-language answer synthesis. Sessions, metadata, and contact-method CRUD are plain Python with no network calls. The LLM calls go to the provider named by `BLUE_DATA_LLM_PROVIDER` (blank, the default, means `openai`; `anthropic` is the other one with a default model), through LiteLLM, with that provider's key: `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Document embeddings stay on OpenAI, so a new database's default `openai` embedding needs `OPENAI_API_KEY` under any provider (or use `dummy` with `bm25`).
 
 None of the four packages are published to PyPI yet — always install from the local checkout as shown above.

@@ -1,7 +1,7 @@
 # blue-data-user-source Examples
 
 This directory contains runnable examples organized by purpose, mirroring the sibling
-[`blue-data-kb-source/examples/`](https://github.com/megagon-internal/blue-data-kb-source/tree/1.0/examples) layout.
+[`blue-data-kb-source/examples/`](https://github.com/megagonlabs/blue-data-kb-source/tree/1.0/examples) layout.
 
 Every script below was actually run against a real OpenAI-backed environment during
 authoring, with its stdout captured verbatim into the matching `.output.txt` — none of
