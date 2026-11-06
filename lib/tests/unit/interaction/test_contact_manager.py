@@ -12,7 +12,7 @@ from blue_data_user_source.data.manager import UserDataManager
 from blue_data_user_source.interaction.contact import ContactManager, ContactMethod
 from blue_data_user_source.interaction.manager import InteractionManager
 from blue_data_user_source.interaction.pending import pending_interactions
-from blue_data_user_source.types import InteractionError, LLMError
+from blue_data_user_source.types import InteractionError, InteractionTimeoutError, LLMError
 
 
 @pytest.fixture
@@ -539,6 +539,69 @@ async def test_email_sends_with_the_password_from_the_referenced_variable(monkey
         method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, "smtp_password": "$BLUE_DATA_USER_CONTACT_SMTP_PASSWORD"})
         await method.interact().send("Pick a colour.")
     assert seen["password"] == "from-env"
+
+
+@pytest.mark.parametrize("details, login", [
+    ({}, (None, None)),
+    ({"smtp_user": "relay"}, (None, None)),
+    ({"smtp_password": "p"}, (_EMAIL_DETAILS["from_address"], "p")),
+    ({"smtp_user": "relay", "smtp_password": "p"}, ("relay", "p")),
+])
+async def test_email_logs_in_only_with_a_password(details: dict, login: tuple) -> None:
+    seen: list = []
+
+    async def _capture(msg, *, hostname, port, username, password, start_tls):
+        seen.append((username, password))
+        for fut in list(pending_interactions.values()):
+            if not fut.done():
+                fut.set_result("ok")
+
+    with patch.dict(sys.modules, {"aiosmtplib": _mock_aiosmtplib(_capture)}):
+        method = ContactMethod(protocol="email", name="work", details={**_EMAIL_DETAILS, **details})
+        await method.interact().send("Pick a colour.")
+    assert seen == [login]
+
+
+async def test_email_reaches_a_server_that_offers_no_auth() -> None:
+    """A local relay or Mailpit (#212): the mail goes out, and the question waits for its reply."""
+    pytest.importorskip("aiosmtplib")
+    delivered: list = []
+
+    async def _serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        async def say(text: str) -> None:
+            writer.write(text.encode() + b"\r\n")
+            await writer.drain()
+
+        await say("220 stub")
+        in_data = False
+        while raw := await reader.readline():
+            line = raw.decode().rstrip("\r\n")
+            if in_data:
+                if line == ".":
+                    delivered.append(1)
+                    in_data = False
+                    await say("250 ok")
+                continue
+            command = line.split(" ")[0].upper()
+            if command == "DATA":
+                in_data = True
+                await say("354 go")
+            elif command == "QUIT":
+                await say("221 bye")
+                break
+            else:
+                await say("250 ok")  # EHLO included: it advertises no AUTH
+        writer.close()
+
+    server = await asyncio.start_server(_serve, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    details = {**_EMAIL_DETAILS, "smtp_host": "127.0.0.1", "smtp_port": port,
+               "smtp_use_tls": False, "timeout": 0.05}
+    async with server:
+        with pytest.raises(InteractionTimeoutError):
+            method = ContactMethod(protocol="email", name="work", details=details)
+            await method.interact().send("A question?")
+    assert delivered == [1]
 
 
 # ── which variables a contact may reference (#198) ───────────────────────────

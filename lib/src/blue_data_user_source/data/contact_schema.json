@@ -7,7 +7,7 @@
     "smtp_host":          { "description": "SMTP server hostname. Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": null },
     "smtp_port":          { "description": "SMTP port.", "type": "int", "required": false, "default": 587 },
     "smtp_user":          { "description": "SMTP username.", "type": "str", "required": false, "default": null },
-    "smtp_password":      { "description": "SMTP password. Prefer a $BLUE_DATA_USER_CONTACT_* reference to an environment variable; read paths mask it.", "type": "str", "required": false, "default": "", "secret": true },
+    "smtp_password":      { "description": "SMTP password. Without one, the mail is sent without logging in. Prefer a $BLUE_DATA_USER_CONTACT_* reference to an environment variable; read paths mask it.", "type": "str", "required": false, "default": "", "secret": true },
     "smtp_use_tls":       { "description": "Use STARTTLS.", "type": "bool", "required": false, "default": true },
     "reply_domain":       { "description": "Domain for Reply-To: interaction-{id}@reply_domain. Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": "localhost" },
     "response_base_url":  { "description": "Base URL of the user source REST API (link in email body + inbound endpoint). Not required when inbound_provider is 'stdio'.", "type": "str", "required": true, "default": null },

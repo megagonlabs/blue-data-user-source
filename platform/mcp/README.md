@@ -308,7 +308,7 @@ webhook → {"url": "https://hooks.example.com/incoming",
 | `smtp_host` | yes¹ | — | SMTP server hostname |
 | `smtp_port` | no | `587` | SMTP port |
 | `smtp_user` | no | `from_address` | SMTP auth username |
-| `smtp_password` | no | `""` | SMTP auth password. Masked on reads; may be a `$VAR` reference |
+| `smtp_password` | no | `""` | SMTP auth password. Without one, the mail is sent without logging in. Masked on reads; may be a `$VAR` reference |
 | `smtp_use_tls` | no | `True` | Use STARTTLS |
 | `reply_domain` | yes¹ | `"localhost"` | Domain for `Reply-To: interaction-{id}@reply_domain` |
 | `response_base_url` | yes¹ | — | Base URL of `blue-userdb-api` (link in email body + inbound endpoint) |

@@ -456,7 +456,7 @@ class ContactMethod:
                                 reads reply from stdin — no SMTP connection required.
             smtp_port         — SMTP port (default: 587)
             smtp_user         — SMTP username (default: from_address)
-            smtp_password     — SMTP password
+            smtp_password     — SMTP password (default: none — the mail is sent without logging in)
             smtp_use_tls      — use STARTTLS (default: True)
             subject           — email subject (default: 'A question for you')
             timeout           — seconds to wait for response (default: 300)
@@ -519,8 +519,9 @@ class ContactMethod:
                         msg,
                         hostname=smtp_host,
                         port=smtp_port,
-                        username=smtp_user,
-                        password=smtp_password,
+                        # No password means no login: a relay may not offer AUTH (#212).
+                        username=smtp_user if smtp_password else None,
+                        password=smtp_password or None,
                         start_tls=smtp_use_tls,
                     )
                 except (aiosmtplib.SMTPException, OSError) as exc:
