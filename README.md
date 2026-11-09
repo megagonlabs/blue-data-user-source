@@ -159,7 +159,8 @@ For OSS components having different portions released under different licenses, 
 | 11 | openai | No | OpenAI | [link](https://github.com/openai/openai-python) | Apache Software License |
 | 12 | pydantic | No | Pydantic Services Inc. and individual contributors | [link](https://github.com/pydantic/pydantic) | MIT License |
 | 13 | pydantic-settings | No | Samuel Colvin and other contributors | [link](https://github.com/pydantic/pydantic-settings) | MIT License |
-| 14 | rank-bm25 | No | Dorian Brown | [link](https://github.com/dorianbrown/rank_bm25) | Apache Software License |
-| 15 | redis | No | Redis, inc. | [link](https://github.com/redis/redis-py) | MIT License |
-| 16 | rich | No | Will McGugan | [link](https://github.com/Textualize/rich) | MIT License |
-| 17 | uvicorn | No | Encode OSS Ltd. | [link](https://github.com/encode/uvicorn) | BSD License |
+| 14 | python-multipart | No | Andrew Dunham | [link](https://github.com/Kludex/python-multipart) | Apache Software License |
+| 15 | rank-bm25 | No | Dorian Brown | [link](https://github.com/dorianbrown/rank_bm25) | Apache Software License |
+| 16 | redis | No | Redis, inc. | [link](https://github.com/redis/redis-py) | MIT License |
+| 17 | rich | No | Will McGugan | [link](https://github.com/Textualize/rich) | MIT License |
+| 18 | uvicorn | No | Encode OSS Ltd. | [link](https://github.com/encode/uvicorn) | BSD License |
