@@ -55,6 +55,7 @@ cd platform/api && bash scripts/install.sh
 ```bash
 cd lib && bash scripts/build.sh          # python -m build
 cd ../platform/mcp && bash scripts/build.sh
+cd ../cli && bash scripts/build.sh
 cd ../api && bash scripts/build.sh
 ```
 
