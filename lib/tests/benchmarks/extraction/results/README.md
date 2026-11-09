@@ -15,11 +15,11 @@ Value: mean hit rate: share of expected values found in the answers.
 
 ## Latest run
 
-`20261105-163046` · commit `1fff0fd` · gpt-4o · 4 cases, 4 runs · judge gpt-4o-mini · 1604k tokens · *milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272)*
+`20261109-185229` · commit `da99c5d` · gpt-4o · 4 cases, 4 runs · judge gpt-4o-mini · 1184k tokens · *blue-data-kb-source at 24ffe22: extraction looks for what the text is about first (blue-data-kb-source#189), schema expansion connects unreachable classes (#190); email login fix #212; blue-data at 3436ec0*
 
 | | value | questions answered |
 |---|---|---|
-| **all** | 0.68 ▼0.19 `▄▇▆` | 0.75 ▼0.21 `▄█▇` |
+| **all** | 0.88 ▲0.20 `▄▇▆█` | 0.94 ▲0.19 `▄█▇█` |
 
 Each cell: latest value, ▲/▼ change since the previous run, and the history as a sparkline (`▁` = 0, `█` = 1).
 
@@ -29,10 +29,10 @@ Each cell: latest value, ▲/▼ change since the previous run, and the history 
 %%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#2563eb, #16a34a"}}}}%%
 xychart-beta
     title "extraction: per run"
-    x-axis ["20261010", "261102-1917", "261105-1630"]
+    x-axis ["20261010", "261102-1917", "261105-1630", "261109-1852"]
     y-axis "value" 0 --> 1
-    line [0.45, 0.87, 0.68]
-    line [0.44, 0.96, 0.75]
+    line [0.45, 0.87, 0.68, 0.88]
+    line [0.44, 0.96, 0.75, 0.94]
 ```
 
 *Lines: blue = all, green = questions answered.*
@@ -43,10 +43,10 @@ xychart-beta
 
 | case | value | answered |
 |---|---|---|
-| basic_profile | 0.57 ▼0.29 `▇▇▅` | 0.75 |
-| contact_info | 0.33 ▼0.67 `▃█▃` | 0.25 |
-| multi_domain | 1.00 ▲0.20 `▅▇█` | 1.00 |
-| skills_and_preferences | 0.83 `▁▇▇` | 1.00 |
+| basic_profile | 0.86 ▲0.29 `▇▇▅▇` | 1.00 |
+| contact_info | 1.00 ▲0.67 `▃█▃█` | 1.00 |
+| multi_domain | 1.00 `▅▇██` | 1.00 |
+| skills_and_preferences | 0.67 ▼0.17 `▁▇▇▆` | 0.75 |
 
 </details>
 
@@ -54,6 +54,7 @@ xychart-beta
 
 | run | commit | models | cases | value | tokens | latency | note |
 |---|---|---|---|---|---|---|---|
+| 20261109-185229 | `da99c5d` | gpt-4o | 4 | 0.88 | 1184k | 576s | blue-data-kb-source at 24ffe22: extraction looks for what the text is about first (blue-data-kb-source#189), schema expansion connects unreachable classes (#190); email login fix #212; blue-data at 3436ec0 |
 | 20261105-163046 | `1fff0fd` | gpt-4o | 4 | 0.68 | 1604k | 733s | milestone fixes #194-#207, #210; blue-data at 78e57b3 with its locked FileVectorSource (#272) |
 | 20261102-191757 | `35955a5` | gpt-4o | 4 | 0.87 | 1104k | 528s | calls through LiteLLM (#190), console off by default (#191), Python 3.12 |
 | 20261010 | `421622f` | gpt-4o | 4 | 0.45 | 2389k | 640s | **baseline** [`results/2026-10-10-gpt-4o/`](../../results/2026-10-10-gpt-4o/) first committed run (#131), at 421622f: the run at d00f477 died on an unparseable judge reply, which 421622f retries. The KB query agent loops until it gives up: skills_and_preferences (0.0, all 4 answers empty) took 306 agent calls and multi_domain 269 (blue-data-kb-source#133). |
