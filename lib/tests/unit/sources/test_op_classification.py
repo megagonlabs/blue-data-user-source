@@ -1,6 +1,6 @@
 """Every op UserSource serves is classified for blue-data's read-only guard (#188).
 
-blue-data's guard is deny-by-default (megagon-internal/blue-data#237): a dict or
+blue-data's guard is deny-by-default (blue-data's registry write-op guard fix): a dict or
 JSON op runs without ``optional_properties["commit"]`` only when the source lists
 it in ``_READ_OPS``; one in ``_WRITE_OPS``, or in neither, needs ``commit``. Each
 op a source serves belongs to exactly one set. UserSource serves none: its

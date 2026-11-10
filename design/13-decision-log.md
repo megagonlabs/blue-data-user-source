@@ -409,7 +409,7 @@ Architectural decisions are recorded here as they are made, throughout the desig
 
 **Consequences:**
 - Library scripts that relied on being asked at the terminal pass `console=True` (the examples that do now do).
-- A registry host never asks on the console, whatever its streams, and needs no change. blue-data's side (megagon-internal/blue-data#250) is no longer needed for user-source, though a per-process property hook there would still help other sources.
+- A registry host never asks on the console, whatever its streams, and needs no change. blue-data's side (its registry fix for persisting a source's per-process console property) is no longer needed for user-source, though a per-process property hook there would still help other sources.
 
 
 
